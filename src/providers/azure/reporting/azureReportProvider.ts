@@ -3,6 +3,7 @@ import {
   type ReportExportFormat,
   type ReportProvider
 } from "../../../report/reportTypes";
+import { ownershipTargetCollection } from "../../../report/ownershipTargetCollection";
 import {
   buildEntraConsentInventoryExport,
   buildManagedIdentityExport,
@@ -24,13 +25,19 @@ import { ownersCollection } from "./ownersCollection";
 import { servicePrincipalCollection } from "./servicePrincipalCollection";
 import type { AzureReportInput, AzureReportOverview } from "./azureReportTypes";
 
-type AzureProviderExportedCollectionId = Exclude<AzureExportedCollectionId, "owners">;
+type AzureProviderExportedCollectionId = Exclude<AzureExportedCollectionId, "owners" | "ownershipTargets">;
 
 export type { AzureReportInput, AzureReportOverview } from "./azureReportTypes";
 
 export const azureReportProvider: ReportProvider<AzureReportInput> = {
   id: "azure",
-  collections: [ownersCollection, managedIdentityCollection, servicePrincipalCollection, consentInventoryCollection],
+  collections: [
+    ownersCollection,
+    ownershipTargetCollection,
+    managedIdentityCollection,
+    servicePrincipalCollection,
+    consentInventoryCollection
+  ],
   buildExport: (ctx, collectionId, format) => buildAzureReportExport(ctx, collectionId, format)
 };
 

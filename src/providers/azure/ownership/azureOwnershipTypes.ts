@@ -3,7 +3,7 @@ import type { AzureActivityLog, AzureResourceGroup, AzureSnapshot, AzureSubscrip
 import type { OwnerResolver } from "../../../core/ownership/resolveOwner";
 import type { OwnerResolution } from "../../../core/ownership/types";
 
-export type OwnerTarget =
+export type AzureScopeOwnershipTarget =
   | {
       kind: "subscription";
       subscription: AzureSubscription;
@@ -21,10 +21,10 @@ export type OwnerResolverContext = {
   servicePrincipalIndex: Map<string, EntraServicePrincipal>;
 };
 
-export type OwnerResolverAdapter = OwnerResolver<OwnerTarget, OwnerResolverContext>;
+export type OwnerResolverAdapter = OwnerResolver<AzureScopeOwnershipTarget, OwnerResolverContext>;
 
 export type AzureOwnerTargetConfig = {
-  kind: OwnerTarget["kind"];
+  kind: AzureScopeOwnershipTarget["kind"];
   adapter: OwnerResolverAdapter;
 };
 

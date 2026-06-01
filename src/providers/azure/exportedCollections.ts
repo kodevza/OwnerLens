@@ -1,5 +1,6 @@
 export type AzureExportedCollectionId =
   | "owners"
+  | "ownershipTargets"
   | "managedIdentities"
   | "servicePrincipals"
   | "entraConsentInventory";
@@ -7,7 +8,7 @@ export type AzureExportedCollectionId =
 export type AzureExportedCollection = {
   id: AzureExportedCollectionId;
   label: string;
-  exportLabel: string;
+  exportLabel?: string;
   fileBaseName: string;
   table: {
     emptyMessage: string;
@@ -24,6 +25,15 @@ export const azureExportedCollections: AzureExportedCollection[] = [
     table: {
       emptyMessage: "No owner rows match the filter.",
       minWidthClassName: "min-w-[960px]"
+    }
+  },
+  {
+    id: "ownershipTargets",
+    label: "Ownership Targets",
+    fileBaseName: "ownership-targets",
+    table: {
+      emptyMessage: "No ownership targets match the filter.",
+      minWidthClassName: "min-w-[1180px]"
     }
   },
   {

@@ -37,7 +37,7 @@ export type ReportFieldDescriptor<TRow> = {
 export type ReportCollectionUiDescriptor<TId extends string = string> = {
   id: TId;
   label: string;
-  exportLabel: string;
+  exportLabel?: string;
   fileBaseName: string;
   table: {
     emptyMessage: string;
