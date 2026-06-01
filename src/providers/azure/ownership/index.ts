@@ -1,4 +1,8 @@
 export { buildAzureOwnershipReport, buildOwnerReport } from "./buildAzureOwnershipReport";
+export {
+  buildAzureManagedIdentityOwnershipTargets,
+  buildEntraServicePrincipalOwnershipTargets
+} from "./buildAzureOwnershipTargets";
 export { azureOwnershipConfig, azureReportConfig } from "./azureOwnershipConfig";
 export { azureOwnerAdapter, buildActivityIndex } from "./resolveAzureOwner";
 export type { OwnerConfidence, OwnerEvidence, OwnerResolution } from "../../../core/ownership/types";
@@ -9,7 +13,7 @@ export type {
   AzureOwnerTagConfigMap,
   AzureOwnerTargetConfig,
   AzureReportConfig,
+  AzureScopeOwnershipTarget,
   OwnerResolverAdapter,
-  OwnerResolverContext,
-  OwnerTarget
+  OwnerResolverContext
 } from "./azureOwnershipTypes";

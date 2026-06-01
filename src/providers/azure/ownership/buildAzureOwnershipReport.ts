@@ -4,7 +4,7 @@ import type { OwnerReport, OwnerReportRow } from "./azureOwnerReportTypes";
 import { azureOwnershipConfig } from "./azureOwnershipConfig";
 import { buildActivityIndex } from "./resolveAzureOwner";
 import { buildServicePrincipalIndex } from "./azureActivityOwnershipEvidence";
-import type { AzureReportConfig, OwnerTarget } from "./azureOwnershipTypes";
+import type { AzureReportConfig, AzureScopeOwnershipTarget } from "./azureOwnershipTypes";
 
 export function buildAzureOwnershipReport(
   resourceSnapshot: AzureSnapshot,
@@ -39,7 +39,10 @@ export function buildAzureOwnershipReport(
 
 export const buildOwnerReport = buildAzureOwnershipReport;
 
-function getTargets(kind: OwnerTarget["kind"], resourceSnapshot: AzureSnapshot): OwnerTarget[] {
+function getTargets(
+  kind: AzureScopeOwnershipTarget["kind"],
+  resourceSnapshot: AzureSnapshot
+): AzureScopeOwnershipTarget[] {
   if (kind === "subscription") {
     return resourceSnapshot.subscriptions.map((subscription) => ({
       kind,
@@ -53,7 +56,7 @@ function getTargets(kind: OwnerTarget["kind"], resourceSnapshot: AzureSnapshot):
   }));
 }
 
-function getTargetIdentity(target: OwnerTarget): Pick<
+function getTargetIdentity(target: AzureScopeOwnershipTarget): Pick<
   OwnerReportRow,
   "targetKey" | "kind" | "subscriptionId" | "subscriptionName" | "resourceGroup"
 > {
