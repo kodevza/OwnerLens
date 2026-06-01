@@ -6,21 +6,30 @@ subscriptions and resource groups using tags, cost center mappings, role
 assignments, managed identities, service principals, groups, and activity-log
 evidence.
 
-The application is intended to reconcile cloud provider ownership data
-(currently Azure) and export the resolved ownership results for Identity and Access Management (IAM) systems.
+The application is intended to reconcile cloud provider ownership data (currently Azure), 
+👉 export the resolved ownership results for Identity and Access Management (IAM) systems, 
+👉 support remediation ownership for Zero TrustAssessment (ZTA) findings. 
+
+OwnerLens helps split actionable remediations by the
+most likely accountable owners and provides traceable evidence for why each
+remediation was assigned.
 
 The app runs locally with Vite. Snapshot file (exported by ./tools/* scripts) stay on your machine and are read
 from the repository `data` directory by the development server.
 ```mermaid
 
 flowchart TD
-    A["1. Entra + Azure Resource Snapshot<br/><br/>Service Principals<br/>Managed Identities<br/>Groups<br/>Role Assignments<br/>Tags<br/>Activity Logs"]
+    A["1. Entra + Azure Resource Snapshot<br/><br/>Service Principals<br/>Managed Identities<br/>Groups<br/>Azure RBAC<br/>Tags<br/>Activity Logs"]
 
-    B["2. OwnerLens Review UI<br/><br/>Resolve likely owners<br/>Show confidence<br/>Show evidence<br/>Find ownership gaps<br/>Manual review & cleanup"]
+    B["2. OwnerLens Review UI<br/><br/>Resolve likely owners<br/>Show confidence<br/>Show evidence<br/>Find ownership gaps"]
 
     C["3. Export to IAM / Recertification<br/><br/>CSV / JSON<br/>Owner mapping<br/>Gap report<br/>Input for SailPoint / Saviynt / Omada / Entra Governance"]
 
+    D["4. Information Enrichment with ZTA Report<br/>"]
+    E["5. Actionable remediations<br/>"]
+
     A --> B --> C
+    B --> D --> E
 ```    
 ## Features
 
@@ -32,6 +41,9 @@ flowchart TD
 - Review managed identity and service principal relationships.
 - Export resolved ownership results to CSV and JSON files for resource groups,
   service principals, and managed identities.
+- Enrich ZTA Assessment findings with ownership context, split actionable
+  remediations across accountable teams, and trace remediation assignments back
+  to ownership evidence.
 - Switch between snapshot files found in `./data`.
 
 ## Requirements
