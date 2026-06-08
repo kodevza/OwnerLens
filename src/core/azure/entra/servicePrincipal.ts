@@ -4,6 +4,7 @@ import type {
   ManagedIdentityPermissionRiskSummary
 } from "../identityEnrichment";
 import type { AzureRoleAssignment } from "../resources";
+import type { ZtaRemediationSummary } from "../ztaReport";
 import type { OwnerConfidence } from "../../ownership/types";
 import type { EntraServicePrincipal, EntraServicePrincipalType } from "./types";
 
@@ -23,7 +24,7 @@ export type ServicePrincipal = EntraServicePrincipal & AzureIdentityRuntimeEnric
   servicePrincipalType: Exclude<EntraServicePrincipalType, "ManagedIdentity">;
   potentialOwners?: string[];
   ownerConfidence?: OwnerConfidence;
-} & EntraPrincipalPermissionSummary;
+} & EntraPrincipalPermissionSummary & ZtaRemediationSummary;
 
 export function isServicePrincipal(servicePrincipal: EntraServicePrincipal): servicePrincipal is ServicePrincipal {
   return servicePrincipal.servicePrincipalType !== "ManagedIdentity";
@@ -32,13 +33,22 @@ export function isServicePrincipal(servicePrincipal: EntraServicePrincipal): ser
 export function toServicePrincipals(
   servicePrincipals: EntraServicePrincipal[],
   enrichment?: LatestAzureIdentityEnrichment,
-  permissionsByPrincipalId: Map<string, EntraPrincipalPermissionSummary> = new Map()
+  permissionsByPrincipalId: Map<string, EntraPrincipalPermissionSummary> = new Map(),
+  ztaSummariesByPrincipalId: Map<string, ZtaRemediationSummary> = new Map()
 ): ServicePrincipal[] {
   return servicePrincipals.filter(isServicePrincipal).map((servicePrincipal) => ({
     ...servicePrincipal,
     ...getAzureIdentityRuntimeEnrichment(servicePrincipal, enrichment),
-    ...getEntraPrincipalPermissionSummary(servicePrincipal, permissionsByPrincipalId)
+    ...getEntraPrincipalPermissionSummary(servicePrincipal, permissionsByPrincipalId),
+    ...getZtaRemediationSummary(servicePrincipal, ztaSummariesByPrincipalId)
   }));
+}
+
+export function getZtaRemediationSummary(
+  servicePrincipal: EntraServicePrincipal,
+  ztaSummariesByPrincipalId: Map<string, ZtaRemediationSummary>
+): ZtaRemediationSummary {
+  return ztaSummariesByPrincipalId.get(servicePrincipal.id.toLowerCase()) ?? createEmptyZtaRemediationSummary();
 }
 
 export function getEntraPrincipalPermissionSummary(
@@ -53,6 +63,14 @@ function createEmptyPermissionSummary(): EntraPrincipalPermissionSummary {
     oauthPemrissionsCount: 0,
     appRolesPermissionCount: 0,
     isAllParticipant: false
+  };
+}
+
+function createEmptyZtaRemediationSummary(): ZtaRemediationSummary {
+  return {
+    ztaRemediationCountAll: 0,
+    ztaRemediationFailedCount: 0,
+    ztaMaxRisk: "none"
   };
 }
 

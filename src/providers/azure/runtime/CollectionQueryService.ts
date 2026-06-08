@@ -2,6 +2,7 @@ import { RuntimeHttpError } from "../../../core/runtime/localSnapshotFiles";
 import type { ManagedIdentity } from "../../../core/azure/entra/managedIdentity";
 import type { ServicePrincipal } from "../../../core/azure/entra/servicePrincipal";
 import type { AzureRoleAssignment } from "../../../core/azure/resources";
+import type { ZtaRemediationSummary } from "../../../core/azure/ztaReport";
 import type { OwnerConfidence } from "../../../core/ownership/types";
 
 import type { LocalEntraReportCollectionId } from "./entra/LocalEntraReportRuntime";
@@ -18,6 +19,7 @@ import {
 } from "./localReportCollections";
 import type { LocalEntraReportRuntime } from "./entra/LocalEntraReportRuntime";
 import type { LocalAzureResourcesReportRuntime } from "./resources/LocalAzureResourcesReportRuntime";
+import type { LocalZeroTrustAssessmentReportRuntime } from "./zta/LocalZeroTrustAssessmentReportRuntime";
 import type { DisabledEvidenceStore } from "./DisabledEvidenceStore";
 import type { AzureUserAssignedManagedIdentity } from "../domain/resources/AzureUserAssignedManagedIdentity";
 
@@ -29,17 +31,20 @@ export type LocalReportCollectionId =
 export type CollectionQueryServiceOptions = {
   entra: LocalEntraReportRuntime;
   azureResources: LocalAzureResourcesReportRuntime;
+  zeroTrustAssessment: LocalZeroTrustAssessmentReportRuntime;
   disabledEvidenceStore: DisabledEvidenceStore;
 };
 
 export class CollectionQueryService {
   private readonly entra: LocalEntraReportRuntime;
   private readonly azureResources: LocalAzureResourcesReportRuntime;
+  private readonly zeroTrustAssessment: LocalZeroTrustAssessmentReportRuntime;
   private readonly disabledEvidenceStore: DisabledEvidenceStore;
 
   constructor(options: CollectionQueryServiceOptions) {
     this.entra = options.entra;
     this.azureResources = options.azureResources;
+    this.zeroTrustAssessment = options.zeroTrustAssessment;
     this.disabledEvidenceStore = options.disabledEvidenceStore;
   }
 
@@ -85,7 +90,7 @@ export class CollectionQueryService {
   }
 
   private async readManagedIdentityRows(): Promise<Record<string, unknown>[]> {
-    const managedIdentities = await this.entra.readManagedIdentities();
+    const managedIdentities = await this.enrichWithZtaRemediationSummaries(await this.entra.readManagedIdentities());
 
     try {
       const [resourceGroupOwnershipRows, userAssignedManagedIdentities] = await Promise.all([
@@ -108,7 +113,7 @@ export class CollectionQueryService {
   }
 
   private async readServicePrincipalRows(): Promise<Record<string, unknown>[]> {
-    const servicePrincipals = await this.entra.readServicePrincipals();
+    const servicePrincipals = await this.enrichWithZtaRemediationSummaries(await this.entra.readServicePrincipals());
 
     try {
       return enrichServicePrincipalsWithResourceGroupOwners(
@@ -122,6 +127,25 @@ export class CollectionQueryService {
 
       throw error;
     }
+  }
+
+  private async enrichWithZtaRemediationSummaries<Row extends ServicePrincipal | ManagedIdentity>(rows: Row[]): Promise<Row[]> {
+    let summariesByPrincipalId: Map<string, ZtaRemediationSummary>;
+
+    try {
+      summariesByPrincipalId = await this.zeroTrustAssessment.readRemediationSummaries();
+    } catch (error) {
+      if (error instanceof RuntimeHttpError && error.statusCode === 404) {
+        return rows;
+      }
+
+      throw error;
+    }
+
+    return rows.map((row) => ({
+      ...row,
+      ...(summariesByPrincipalId.get(row.id.toLowerCase()) ?? {})
+    }));
   }
 }
 

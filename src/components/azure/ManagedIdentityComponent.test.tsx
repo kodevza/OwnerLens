@@ -36,6 +36,9 @@ test("loads managed identities with runtime risk enrichment", async () => {
       columns: [
         "displayName",
         "permissionRisk",
+        "ztaRemediationCountAll",
+        "ztaRemediationFailedCount",
+        "ztaMaxRisk",
         "azureRbac",
         "oauthPemrissionsCount",
         "appRolesPermissionCount",
@@ -45,7 +48,8 @@ test("loads managed identities with runtime risk enrichment", async () => {
         "ownerConfidence",
         "accountEnabled",
         "id",
-        "appId"
+        "appId",
+        "tags"
       ],
       count: 1,
       page: 1,
@@ -63,6 +67,9 @@ test("loads managed identities with runtime risk enrichment", async () => {
           loginUrl: null,
           managedIdentityAssignments: [],
           permissionRisk: "medium",
+          ztaRemediationCountAll: 3,
+          ztaRemediationFailedCount: 1,
+          ztaMaxRisk: "medium",
           publisherName: null,
           replyUrls: [],
           roleAssignments: [],
@@ -74,7 +81,7 @@ test("loads managed identities with runtime risk enrichment", async () => {
           assignedResourceGroups: ["rg-app"],
           potentialOwners: ["alice@example.test"],
           ownerConfidence: "high",
-          tags: []
+          tags: ["ownerlens", "managed-identity"]
         }
       ]
     })
@@ -87,13 +94,17 @@ test("loads managed identities with runtime risk enrichment", async () => {
 
   expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/data/entra/managedIdentities?page=1&count=50");
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
+  expect(getButton("Sort by ZTA remediations").textContent).toContain("ZTA remediations");
   expect(getButton("Sort by Entra permissions").textContent).toContain("Entra permissions");
+  expect(getButton("Sort by Tags").textContent).toContain("Tags");
   expect(container.textContent).toContain("1/2");
-  expect(container.textContent).toContain("medium");
+  expect(container.textContent).toContain("1/3");
   expect(container.textContent).toContain("Contributor on rg/rg-app");
   expect(container.textContent).toContain("rg-app");
   expect(container.textContent).toContain("alice@example.test");
   expect(container.textContent).toContain("high");
+  expect(container.textContent).toContain("ownerlens");
+  expect(container.textContent).toContain("managed-identity");
 
   act(() => root.unmount());
 });

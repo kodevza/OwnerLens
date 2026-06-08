@@ -1,10 +1,13 @@
+import { useMemo } from "react";
+
 import type { ManagedIdentity } from "../../core/azure/entra/managedIdentity";
 import { azureManagedIdentityColumnHelp } from "./azureReportConfig";
 import { buildServicePrincipalRuntimeFilterOptions } from "./servicePrincipalRuntimeFilters";
 import { readManagedIdentities } from "./api";
 import { GenericTable } from "../../report/components/GenericTable";
+import type { ColumnFilters } from "../../report/components/reportTableControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
-import { servicePrincipalFieldRenderers } from "./ServicePrincipalFieldRenderers";
+import { buildServicePrincipalFieldRenderers } from "./ServicePrincipalFieldRenderers";
 
 const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
   {
@@ -20,6 +23,13 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
     valueType: "riskLevel",
     getValue: (identity) => identity.permissionRisk,
     filter: { kind: "multiSelect" }
+  },
+  {
+    id: "ztaRemediationCountAll",
+    label: "ZTA remediations",
+    valueType: "number",
+    getValue: (identity) => identity.ztaRemediationCountAll,
+    filter: { kind: "text" }
   },
   {
     id: "azureRbac",
@@ -71,26 +81,38 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
     filter: { kind: "text" }
   },
   {
-    id: "appId",
-    label: "Client/App ID",
-    valueType: "text",
-    getValue: (identity) => identity.appId,
+    id: "tags",
+    label: "Tags",
+    valueType: "list",
+    getValue: (identity) => identity.tags,
     filter: { kind: "text" }
-  }
+  },
 ];
 
-export function ManagedIdentityComponent() {
+export function ManagedIdentityComponent({
+  initialFilters,
+  onZtaRemediationsClick
+}: {
+  initialFilters?: ColumnFilters;
+  onZtaRemediationsClick?: (objectId: string) => void;
+}) {
+  const fieldRenderers = useMemo(
+    () => buildServicePrincipalFieldRenderers<ManagedIdentity>({ onZtaRemediationsClick }),
+    [onZtaRemediationsClick]
+  );
+
   return (
     <GenericTable
       buildFilterOptions={buildServicePrincipalRuntimeFilterOptions}
       columnHelp={azureManagedIdentityColumnHelp}
       emptyMessage="No managed identities match the filter."
-      fieldRenderers={servicePrincipalFieldRenderers}
+      fieldRenderers={fieldRenderers}
       fields={managedIdentityFields}
       getRowKey={(row) => row.id}
+      initialFilters={initialFilters}
       loadPage={readManagedIdentities}
       loadingMessage="Loading managed identities..."
-      minWidthClassName="min-w-[1920px]"
+      minWidthClassName="min-w-[2160px]"
     />
   );
 }

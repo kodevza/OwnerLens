@@ -1,5 +1,6 @@
 import type { ManagedIdentity } from "../../core/azure/entra/managedIdentity";
 import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
+import type { ZtaReport } from "../../core/azure/ztaReport";
 import type { ResourceGroupOwnershipRow } from "../../providers/azure/runtime/resources/resourceGroupOwnership";
 import type { ColumnFilters } from "../../report/components/reportTableControls";
 import { appendRuntimeCollectionFilters } from "../../report/runtimeCollectionQuery";
@@ -97,6 +98,15 @@ export async function readResourceGroups({
   }
 
   return (await response.json()) as ResourceGroupRuntimeResponse;
+}
+
+export async function readZeroTrustAssessmentReport({ signal }: { signal: AbortSignal }): Promise<ZtaReport> {
+  const response = await fetch("/api/data/zeroTrustAssessment/report", { signal });
+  if (!response.ok) {
+    throw new Error(`Zero Trust Assessment report read failed: ${response.status}`);
+  }
+
+  return (await response.json()) as ZtaReport;
 }
 
 export async function updateDisabledOwnerEvidence({

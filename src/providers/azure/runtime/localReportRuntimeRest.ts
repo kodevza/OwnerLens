@@ -5,6 +5,7 @@ import { createRuntimeRestMiddleware, type RuntimeRestEndpoint } from "../../../
 import { defineEntraLocalReportRuntimeRestEndpoints } from "./entra/localReportRuntimeRest";
 import { LocalReportRuntime } from "./LocalReportRuntime";
 import { defineAzureResourcesLocalReportRuntimeRestEndpoints } from "./resources/localReportRuntimeRest";
+import { defineZeroTrustAssessmentLocalReportRuntimeRestEndpoints } from "./zta/localReportRuntimeRest";
 
 const restBasePath = "/api/data";
 
@@ -33,6 +34,7 @@ export function defineLocalReportRuntimeRestEndpoints(runtime: LocalReportRuntim
     },
     ...defineEntraLocalReportRuntimeRestEndpoints(runtime, restBasePath),
     ...defineAzureResourcesLocalReportRuntimeRestEndpoints(runtime, restBasePath),
+    ...defineZeroTrustAssessmentLocalReportRuntimeRestEndpoints(runtime, restBasePath),
     {
       path: `${restBasePath}/runtime/enrichment/recalculate`,
       handle: async () => {

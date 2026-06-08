@@ -1,10 +1,8 @@
-import type { EntraServicePrincipal } from "../../providers/azure/inputTransferObject/entra/EntraServicePrincipal";
+import type { ManagedIdentity } from "../../core/azure/entra/managedIdentity";
+import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
 import type { ColumnFilterOptions } from "../../report/applyCollectionControls";
 
-type RuntimeServicePrincipalRow = EntraServicePrincipal & {
-  permissionRisk?: string;
-  ownerConfidence?: string;
-};
+type RuntimeServicePrincipalRow = ServicePrincipal | ManagedIdentity;
 
 export function buildServicePrincipalRuntimeFilterOptions(rows: RuntimeServicePrincipalRow[]): ColumnFilterOptions {
   return {
@@ -12,7 +10,8 @@ export function buildServicePrincipalRuntimeFilterOptions(rows: RuntimeServicePr
     isAllParticipant: ["true", "false"],
     ownerConfidence: uniqueSorted(rows.map((row) => row.ownerConfidence ?? "")),
     permissionRisk: uniqueSorted(rows.map((row) => row.permissionRisk ?? "")),
-    servicePrincipalType: uniqueSorted(rows.map((row) => row.servicePrincipalType))
+    servicePrincipalType: uniqueSorted(rows.map((row) => row.servicePrincipalType)),
+    ztaMaxRisk: uniqueSorted(rows.map((row) => row.ztaMaxRisk ?? ""))
   };
 }
 

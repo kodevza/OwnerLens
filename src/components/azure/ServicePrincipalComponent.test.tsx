@@ -24,6 +24,9 @@ const columns = [
   "displayName",
   "servicePrincipalType",
   "permissionRisk",
+  "ztaRemediationCountAll",
+  "ztaRemediationFailedCount",
+  "ztaMaxRisk",
   "azureRbac",
   "oauthPemrissionsCount",
   "appRolesPermissionCount",
@@ -85,22 +88,21 @@ test("loads service principals through the full table UI and sends filters and p
   expect(getButton("Sort by Display name").textContent).toContain("Display name");
   expect(getButton("Sort by Type").textContent).toContain("Type");
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
+  expect(getButton("Sort by ZTA remediations").textContent).toContain("ZTA remediations");
   expect(getButton("Sort by Azure RBAC").textContent).toContain("Azure RBAC");
   expect(getButton("Sort by Entra permissions").textContent).toContain("Entra permissions");
   expect(getButton("Sort by Owner").textContent).toContain("Owner");
   expect(getButton("Sort by Owner confidence").textContent).toContain("Owner confidence");
   expect(getButton("Sort by Enabled").textContent).toContain("Enabled");
   expect(getButton("Sort by Object ID").textContent).toContain("Object ID");
-  expect(getButton("Sort by Client/App ID").textContent).toContain("Client/App ID");
-  expect(getButton("Sort by App display name").textContent).toContain("App display name");
   expect(getButton("Sort by Publisher").textContent).toContain("Publisher");
   expect(getButton("Sort by Tags").textContent).toContain("Tags");
   expect(container.textContent).toContain("graph-sp-id");
   expect(container.textContent).toContain("high");
+  expect(container.textContent).toContain("2/4");
   expect(container.textContent).toContain("3/1");
   expect(container.textContent).toContain("Owner on subscription");
   expect(container.textContent).toContain("platform@example.test");
-  expect(container.textContent).toContain("payroll-client-id");
   expect(container.textContent).toContain("Microsoft");
   expect(container.textContent).toContain("finance");
   expect(container.textContent).toContain("Page 1 of 2");
@@ -171,7 +173,10 @@ const graphApi = servicePrincipal({
   potentialOwners: ["platform@example.test"],
   publisherName: "Microsoft",
   servicePrincipalType: "Application",
-  tags: ["windowsAzureActiveDirectoryIntegratedApp"]
+  tags: ["windowsAzureActiveDirectoryIntegratedApp"],
+  ztaMaxRisk: "high",
+  ztaRemediationCountAll: 4,
+  ztaRemediationFailedCount: 2
 });
 
 const payrollApi = servicePrincipal({
@@ -214,6 +219,9 @@ function servicePrincipal(input: Partial<ServicePrincipal> & Pick<ServicePrincip
     oauthPemrissionsCount: 0,
     appRolesPermissionCount: 0,
     isAllParticipant: false,
+    ztaRemediationCountAll: 0,
+    ztaRemediationFailedCount: 0,
+    ztaMaxRisk: "none",
     ...input
   } as ServicePrincipal;
 }

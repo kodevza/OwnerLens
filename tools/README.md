@@ -57,7 +57,10 @@ Common resource snapshot options:
 .\tools\prepare-resource-snapshot.ps1 -OutputPath ".\data\snapshot-prod.json"
 .\tools\prepare-resource-snapshot.ps1 -ActivityDays 30 -MaxActivityRecords 5000
 .\tools\prepare-resource-snapshot.ps1 -SkipAuditLogsExport
+.\tools\prepare-resource-snapshot.ps1 -ExpandResourceProperties
 ```
+
+Resource property expansion is disabled by default because OwnerLens reads the standard resource fields plus identity data from the resource list response. Use `-ExpandResourceProperties` only when debugging or when you need Azure's additional expanded metadata in a raw snapshot.
 
 Create the Entra snapshot:
 
