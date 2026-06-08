@@ -1,8 +1,7 @@
 import { buildAzureOwnershipReport } from "./buildAzureOwnershipReport";
 import { azureOwnerAdapter } from "./resolveAzureOwner";
-import type { EntraSnapshot } from "../domain/entra";
-import type { AzureSnapshot } from "../domain/resources";
-import type { AzureReportConfig } from "./azureOwnershipTypes";
+import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
+import type { AzureSnapshot } from "../domain/resources/AzureSnapshot";
 
 test("resolves owners from configurable tag names", () => {
   const report = buildAzureOwnershipReport(resourceSnapshot(), entraSnapshot(), {

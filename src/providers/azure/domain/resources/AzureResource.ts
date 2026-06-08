@@ -1,10 +1,6 @@
 import type { AzureResourceTags } from "./AzureResourceGroup";
 
-export type AzureUserAssignedIdentityAssignment = {
-  resourceId: string;
-  clientId: string | null;
-  principalId: string | null;
-};
+export type { AzureUserAssignedIdentityAssignment } from "../../../../core/azure/resources";
 
 export type AzureResource = {
   subscriptionId: string;

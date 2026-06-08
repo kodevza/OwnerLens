@@ -195,6 +195,28 @@ module.exports = {
       }
     },
     {
+      name: 'core-must-not-import-outside-core',
+      severity: 'error',
+      from: {
+        path: '^src/core/'
+      },
+      to: {
+        path: '^src/',
+        pathNot: '^src/core/'
+      }
+    },
+    {
+      name: 'lib-must-not-import-outside-lib',
+      severity: 'error',
+      from: {
+        path: '^src/lib/'
+      },
+      to: {
+        path: '^src/',
+        pathNot: '^src/lib/'
+      }
+    },
+    {
       name: 'providers-must-not-import-ui',
       severity: 'error',
       from: {
@@ -355,6 +377,11 @@ module.exports = {
     
     reporterOptions: {
       dot: {
+        filters: {
+          exclude: {
+            path: '^src/(?:core|lib)/'
+          }
+        },
         // Pattern of modules to consolidate to. The default pattern in this configuration
         // collapses everything in node_modules to one folder deep so you see
         // the external modules, but not their innards.

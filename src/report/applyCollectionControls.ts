@@ -20,7 +20,6 @@ export type ColumnFilter =
 
 export type ColumnFilters = Record<string, ColumnFilter>;
 export type ColumnFilterOptions = Record<string, string[]>;
-export type ReportFilterValues = Record<string, string | string[]>;
 
 type ActiveFieldFilter<TRow> = {
   field: ReportFieldDescriptor<TRow>;
@@ -59,25 +58,6 @@ export function applyCollectionControls<TRow>(
     controlledRows,
     filterOptions
   };
-}
-
-export function normalizeReportFilterValues<TRow>(
-  fields: ReportFieldDescriptor<TRow>[],
-  values: ReportFilterValues
-): ColumnFilters {
-  return Object.fromEntries(
-    fields
-      .filter((field) => field.filter && values[field.id] !== undefined)
-      .map((field) => {
-        const value = values[field.id];
-
-        if (field.filter?.kind === "multiSelect") {
-          return [field.id, { type: "values", values: Array.isArray(value) ? value : [String(value)] }];
-        }
-
-        return [field.id, { type: "text", value: Array.isArray(value) ? value.join(" ") : String(value) }];
-      })
-  );
 }
 
 export function buildCollectionFilterOptions<TRow>(

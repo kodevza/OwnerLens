@@ -1,6 +1,6 @@
-import type { OwnershipTarget, OwnershipTargetRef } from "../../../core/ownership";
-import type { EntraServicePrincipal } from "../domain/entra";
-import type { AzureUserAssignedManagedIdentity } from "../domain/resources";
+import type { OwnershipTarget, OwnershipTargetRef } from "../../../core/ownership/OwnershipTarget";
+import type { EntraServicePrincipal } from "../inputTransferObject/entra/EntraServicePrincipal";
+import type { AzureUserAssignedManagedIdentity } from "../domain/resources/AzureUserAssignedManagedIdentity";
 
 export function buildAzureManagedIdentityOwnershipTargets(
   managedIdentities: AzureUserAssignedManagedIdentity[]

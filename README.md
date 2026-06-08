@@ -33,18 +33,23 @@ flowchart TD
 ```    
 ## Features
 
-- Resolve owners from configurable Azure tags such as `ownerGroup`,
+➡️ Resolve owners from configurable Azure tags such as `ownerGroup`,
   `costCenter`, and `owner`. Configure tag names and confidence levels in
-  [src/config.ts](src/config.ts).
-- Review ownership confidence and supporting evidence.
-- Inspect Azure role assignment and permission risk signals.
-- Review managed identity and service principal relationships.
-- Export resolved ownership results to CSV and JSON files for resource groups,
-  service principals, and managed identities.
-- Enrich ZTA Assessment findings with ownership context, split actionable
+  [src/core/config.ts](src/core/config.ts).
+
+➡️ Review ownership confidence and supporting evidence.
+
+➡️ Inspect Azure role assignment and permission risk signals.
+
+➡️ Review managed identity and service principal relationships.
+
+➡️ Export resolved ownership results to CSV and JSON files for resource groups, service principals, and managed identities.
+
+➡️ Enrich ZTA Assessment findings with ownership context, split actionable
   remediations across accountable teams, and trace remediation assignments back
   to ownership evidence.
-- Switch between snapshot files found in `./data`.
+
+➡️ Switch between snapshot files found in `./data`.
 
 ## Requirements
 
@@ -114,7 +119,7 @@ npm run preview
 
 ## Configure Ownership Rules
 
-Edit [src/config.ts](src/config.ts) to change ownership resolution defaults.
+Edit [src/core/config.ts](src/core/config.ts) to change ownership resolution defaults.
 
 `ownerTags` is ordered by priority. The tag value is treated as the owner
 identity and can be a group name, security group alias, or user email.
@@ -139,10 +144,44 @@ export const appConfig = {
 npm test
 ```
 
+Run only component tests:
+
+```bash
+npm run test:components
+```
+
+Track component-test coverage:
+
+```bash
+npm run test:components:coverage
+```
+
+The component coverage report is written to `coverage/components`. Jest also
+enforces the current component coverage baseline so new UI changes do not
+silently reduce coverage.
+
+## Dependency Graph
+
+Generate a folder-level dependency graph:
+
+```bash
+npm run deps:graph
+```
+
+The generated SVG is written to `output/dependency-folders.svg`.
+
+Generate a file-level dependency graph:
+
+```bash
+npm run deps:graph:files
+```
+
+The generated SVG is written to `output/dependency-files.svg`.
+
 ## Project Structure
 
 - `src/App.tsx` loads snapshot files and renders the report.
-- `src/config.ts` contains ownership resolution configuration.
+- `src/core/config.ts` contains ownership resolution configuration.
 - `src/report` contains report UI, filtering, view helpers, and tests.
 - `src/providers/azure` contains Azure and Entra domain models and ownership
   analysis logic.
