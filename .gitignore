@@ -1,9 +1,10 @@
 node_modules/
 dist/
+coverage/
 *.tsbuildinfo
 .playwright-cli/
 output/
-data/*snapshot.json
+data/
 .tmp
 src.zip
 dependency-graph.svg

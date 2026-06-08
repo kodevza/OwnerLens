@@ -1,6 +1,6 @@
-import { buildZeroTrustAssessmentAuditFindingTarget } from "../../../core/ownership";
-import type { EntraServicePrincipal } from "../domain/entra";
-import type { AzureUserAssignedManagedIdentity } from "../domain/resources";
+import { buildZeroTrustAssessmentAuditFindingTarget } from "../../../core/ownership/OwnershipTarget";
+import type { EntraServicePrincipal } from "../inputTransferObject/entra/EntraServicePrincipal";
+import type { AzureUserAssignedManagedIdentity } from "../domain/resources/AzureUserAssignedManagedIdentity";
 import {
   buildAzureManagedIdentityOwnershipTargets,
   buildEntraServicePrincipalOwnershipTargets

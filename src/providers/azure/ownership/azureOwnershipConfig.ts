@@ -1,4 +1,4 @@
-import { appConfig } from "../../../config";
+import { appConfig } from "../../../core/config";
 import { azureOwnerAdapter } from "./resolveAzureOwner";
 import type { AzureOwnerTagConfigMap, AzureReportConfig } from "./azureOwnershipTypes";
 
@@ -15,8 +15,6 @@ export const azureOwnershipConfig: AzureReportConfig = {
     }
   ]
 };
-
-export const azureReportConfig = azureOwnershipConfig;
 
 function buildOwnerTagConfigMap(ownerTags: typeof appConfig.azure.ownership.ownerTags): AzureOwnerTagConfigMap {
   return Object.fromEntries(ownerTags.map(({ name, confidence }) => [name, { confidence }]));

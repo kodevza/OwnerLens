@@ -12,23 +12,3 @@ export type OwnerReportRow = OwnerResolution & {
 export type OwnerReport = {
   owners: OwnerReportRow[];
 };
-
-export type SnapshotFile = {
-  name: string;
-  size: number;
-  updatedAt: string;
-};
-
-export type SnapshotData = {
-  meta?: {
-    provider?: string;
-    createdAt?: string;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-};
-
-export type LoadState =
-  | { status: "loading" }
-  | { status: "ready" }
-  | { status: "error"; message: string };

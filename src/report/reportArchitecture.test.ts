@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
-import { applyCollectionControls, normalizeReportFilterValues } from "./applyCollectionControls.ts";
+import { applyCollectionControls } from "./applyCollectionControls.ts";
 import { buildCollectionColumns } from "./buildCollectionColumns.tsx";
 import type { ReportFieldDescriptor } from "./reportTypes.ts";
 
@@ -38,9 +38,9 @@ const fields: ReportFieldDescriptor<Row>[] = [
 test("generic filter engine applies provider-defined field filters", () => {
   const filteredRows = applyCollectionControls(rows, fields, {
     query: "platform",
-    filters: normalizeReportFilterValues(fields, {
-      risk: ["high"]
-    })
+    filters: {
+      risk: { type: "values", values: ["high"] }
+    }
   }).controlledRows;
 
   expect(filteredRows.map((row) => row.id)).toEqual(["platform-high"]);

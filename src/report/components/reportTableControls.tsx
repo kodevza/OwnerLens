@@ -12,7 +12,7 @@ import {
   type SortRule
 } from "../applyCollectionControls";
 
-export type { ColumnFilter, ColumnFilterOptions, ColumnFilters, SortDirection, SortRule } from "../applyCollectionControls";
+export type { ColumnFilter, ColumnFilterOptions, ColumnFilters, SortRule } from "../applyCollectionControls";
 
 export type ReportTableColumn<TRow> = {
   id: string;

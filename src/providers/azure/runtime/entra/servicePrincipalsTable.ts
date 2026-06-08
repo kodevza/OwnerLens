@@ -1,0 +1,176 @@
+import type { DuckDBConnection } from "@duckdb/node-api";
+
+import type { EntraServicePrincipal } from "../../inputTransferObject/entra/EntraServicePrincipal";
+
+export async function prepareEntraServicePrincipalsTable(connection: DuckDBConnection): Promise<void> {
+  await connection.run(`
+    create table if not exists entra_service_principals (
+      ordinal integer not null,
+      id varchar primary key,
+      app_id varchar not null,
+      display_name varchar not null,
+      app_display_name varchar,
+      service_principal_type varchar not null,
+      publisher_name varchar,
+      account_enabled boolean not null,
+      app_owner_organization_id varchar,
+      homepage varchar,
+      login_url varchar,
+      reply_urls json not null,
+      service_principal_names json not null,
+      tags json not null,
+      app_roles json not null,
+      owners json not null,
+      app_owners json not null,
+      service_principal_owners json not null,
+      application_owners json not null,
+      metadata json
+    )
+  `);
+}
+
+export async function insertEntraServicePrincipalRows(
+  connection: DuckDBConnection,
+  servicePrincipals: EntraServicePrincipal[]
+): Promise<void> {
+  for (const [ordinal, servicePrincipal] of servicePrincipals.entries()) {
+    await connection.run(
+      `insert into entra_service_principals values (
+        $ordinal,
+        $id,
+        $appId,
+        $displayName,
+        $appDisplayName,
+        $servicePrincipalType,
+        $publisherName,
+        $accountEnabled,
+        $appOwnerOrganizationId,
+        $homepage,
+        $loginUrl,
+        $replyUrls::json,
+        $servicePrincipalNames::json,
+        $tags::json,
+        $appRoles::json,
+        $owners::json,
+        $appOwners::json,
+        $servicePrincipalOwners::json,
+        $applicationOwners::json,
+        $metadata::json
+      )`,
+      {
+        ordinal,
+        id: servicePrincipal.id,
+        appId: servicePrincipal.appId,
+        displayName: servicePrincipal.displayName,
+        appDisplayName: servicePrincipal.appDisplayName,
+        servicePrincipalType: servicePrincipal.servicePrincipalType,
+        publisherName: servicePrincipal.publisherName,
+        accountEnabled: servicePrincipal.accountEnabled,
+        appOwnerOrganizationId: servicePrincipal.appOwnerOrganizationId,
+        homepage: servicePrincipal.homepage,
+        loginUrl: servicePrincipal.loginUrl,
+        replyUrls: JSON.stringify(servicePrincipal.replyUrls),
+        servicePrincipalNames: JSON.stringify(servicePrincipal.servicePrincipalNames),
+        tags: JSON.stringify(servicePrincipal.tags),
+        appRoles: JSON.stringify(servicePrincipal.appRoles ?? []),
+        owners: JSON.stringify(servicePrincipal.owners ?? []),
+        appOwners: JSON.stringify(servicePrincipal.appOwners ?? []),
+        servicePrincipalOwners: JSON.stringify(servicePrincipal.servicePrincipalOwners ?? []),
+        applicationOwners: JSON.stringify(servicePrincipal.applicationOwners ?? []),
+        metadata: JSON.stringify(servicePrincipal.metadata ?? null)
+      }
+    );
+  }
+}
+
+export async function readEntraServicePrincipalRows(connection: DuckDBConnection): Promise<EntraServicePrincipal[]> {
+  const rows = await readRows<EntraServicePrincipalRow>(
+    connection,
+    `select
+      id,
+      app_id,
+      display_name,
+      app_display_name,
+      service_principal_type,
+      publisher_name,
+      account_enabled,
+      app_owner_organization_id,
+      homepage,
+      login_url,
+      reply_urls,
+      service_principal_names,
+      tags,
+      app_roles,
+      owners,
+      app_owners,
+      service_principal_owners,
+      application_owners,
+      metadata
+    from entra_service_principals
+    order by ordinal`
+  );
+
+  return rows.map(mapServicePrincipalRow);
+}
+
+type EntraServicePrincipalRow = {
+  id: string;
+  app_id: string;
+  display_name: string;
+  app_display_name: string | null;
+  service_principal_type: EntraServicePrincipal["servicePrincipalType"];
+  publisher_name: string | null;
+  account_enabled: boolean;
+  app_owner_organization_id: string | null;
+  homepage: string | null;
+  login_url: string | null;
+  reply_urls: string;
+  service_principal_names: string;
+  tags: string;
+  app_roles: string;
+  owners: string;
+  app_owners: string;
+  service_principal_owners: string;
+  application_owners: string;
+  metadata: string | null;
+};
+
+function mapServicePrincipalRow(row: EntraServicePrincipalRow): EntraServicePrincipal {
+  return {
+    id: row.id,
+    appId: row.app_id,
+    displayName: row.display_name,
+    appDisplayName: row.app_display_name,
+    servicePrincipalType: row.service_principal_type,
+    publisherName: row.publisher_name,
+    accountEnabled: row.account_enabled,
+    appOwnerOrganizationId: row.app_owner_organization_id,
+    homepage: row.homepage,
+    loginUrl: row.login_url,
+    replyUrls: parseJsonArray<string>(row.reply_urls),
+    servicePrincipalNames: parseJsonArray<string>(row.service_principal_names),
+    tags: parseJsonArray<string>(row.tags),
+    appRoles: parseJsonArray(row.app_roles),
+    owners: parseJsonArray(row.owners),
+    appOwners: parseJsonArray(row.app_owners),
+    servicePrincipalOwners: parseJsonArray(row.service_principal_owners),
+    applicationOwners: parseJsonArray(row.application_owners),
+    metadata: row.metadata ? parseJsonObject(row.metadata) : null
+  };
+}
+
+async function readRows<Row extends Record<string, unknown>>(
+  connection: DuckDBConnection,
+  sql: string
+): Promise<Row[]> {
+  const reader = await connection.runAndReadAll(sql);
+  return reader.getRowObjectsJson() as Row[];
+}
+
+function parseJsonArray<T>(value: string | null | undefined): T[] {
+  return value ? JSON.parse(value) : [];
+}
+
+function parseJsonObject(value: string | null | undefined): Record<string, unknown> {
+  return value ? JSON.parse(value) : {};
+}
