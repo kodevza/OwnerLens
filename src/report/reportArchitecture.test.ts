@@ -57,6 +57,22 @@ test("generic column factory builds columns from field descriptors", () => {
   expect(columns[1].render).toEqual(expect.any(Function));
 });
 
+test("generic column factory attaches help definitions by field id", () => {
+  const columns = buildCollectionColumns(fields, {
+    columnHelp: {
+      owner: {
+        source: "Computed from owner evidence.",
+        logic: ["Uses the resolved owner value."]
+      }
+    }
+  });
+
+  expect(columns[0].help).toEqual({
+    source: "Computed from owner evidence.",
+    logic: ["Uses the resolved owner value."]
+  });
+});
+
 test("Azure provider source does not contain UI rendering concepts", () => {
   const providerSources = readSourceFiles(join(process.cwd(), "src/providers/azure"));
 

@@ -4,6 +4,7 @@ import type {
   ManagedIdentityPermissionRiskSummary
 } from "../identityEnrichment";
 import type { AzureRoleAssignment } from "../resources";
+import type { OwnerConfidence } from "../../ownership/types";
 import type { EntraServicePrincipal, EntraServicePrincipalType } from "./types";
 
 export type AzureIdentityRuntimeEnrichment = {
@@ -12,9 +13,17 @@ export type AzureIdentityRuntimeEnrichment = {
   roleAssignments: AzureRoleAssignment[];
 };
 
+export type EntraPrincipalPermissionSummary = {
+  oauthPemrissionsCount: number;
+  appRolesPermissionCount: number;
+  isAllParticipant: boolean;
+};
+
 export type ServicePrincipal = EntraServicePrincipal & AzureIdentityRuntimeEnrichment & {
   servicePrincipalType: Exclude<EntraServicePrincipalType, "ManagedIdentity">;
-};
+  potentialOwners?: string[];
+  ownerConfidence?: OwnerConfidence;
+} & EntraPrincipalPermissionSummary;
 
 export function isServicePrincipal(servicePrincipal: EntraServicePrincipal): servicePrincipal is ServicePrincipal {
   return servicePrincipal.servicePrincipalType !== "ManagedIdentity";
@@ -22,12 +31,29 @@ export function isServicePrincipal(servicePrincipal: EntraServicePrincipal): ser
 
 export function toServicePrincipals(
   servicePrincipals: EntraServicePrincipal[],
-  enrichment?: LatestAzureIdentityEnrichment
+  enrichment?: LatestAzureIdentityEnrichment,
+  permissionsByPrincipalId: Map<string, EntraPrincipalPermissionSummary> = new Map()
 ): ServicePrincipal[] {
   return servicePrincipals.filter(isServicePrincipal).map((servicePrincipal) => ({
     ...servicePrincipal,
-    ...getAzureIdentityRuntimeEnrichment(servicePrincipal, enrichment)
+    ...getAzureIdentityRuntimeEnrichment(servicePrincipal, enrichment),
+    ...getEntraPrincipalPermissionSummary(servicePrincipal, permissionsByPrincipalId)
   }));
+}
+
+export function getEntraPrincipalPermissionSummary(
+  servicePrincipal: EntraServicePrincipal,
+  permissionsByPrincipalId: Map<string, EntraPrincipalPermissionSummary>
+): EntraPrincipalPermissionSummary {
+  return permissionsByPrincipalId.get(servicePrincipal.id.toLowerCase()) ?? createEmptyPermissionSummary();
+}
+
+function createEmptyPermissionSummary(): EntraPrincipalPermissionSummary {
+  return {
+    oauthPemrissionsCount: 0,
+    appRolesPermissionCount: 0,
+    isAllParticipant: false
+  };
 }
 
 export function getAzureIdentityRuntimeEnrichment(

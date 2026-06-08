@@ -33,7 +33,20 @@ test("loads managed identities with runtime risk enrichment", async () => {
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
     jsonResponse({
       collectionId: "entra.managedIdentities",
-      columns: ["displayName", "permissionRisk", "azureRbac", "assignedResourceGroups", "accountEnabled", "id", "appId"],
+      columns: [
+        "displayName",
+        "permissionRisk",
+        "azureRbac",
+        "oauthPemrissionsCount",
+        "appRolesPermissionCount",
+        "isAllParticipant",
+        "assignedResourceGroups",
+        "potentialOwners",
+        "ownerConfidence",
+        "accountEnabled",
+        "id",
+        "appId"
+      ],
       count: 1,
       page: 1,
       pageSize: 50,
@@ -53,9 +66,14 @@ test("loads managed identities with runtime risk enrichment", async () => {
           publisherName: null,
           replyUrls: [],
           roleAssignments: [],
+          oauthPemrissionsCount: 1,
+          appRolesPermissionCount: 2,
+          isAllParticipant: true,
           servicePrincipalNames: [],
           servicePrincipalType: "ManagedIdentity",
           assignedResourceGroups: ["rg-app"],
+          potentialOwners: ["alice@example.test"],
+          ownerConfidence: "high",
           tags: []
         }
       ]
@@ -69,9 +87,13 @@ test("loads managed identities with runtime risk enrichment", async () => {
 
   expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/data/entra/managedIdentities?page=1&count=50");
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
+  expect(getButton("Sort by Entra permissions").textContent).toContain("Entra permissions");
+  expect(container.textContent).toContain("1/2");
   expect(container.textContent).toContain("medium");
   expect(container.textContent).toContain("Contributor on rg/rg-app");
   expect(container.textContent).toContain("rg-app");
+  expect(container.textContent).toContain("alice@example.test");
+  expect(container.textContent).toContain("high");
 
   act(() => root.unmount());
 });

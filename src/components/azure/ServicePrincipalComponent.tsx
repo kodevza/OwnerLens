@@ -1,8 +1,10 @@
 import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
+import { azureServicePrincipalColumnHelp } from "./azureReportConfig";
 import { buildServicePrincipalRuntimeFilterOptions } from "./servicePrincipalRuntimeFilters";
 import { readServicePrincipals } from "./api";
 import { GenericTable } from "../../report/components/GenericTable";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
+import { servicePrincipalFieldRenderers } from "./ServicePrincipalFieldRenderers";
 
 const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
   {
@@ -32,6 +34,27 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     valueType: "text",
     getValue: (sp) => sp.azureRbac,
     filter: { kind: "text" }
+  },
+  {
+    id: "oauthPemrissionsCount",
+    label: "Entra permissions",
+    valueType: "text",
+    getValue: (sp) => sp.oauthPemrissionsCount,
+    filter: { kind: "text" }
+  },
+  {
+    id: "potentialOwners",
+    label: "Owner",
+    valueType: "list",
+    getValue: (sp) => sp.potentialOwners,
+    filter: { kind: "text" }
+  },
+  {
+    id: "ownerConfidence",
+    label: "Owner confidence",
+    valueType: "ownerConfidence",
+    getValue: (sp) => sp.ownerConfidence ?? "none",
+    filter: { kind: "multiSelect" }
   },
   {
     id: "accountEnabled",
@@ -77,16 +100,19 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
   }
 ];
 
+
 export function ServicePrincipalComponent() {
   return (
     <GenericTable
       buildFilterOptions={buildServicePrincipalRuntimeFilterOptions}
+      columnHelp={azureServicePrincipalColumnHelp}
       emptyMessage="No service principals match the filter."
+      fieldRenderers={servicePrincipalFieldRenderers}
       fields={servicePrincipalFields}
       getRowKey={(row) => row.id}
       loadPage={readServicePrincipals}
       loadingMessage="Loading service principals..."
-      minWidthClassName="min-w-[1760px]"
+      minWidthClassName="min-w-[2400px]"
     />
   );
 }

@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { AzureResourceTags } from "../../providers/azure/domain/resources/AzureResourceGroup";
 import type { ResourceGroupOwnershipRow } from "../../providers/azure/runtime/resources/resourceGroupOwnership";
 import type { OwnerEvidence } from "../../report/types";
+import { azureOwnerColumnHelp } from "./azureReportConfig";
 import { readResourceGroups, updateDisabledOwnerEvidence } from "./api";
 import { EvidenceList } from "../../report/components/EvidenceList";
 import { GenericTable } from "../../report/components/GenericTable";
@@ -119,6 +120,7 @@ export function ResourceGroupComponent() {
     <>
       {toggleError ? <div className="alert">{toggleError}</div> : null}
       <GenericTable
+        columnHelp={azureOwnerColumnHelp}
         emptyMessage="No resource groups match the filter."
         fieldRenderers={resourceGroupFieldRenderers}
         fields={resourceGroupFields}
