@@ -1,10 +1,13 @@
+import { useMemo } from "react";
+
 import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
 import { azureServicePrincipalColumnHelp } from "./azureReportConfig";
 import { buildServicePrincipalRuntimeFilterOptions } from "./servicePrincipalRuntimeFilters";
 import { readServicePrincipals } from "./api";
 import { GenericTable } from "../../report/components/GenericTable";
+import type { ColumnFilters } from "../../report/components/reportTableControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
-import { servicePrincipalFieldRenderers } from "./ServicePrincipalFieldRenderers";
+import { buildServicePrincipalFieldRenderers } from "./ServicePrincipalFieldRenderers";
 
 const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
   {
@@ -27,6 +30,13 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     valueType: "riskLevel",
     getValue: (sp) => sp.permissionRisk,
     filter: { kind: "multiSelect" }
+  },
+  {
+    id: "ztaRemediationCountAll",
+    label: "ZTA remediations",
+    valueType: "number",
+    getValue: (sp) => sp.ztaRemediationCountAll,
+    filter: { kind: "text" }
   },
   {
     id: "azureRbac",
@@ -71,20 +81,6 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     filter: { kind: "text" }
   },
   {
-    id: "appId",
-    label: "Client/App ID",
-    valueType: "text",
-    getValue: (sp) => sp.appId,
-    filter: { kind: "text" }
-  },
-  {
-    id: "appDisplayName",
-    label: "App display name",
-    valueType: "text",
-    getValue: (sp) => sp.appDisplayName,
-    filter: { kind: "text" }
-  },
-  {
     id: "publisherName",
     label: "Publisher",
     valueType: "text",
@@ -101,15 +97,27 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
 ];
 
 
-export function ServicePrincipalComponent() {
+export function ServicePrincipalComponent({
+  initialFilters,
+  onZtaRemediationsClick
+}: {
+  initialFilters?: ColumnFilters;
+  onZtaRemediationsClick?: (objectId: string) => void;
+}) {
+  const fieldRenderers = useMemo(
+    () => buildServicePrincipalFieldRenderers<ServicePrincipal>({ onZtaRemediationsClick }),
+    [onZtaRemediationsClick]
+  );
+
   return (
     <GenericTable
       buildFilterOptions={buildServicePrincipalRuntimeFilterOptions}
       columnHelp={azureServicePrincipalColumnHelp}
       emptyMessage="No service principals match the filter."
-      fieldRenderers={servicePrincipalFieldRenderers}
+      fieldRenderers={fieldRenderers}
       fields={servicePrincipalFields}
       getRowKey={(row) => row.id}
+      initialFilters={initialFilters}
       loadPage={readServicePrincipals}
       loadingMessage="Loading service principals..."
       minWidthClassName="min-w-[2400px]"

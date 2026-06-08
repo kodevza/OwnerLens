@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -8,6 +8,271 @@ import { LocalReportRuntime } from "./LocalReportRuntime";
 import { defineLocalReportRuntimeRestEndpoints } from "./localReportRuntimeRest";
 import type { AzureSnapshot } from "../domain/resources/AzureSnapshot";
 import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
+import {
+  importZeroTrustAssessmentReportToDuckDb,
+  prepareZeroTrustAssessmentDuckDbSchema,
+  readZeroTrustAssessmentReportFromDuckDb
+} from "./zta/snapshotStore";
+import { insertEntraServicePrincipalRows, prepareEntraServicePrincipalsTable } from "./entra/servicePrincipalsTable";
+import type { ZeroTrustAssessmentReport } from "./zta/types";
+
+test("imports Zero Trust Assessment report into DuckDB and reads it back through the runtime", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "ownerlens-runtime-"));
+  const runtime = new LocalReportRuntime({ dataDir });
+  const exportDir = path.join(dataDir, "exports", "nested");
+
+  const report: ZeroTrustAssessmentReport = {
+    Account: "owner@example.test",
+    CurrentVersion: "2.4.100",
+    Domain: "example.test",
+    ExecutedAt: "2026-06-02T16:06:31.3057648+02:00",
+    LatestVersion: "2.3.0",
+    TenantId: "tenant-1",
+    TenantInfo: {
+      TenantOverview: {
+        UserCount: 4
+      }
+    },
+    TenantName: "Example tenant",
+    TestResultSummary: {
+      IdentityPassed: 1,
+      IdentityTotal: 2
+    },
+    Tests: [
+      {
+        TestId: "21791",
+        TestTitle: "Guest can't invite other guests",
+        TestPillar: "Identity",
+        TestImpact: "Medium",
+        TestImplementationCost: "Low",
+        TestMinimumLicense: "Free",
+        TestStatus: "Failed",
+        TestResult: "Tenant allows any user to invite guests.",
+        TestTags: ["ExternalCollaboration"],
+        TestSkipped: "",
+        TestDescription: "External collaboration should be restricted.",
+        TestCategory: "External collaboration",
+        TestRisk: "Medium",
+        TestSfiPillar: "Protect tenants and isolate production systems",
+        TestAppliesTo: ["Identity"],
+        RelatedObjects: [{ object_id: "object-1" }]
+      },
+      {
+        TestId: 21823,
+        TestTitle: "Guest self-service sign-up via user flow is disabled",
+        TestPillar: "Identity",
+        TestStatus: "Passed",
+        TestMinimumLicense: ["Free"],
+        RelatedObjects: []
+      }
+    ]
+  };
+
+  try {
+    await mkdir(exportDir, { recursive: true });
+    await writeFile(path.join(dataDir, "regular.json"), JSON.stringify({ TenantId: "not-zta" }), "utf8");
+    await writeFile(
+      path.join(exportDir, "older-zta-report.json"),
+      JSON.stringify({
+        ...report,
+        ExecutedAt: "2026-06-01T16:06:31.3057648+02:00",
+        Tests: [{ TestId: "old", TestStatus: "Failed" }]
+      }),
+      "utf8"
+    );
+    await writeFile(path.join(exportDir, "tenant-zta-report.json"), JSON.stringify(report), "utf8");
+    await runtime.initialize();
+
+    expect(runtime.getStatus().zeroTrustAssessment).toMatchObject({
+      imported: true,
+      fileName: "exports/nested/tenant-zta-report.json",
+      testCount: 2
+    });
+
+    const imported = await runtime.readZeroTrustAssessmentReport();
+    expect(imported).toMatchObject({
+      Meta: {
+        Account: "owner@example.test",
+        TenantId: "tenant-1",
+        TestResultSummary: {
+          IdentityPassed: 1,
+          IdentityTotal: 2
+        }
+      }
+    });
+    expect(imported.Tests).toHaveLength(2);
+    expect(imported.Tests[0]).toMatchObject({
+      TestId: "21791",
+      TestImpact: "medium",
+      TestRisk: "medium",
+      TestStatus: "Failed",
+      RelatedObjects: [{ object_id: "object-1" }]
+    });
+    expect(imported.Tests[1]).toMatchObject({
+      TestId: 21823,
+      TestMinimumLicense: ["Free"]
+    });
+
+    const endpoints = defineLocalReportRuntimeRestEndpoints(runtime);
+    const ztaReportEndpoint = endpoints.find((endpoint) => endpoint.path === "/api/data/zeroTrustAssessment/report");
+    await expect(
+      ztaReportEndpoint?.handle({
+        req: {},
+        url: new URL("http://localhost/api/data/zeroTrustAssessment/report")
+      })
+    ).resolves.toMatchObject({
+      Meta: {
+        TenantId: "tenant-1",
+        ExecutedAt: "2026-06-02T16:06:31.3057648+02:00"
+      },
+      Tests: [
+        expect.objectContaining({
+          TestId: "21791"
+        }),
+        expect.objectContaining({
+          TestId: 21823
+        })
+      ]
+    });
+  } finally {
+    await runtime.close();
+    await rm(dataDir, { force: true, recursive: true });
+  }
+});
+
+test("reads the latest Zero Trust Assessment report from DuckDB by execution time", async () => {
+  const instance = await DuckDBInstance.create(":memory:");
+  const connection = await instance.connect();
+  const olderReport: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-01T10:00:00.000Z",
+    TenantId: "tenant-old",
+    TestResultSummary: { IdentityPassed: 1 },
+    Tests: [{ TestId: "old", TestStatus: "Failed" }]
+  };
+  const latestReport: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-latest",
+    TestResultSummary: { IdentityPassed: 2 },
+    CustomTopLevelField: "preserved",
+    Tests: [{ TestId: "latest", TestStatus: "Passed" }]
+  };
+
+  try {
+    await prepareZeroTrustAssessmentDuckDbSchema(connection);
+    await importZeroTrustAssessmentReportToDuckDb(connection, olderReport, "older-zta-report.json");
+    await importZeroTrustAssessmentReportToDuckDb(connection, latestReport, "latest-zta-report.json");
+
+    await expect(readZeroTrustAssessmentReportFromDuckDb(connection)).resolves.toMatchObject({
+      TenantId: "tenant-latest",
+      CustomTopLevelField: "preserved",
+      Tests: [{ TestId: "latest", TestStatus: "Passed" }]
+    });
+  } finally {
+    connection.disconnectSync();
+    instance.closeSync();
+  }
+});
+
+test("imports Zero Trust Assessment related object ids for service principal joins", async () => {
+  const instance = await DuckDBInstance.create(":memory:");
+  const connection = await instance.connect();
+  const report: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-1",
+    TestResultSummary: { IdentityFailed: 1 },
+    Tests: [
+      {
+        TestId: "app-test",
+        TestStatus: "Failed",
+        RelatedObjects: [
+          { object_id: "sp-1", displayName: "Application app", servicePrincipalType: "Application" },
+          { id: "sp-2", displayName: "Application app by id", servicePrincipalType: "Application" },
+          { object_id: "mi-1", displayName: "Managed identity", servicePrincipalType: "ManagedIdentity" },
+          { object_id: "sp-1", displayName: "Duplicate app reference", servicePrincipalType: "Application" },
+          { displayName: "No object id" }
+        ]
+      },
+      {
+        TestId: "empty-test",
+        TestStatus: "Passed",
+        RelatedObjects: []
+      }
+    ]
+  };
+
+  try {
+    await prepareEntraServicePrincipalsTable(connection);
+    await prepareZeroTrustAssessmentDuckDbSchema(connection);
+    await insertEntraServicePrincipalRows(connection, [
+      servicePrincipal("sp-1", "app-1", "Application app", "Application"),
+      servicePrincipal("sp-2", "app-2", "Application app by id", "Application"),
+      servicePrincipal("mi-1", "mi-app-1", "Managed identity", "ManagedIdentity")
+    ]);
+
+    const status = await importZeroTrustAssessmentReportToDuckDb(connection, report, "zta-report.json");
+
+    const relatedRows = await connection.runAndReadAll(
+      `
+        select report_id, test_ordinal, related_object_id
+        from zta_test_related_objects
+        order by test_ordinal, related_object_id
+      `
+    );
+    expect(relatedRows.getRowObjectsJson()).toEqual([
+      {
+        report_id: status.reportId,
+        test_ordinal: 0,
+        related_object_id: "mi-1"
+      },
+      {
+        report_id: status.reportId,
+        test_ordinal: 0,
+        related_object_id: "sp-1"
+      },
+      {
+        report_id: status.reportId,
+        test_ordinal: 0,
+        related_object_id: "sp-2"
+      }
+    ]);
+
+    const joinedRows = await connection.runAndReadAll(
+      `
+        select
+          test.test_id,
+          related.related_object_id,
+          service_principal.service_principal_type
+        from zta_test_related_objects related
+        join zta_tests test
+          on test.report_id = related.report_id
+          and test.ordinal = related.test_ordinal
+        join entra_service_principals service_principal
+          on service_principal.id = related.related_object_id
+        order by related.related_object_id
+      `
+    );
+    expect(joinedRows.getRowObjectsJson()).toEqual([
+      {
+        test_id: "app-test",
+        related_object_id: "mi-1",
+        service_principal_type: "ManagedIdentity"
+      },
+      {
+        test_id: "app-test",
+        related_object_id: "sp-1",
+        service_principal_type: "Application"
+      },
+      {
+        test_id: "app-test",
+        related_object_id: "sp-2",
+        service_principal_type: "Application"
+      }
+    ]);
+  } finally {
+    connection.disconnectSync();
+    instance.closeSync();
+  }
+});
 
 test("imports Entra snapshot into DuckDB and reads it back through the runtime", async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), "ownerlens-runtime-"));
@@ -163,6 +428,115 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
           oauthPemrissionsCount: 0,
           appRolesPermissionCount: 0,
           isAllParticipant: false
+        })
+      ]
+    });
+  } finally {
+    await runtime.close();
+    await rm(dataDir, { force: true, recursive: true });
+  }
+});
+
+test("enriches Entra runtime collections with latest ZTA remediation summaries", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "ownerlens-runtime-"));
+  const runtime = new LocalReportRuntime({ dataDir });
+  const entraSnapshot: EntraSnapshot = {
+    meta: {
+      provider: "entra",
+      snapshotVersion: "1",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      tenantId: "tenant-1",
+      account: "owner@example.test",
+      scopes: [],
+      servicePrincipalCount: 2
+    },
+    servicePrincipals: [
+      servicePrincipal("sp-1", "app-1", "Application app", "Application"),
+      servicePrincipal("principal-uami-1", "client-1", "Identity app", "ManagedIdentity")
+    ],
+    oauth2PermissionGrants: [],
+    appRoleAssignments: []
+  };
+  const olderReport: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-01T10:00:00.000Z",
+    TenantId: "tenant-1",
+    TestResultSummary: { IdentityFailed: 1 },
+    Tests: [
+      {
+        TestId: "older-sp-test",
+        TestStatus: "Failed",
+        TestRisk: "High",
+        RelatedObjects: [{ object_id: "sp-1" }]
+      }
+    ]
+  };
+  const latestReport: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-1",
+    TestResultSummary: { IdentityFailed: 2 },
+    Tests: [
+      {
+        TestId: "sp-failed",
+        TestStatus: "failed",
+        TestRisk: "High",
+        RelatedObjects: [
+          { object_id: "SP-1", displayName: "Application app" },
+          { id: "sp-1", displayName: "Duplicate application app" }
+        ]
+      },
+      {
+        TestId: "sp-and-mi-passed",
+        TestStatus: "Passed",
+        TestRisk: "Medium",
+        RelatedObjects: [{ id: "sp-1" }, { object_id: "principal-uami-1" }]
+      },
+      {
+        TestId: "mi-failed",
+        TestStatus: "Failed",
+        TestRisk: "Low",
+        RelatedObjects: [{ id: "principal-uami-1" }]
+      }
+    ]
+  };
+
+  try {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "older-zta-report.json"), JSON.stringify(olderReport), "utf8");
+    await writeFile(path.join(dataDir, "latest-zta-report.json"), JSON.stringify(latestReport), "utf8");
+    await runtime.initialize();
+
+    const queriedServicePrincipals = await runtime.queryCollection({
+      collectionId: "entra.servicePrincipals",
+      page: 1,
+      pageSize: 10
+    });
+    const queriedManagedIdentities = await runtime.queryCollection({
+      collectionId: "entra.managedIdentities",
+      page: 1,
+      pageSize: 10
+    });
+
+    expect(queriedServicePrincipals).toMatchObject({
+      collectionId: "entra.servicePrincipals",
+      columns: expect.arrayContaining(["ztaRemediationCountAll", "ztaRemediationFailedCount", "ztaMaxRisk"]),
+      rows: [
+        expect.objectContaining({
+          id: "sp-1",
+          ztaRemediationCountAll: 2,
+          ztaRemediationFailedCount: 1,
+          ztaMaxRisk: "high"
+        })
+      ]
+    });
+    expect(queriedManagedIdentities).toMatchObject({
+      collectionId: "entra.managedIdentities",
+      columns: expect.arrayContaining(["ztaRemediationCountAll", "ztaRemediationFailedCount", "ztaMaxRisk"]),
+      rows: [
+        expect.objectContaining({
+          id: "principal-uami-1",
+          ztaRemediationCountAll: 2,
+          ztaRemediationFailedCount: 1,
+          ztaMaxRisk: "medium"
         })
       ]
     });
@@ -831,6 +1205,13 @@ test("defines local report runtime REST endpoints", async () => {
 
       return Promise.resolve({ meta: { provider: "unknown" } });
     }),
+    readZeroTrustAssessmentReport: jest.fn().mockResolvedValue({
+      Meta: {
+        TenantId: "tenant-1",
+        ExecutedAt: "2026-06-05T00:00:00.000Z"
+      },
+      Tests: [{ TestId: "zta-1", TestStatus: "Passed" }]
+    }),
     readEntraServicePrincipals: jest.fn().mockResolvedValue([{ id: "sp-1" }]),
     readServicePrincipals: jest.fn().mockResolvedValue([{ id: "sp-1" }]),
     readManagedIdentities: jest.fn().mockResolvedValue([{ id: "mi-1" }]),
@@ -912,6 +1293,7 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/azureResources/userAssignedManagedIdentities",
     "/api/data/azureResources/roleAssignments",
     "/api/data/azureResources/activityLogs",
+    "/api/data/zeroTrustAssessment/report",
     "/api/data/runtime/enrichment/recalculate",
     "/api/data/runtime"
   ]);
@@ -1026,10 +1408,23 @@ test("defines local report runtime REST endpoints", async () => {
   await expect(
     endpoints[14].handle({
       req: {},
+      url: new URL("http://localhost/api/data/zeroTrustAssessment/report")
+    })
+  ).resolves.toEqual({
+    Meta: {
+      TenantId: "tenant-1",
+      ExecutedAt: "2026-06-05T00:00:00.000Z"
+    },
+    Tests: [{ TestId: "zta-1", TestStatus: "Passed" }]
+  });
+  await expect(
+    endpoints[15].handle({
+      req: {},
       url: new URL("http://localhost/api/data/runtime/enrichment/recalculate")
     })
   ).resolves.toBeUndefined();
   expect(runtime.recalculateEnrichment).toHaveBeenCalledTimes(1);
+  expect(runtime.readZeroTrustAssessmentReport).toHaveBeenCalledTimes(1);
   expect(runtime.readSnapshot).toHaveBeenCalledWith("entra-snapshot.json");
   expect(runtime.queryCollection).toHaveBeenNthCalledWith(1, {
     collectionId: "entra.servicePrincipals",

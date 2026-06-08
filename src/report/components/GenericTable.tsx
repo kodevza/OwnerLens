@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableContainer, TableHeader, TableRow } fr
 import {
   applyColumnFilterValueToggle,
   applyColumnValuesFilter,
+  applyReportTableControls,
   ReportTableHead,
   type ColumnFilterOptions,
   type ColumnFilters,
@@ -44,6 +45,7 @@ type GenericRemoteTableProps<TRow> = Omit<
   "filterOptions" | "filters" | "onFiltersChange" | "onPageChange" | "page" | "rows" | "sortRules" | "totalCount"
 > & {
   buildFilterOptions?: (rows: TRow[]) => ColumnFilterOptions;
+  initialFilters?: ColumnFilters;
   loadPage: (input: { filters: ColumnFilters; page: number; signal: AbortSignal }) => Promise<GenericTablePage<TRow>>;
   loadingMessage: string;
 };
@@ -76,12 +78,13 @@ export function GenericTable<TRow>(props: GenericTableWrapperProps<TRow>) {
 
 function GenericRemoteTable<TRow>({
   buildFilterOptions,
+  initialFilters,
   loadPage,
   loadingMessage,
   ...tableProps
 }: GenericRemoteTableProps<TRow>) {
   const [collection, setCollection] = useState<GenericTablePage<TRow> | null>(null);
-  const [filters, setFilters] = useState<ColumnFilters>({});
+  const [filters, setFilters] = useState<ColumnFilters>(() => initialFilters ?? {});
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [page, setPage] = useState(1);
 
@@ -179,6 +182,10 @@ function GenericTableView<TRow>({
   const localControls = useReportTableControls(rows, fields);
   const filters = controlledFilters ?? localControls.filters;
   const sortRules = controlledSortRules ?? localControls.sortRules;
+  const tableControls = useMemo(
+    () => applyReportTableControls(rows, fields, filters, sortRules),
+    [fields, filters, rows, sortRules]
+  );
   const setColumnFilter =
     onFiltersChange === undefined
       ? localControls.setColumnFilter
@@ -203,8 +210,8 @@ function GenericTableView<TRow>({
       : (columnId: string) => {
           onSortRulesChange(toggleSortRule(sortRules, columnId));
         };
-  const controlledRows = totalCount === undefined ? localControls.controlledRows : rows;
-  const filterOptions = controlledFilterOptions ?? localControls.filterOptions;
+  const controlledRows = totalCount === undefined ? tableControls.controlledRows : rows;
+  const filterOptions = controlledFilterOptions ?? tableControls.filterOptions;
   const openFilterColumnId = localControls.openFilterColumnId;
   const setColumnFilterOpen = localControls.setColumnFilterOpen;
   const resolvedPage = page ?? 1;

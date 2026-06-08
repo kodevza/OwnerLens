@@ -1,16 +1,38 @@
 import type { EntraPrincipalPermissionSummary } from "../../core/azure/entra/servicePrincipal";
+import type { ZtaRemediationSummary } from "../../core/azure/ztaReport";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import { Badge } from "../../report/components/ui/badge";
+import { ZtaRemediationBadge } from "./ZtaRemediationBadge";
 
-export const servicePrincipalFieldRenderers: ReportColumnRenderers<EntraPrincipalPermissionSummary> = {
-  oauthPemrissionsCount: (sp) => (
-    <PermissionCountBadge
-      appRolePermissionsCount={sp.appRolesPermissionCount}
-      isAllParticipant={sp.isAllParticipant}
-      oauthPermissionsCount={sp.oauthPemrissionsCount}
-    />
-  )
+type EntraPrincipalZtaRow = EntraPrincipalPermissionSummary & ZtaRemediationSummary & {
+  id: string;
 };
+
+export function buildServicePrincipalFieldRenderers<TRow extends EntraPrincipalZtaRow>({
+  onZtaRemediationsClick
+}: {
+  onZtaRemediationsClick?: (objectId: string) => void;
+} = {}): ReportColumnRenderers<TRow> {
+  return {
+    oauthPemrissionsCount: (sp) => (
+      <PermissionCountBadge
+        appRolePermissionsCount={sp.appRolesPermissionCount}
+        isAllParticipant={sp.isAllParticipant}
+        oauthPermissionsCount={sp.oauthPemrissionsCount}
+      />
+    ),
+    ztaRemediationCountAll: (sp) => (
+      <ZtaRemediationBadge
+        ztaMaxRisk={sp.ztaMaxRisk}
+        ztaRemediationCountAll={sp.ztaRemediationCountAll}
+        ztaRemediationFailedCount={sp.ztaRemediationFailedCount}
+        onClick={onZtaRemediationsClick ? () => onZtaRemediationsClick(sp.id) : undefined}
+      />
+    )
+  };
+}
+
+export const servicePrincipalFieldRenderers = buildServicePrincipalFieldRenderers();
 
 function PermissionCountBadge({
   appRolePermissionsCount,

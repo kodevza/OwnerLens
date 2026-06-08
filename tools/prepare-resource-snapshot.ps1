@@ -3,7 +3,8 @@ param(
   [int]$ActivityDays = 90,
   [int]$MaxActivityRecords = 10000,
   [switch]$SkipAuditLogsExport,
-  [string]$SubscriptionIds = ""
+  [string]$SubscriptionIds = "",
+  [switch]$ExpandResourceProperties
 )
 
 if (-not (Get-Command Get-AzContext -ErrorAction SilentlyContinue)) {
@@ -15,6 +16,13 @@ if (-not (Get-Command Invoke-AzRestMethod -ErrorAction SilentlyContinue)) {
 }
 
 . "$PSScriptRoot\azure-activity-check.ps1"
+
+function Write-SnapshotProgress {
+  param([string]$Message)
+
+  $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+  Write-Host "[$timestamp] $Message"
+}
 
 function Get-ScopeParts {
   param([string]$Scope)
@@ -85,6 +93,7 @@ function Get-ScopeParts {
   return [pscustomobject]$parts
 }
 
+Write-SnapshotProgress "Checking Azure context"
 $context = Get-AzContext
 
 if (-not $context) {
@@ -98,6 +107,21 @@ if ([string]::IsNullOrWhiteSpace($SubscriptionIds)) {
   $subscriptionFilters = @($context.Subscription.Id)
 } else {
   $subscriptionFilters = $SubscriptionIds.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+}
+
+Write-SnapshotProgress "Preparing Azure resource snapshot"
+Write-SnapshotProgress "Output path: $OutputPath"
+Write-SnapshotProgress "Activity window: last $ActivityDays days starting $($activityStartTime.ToUniversalTime().ToString("o"))"
+Write-SnapshotProgress "Requested subscriptions: $($subscriptionFilters -join ', ')"
+if ($SkipAuditLogsExport) {
+  Write-SnapshotProgress "Activity log export: skipped"
+} else {
+  Write-SnapshotProgress "Activity log export: enabled, max $MaxActivityRecords records per subscription"
+}
+if ($ExpandResourceProperties) {
+  Write-SnapshotProgress "Resource property expansion: enabled"
+} else {
+  Write-SnapshotProgress "Resource property expansion: disabled"
 }
 
 $snapshot = [ordered]@{
@@ -119,6 +143,7 @@ $snapshot = [ordered]@{
   activityLogs = [System.Collections.Generic.List[object]]::new()
 }
 
+Write-SnapshotProgress "Loading enabled subscriptions"
 $enabledSubscriptions = Get-AzSubscription | Where-Object State -eq "Enabled"
 $subs = @()
 
@@ -127,6 +152,7 @@ if (-not (Get-Command Get-AzUserAssignedIdentity -ErrorAction SilentlyContinue))
 }
 
 foreach ($filter in $subscriptionFilters) {
+  Write-SnapshotProgress "Resolving subscription filter: $filter"
   $sub = $enabledSubscriptions | Where-Object { $_.Id -eq $filter -or $_.Name -eq $filter } | Select-Object -First 1
 
   if (-not $sub) {
@@ -135,11 +161,16 @@ foreach ($filter in $subscriptionFilters) {
 
   if (-not ($subs | Where-Object Id -eq $sub.Id)) {
     $subs += $sub
+    Write-SnapshotProgress "Selected subscription: $($sub.Name) ($($sub.Id))"
   }
 }
 
+$subscriptionIndex = 0
 foreach ($sub in $subs) {
+  $subscriptionIndex += 1
+  Write-SnapshotProgress "[$subscriptionIndex/$($subs.Count)] Starting subscription: $($sub.Name) ($($sub.Id))"
 
+  Write-SnapshotProgress "[$($sub.Name)] Setting Azure context"
   Set-AzContext -SubscriptionId $sub.Id | Out-Null
 
   $snapshot.subscriptions.Add([pscustomobject]@{
@@ -149,15 +180,35 @@ foreach ($sub in $subs) {
     state = $sub.State
   }) | Out-Null
 
+  Write-SnapshotProgress "[$($sub.Name)] Loading resource groups"
   $rgs = Get-AzResourceGroup
-  $resources = Get-AzResource -ExpandProperties
+  Write-SnapshotProgress "[$($sub.Name)] Loaded $($rgs.Count) resource groups"
+
+  if ($ExpandResourceProperties) {
+    Write-SnapshotProgress "[$($sub.Name)] Loading resources with expanded properties"
+    $resources = Get-AzResource -ExpandProperties
+  } else {
+    Write-SnapshotProgress "[$($sub.Name)] Loading resources"
+    $resources = Get-AzResource
+  }
+  Write-SnapshotProgress "[$($sub.Name)] Loaded $($resources.Count) resources"
+
+  Write-SnapshotProgress "[$($sub.Name)] Loading user-assigned managed identities"
   $userAssignedIdentities = Get-AzUserAssignedIdentity
+  Write-SnapshotProgress "[$($sub.Name)] Loaded $($userAssignedIdentities.Count) user-assigned managed identities"
+
+  Write-SnapshotProgress "[$($sub.Name)] Loading role assignments"
   $roleAssignments = Get-AzRoleAssignment
+  Write-SnapshotProgress "[$($sub.Name)] Loaded $($roleAssignments.Count) role assignments"
+
   $activityLogs = @()
   if (-not $SkipAuditLogsExport) {
+    Write-SnapshotProgress "[$($sub.Name)] Loading Azure Monitor activity logs"
     $activityLogs = Get-AzureMonitorActivityLogs -SubscriptionId $sub.Id -StartTime $activityStartTime -MaxRecord $MaxActivityRecords
+    Write-SnapshotProgress "[$($sub.Name)] Loaded $($activityLogs.Count) activity log records"
   }
 
+  Write-SnapshotProgress "[$($sub.Name)] Adding resources to snapshot"
   foreach ($resource in $resources) {
     $identity = $resource.Identity
 
@@ -184,6 +235,7 @@ foreach ($sub in $subs) {
     }) | Out-Null
   }
 
+  Write-SnapshotProgress "[$($sub.Name)] Adding role assignments to snapshot"
   foreach ($assignment in $roleAssignments) {
     $scopeParts = Get-ScopeParts $assignment.Scope
     $principalId = [string]$assignment.ObjectId
@@ -213,6 +265,7 @@ foreach ($sub in $subs) {
     ) | Out-Null
   }
 
+  Write-SnapshotProgress "[$($sub.Name)] Adding user-assigned managed identities to snapshot"
   foreach ($identity in $userAssignedIdentities) {
     $snapshot.userAssignedManagedIdentities.Add([pscustomobject]@{
       subscriptionId = $sub.Id
@@ -228,6 +281,7 @@ foreach ($sub in $subs) {
     }) | Out-Null
   }
 
+  Write-SnapshotProgress "[$($sub.Name)] Adding resource groups to snapshot"
   foreach ($rg in $rgs) {
 
     $snapshot.resourceGroups.Add([pscustomobject]@{
@@ -239,6 +293,7 @@ foreach ($sub in $subs) {
     }) | Out-Null
   }
 
+  Write-SnapshotProgress "[$($sub.Name)] Adding activity logs to snapshot"
   foreach ($log in $activityLogs) {
     $snapshot.activityLogs.Add([pscustomobject]@{
       subscriptionId = $sub.Id
@@ -267,8 +322,11 @@ foreach ($sub in $subs) {
       authorizationScope = $log.authorizationScope
     }) | Out-Null
   }
+
+  Write-SnapshotProgress "[$subscriptionIndex/$($subs.Count)] Finished subscription: $($sub.Name)"
 }
 
+Write-SnapshotProgress "Finalizing snapshot metadata"
 $snapshot.meta.subscriptionCount = $snapshot.subscriptions.Count
 $snapshot.meta.resourceGroupCount = $snapshot.resourceGroups.Count
 $snapshot.meta.resourceCount = $snapshot.resources.Count
@@ -278,7 +336,10 @@ $snapshot.meta.activityLogCount = $snapshot.activityLogs.Count
 
 $outputDirectory = Split-Path -Parent $OutputPath
 if (-not [string]::IsNullOrWhiteSpace($outputDirectory) -and -not (Test-Path $outputDirectory)) {
+  Write-SnapshotProgress "Creating output directory: $outputDirectory"
   New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
 }
 
+Write-SnapshotProgress "Writing snapshot JSON to $OutputPath"
 $snapshot | ConvertTo-Json -Depth 20 | Out-File $OutputPath -Encoding utf8
+Write-SnapshotProgress "Snapshot complete: $($snapshot.meta.subscriptionCount) subscriptions, $($snapshot.meta.resourceGroupCount) resource groups, $($snapshot.meta.resourceCount) resources, $($snapshot.meta.userAssignedManagedIdentityCount) user-assigned managed identities, $($snapshot.meta.roleAssignmentCount) role assignments, $($snapshot.meta.activityLogCount) activity logs"
