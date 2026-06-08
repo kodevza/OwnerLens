@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { ReportFieldDescriptor } from "./reportTypes";
+import type { ReportColumnHelp, ReportFieldDescriptor } from "./reportTypes";
 import type { ReportTableColumn } from "./components/reportTableControls";
 import { renderReportValue } from "./reportValueRenderers";
 
@@ -9,15 +9,17 @@ export type ReportColumnRenderers<TRow> = Partial<Record<string, (row: TRow) => 
 export function buildCollectionColumns<TRow>(
   fields: ReportFieldDescriptor<TRow>[],
   {
+    columnHelp = {},
     renderers = {}
   }: {
+    columnHelp?: Record<string, ReportColumnHelp>;
     renderers?: ReportColumnRenderers<TRow>;
   } = {}
 ): ReportTableColumn<TRow>[] {
   return fields.map((field) => ({
     id: field.id,
     label: field.label,
-    help: field.help,
+    help: field.help ?? columnHelp[field.id],
     filter: getColumnFilterKind(field),
     render: renderers[field.id] ?? ((row) => renderReportValue(field, row))
   }));

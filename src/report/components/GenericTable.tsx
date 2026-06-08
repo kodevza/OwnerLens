@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { buildCollectionColumns, type ReportColumnRenderers } from "../buildCollectionColumns";
-import type { ReportFieldDescriptor } from "../reportTypes";
+import type { ReportColumnHelp, ReportFieldDescriptor } from "../reportTypes";
 import { Table, TableBody, TableCell, TableContainer, TableHeader, TableRow } from "./ui/table";
 import {
   applyColumnFilterValueToggle,
@@ -14,6 +14,7 @@ import {
 } from "./reportTableControls";
 
 type GenericTableProps<TRow> = {
+  columnHelp?: Record<string, ReportColumnHelp>;
   emptyMessage: string;
   fields: ReportFieldDescriptor<TRow>[];
   filterOptions?: ColumnFilterOptions;
@@ -154,6 +155,7 @@ function GenericRemoteTable<TRow>({
 }
 
 function GenericTableView<TRow>({
+  columnHelp,
   emptyMessage,
   fields,
   filterOptions: controlledFilterOptions,
@@ -171,8 +173,8 @@ function GenericTableView<TRow>({
   totalCount
 }: GenericTableProps<TRow> & { rows: TRow[] }) {
   const columns = useMemo(
-    () => buildCollectionColumns(fields, { renderers: fieldRenderers }),
-    [fields, fieldRenderers]
+    () => buildCollectionColumns(fields, { columnHelp, renderers: fieldRenderers }),
+    [columnHelp, fields, fieldRenderers]
   );
   const localControls = useReportTableControls(rows, fields);
   const filters = controlledFilters ?? localControls.filters;

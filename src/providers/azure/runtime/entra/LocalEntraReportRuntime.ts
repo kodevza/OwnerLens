@@ -5,7 +5,11 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 
 import { pathExists, RuntimeHttpError, type LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
 import { toManagedIdentities, type ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
-import { toServicePrincipals, type ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
+import {
+  toServicePrincipals,
+  type EntraPrincipalPermissionSummary,
+  type ServicePrincipal
+} from "../../../../core/azure/entra/servicePrincipal";
 import type { EntraAppRoleAssignment } from "../../inputTransferObject/entra/EntraAppRoleAssignment";
 import type { EntraOAuth2PermissionGrant } from "../../inputTransferObject/entra/EntraOAuth2PermissionGrant";
 import type { EntraServicePrincipal } from "../../inputTransferObject/entra/EntraServicePrincipal";
@@ -89,18 +93,24 @@ export class LocalEntraReportRuntime {
   async readServicePrincipals(): Promise<ServicePrincipal[]> {
     this.assertImported();
     const connection = this.getConnection();
+    const permissionsByPrincipalId = await this.readPrincipalPermissionSummary(connection);
+
     return toServicePrincipals(
       mapEntraServicePrincipalsToCore(await readEntraServicePrincipalRows(connection)),
-      await readLatestAzureIdentityEnrichment(connection)
+      await readLatestAzureIdentityEnrichment(connection),
+      permissionsByPrincipalId
     );
   }
 
   async readManagedIdentities(): Promise<ManagedIdentity[]> {
     this.assertImported();
     const connection = this.getConnection();
+    const permissionsByPrincipalId = await this.readPrincipalPermissionSummary(connection);
+
     return toManagedIdentities(
       mapEntraServicePrincipalsToCore(await readEntraServicePrincipalRows(connection)),
-      await readLatestAzureIdentityEnrichment(connection)
+      await readLatestAzureIdentityEnrichment(connection),
+      permissionsByPrincipalId
     );
   }
 
@@ -143,6 +153,54 @@ export class LocalEntraReportRuntime {
         return (await this.readEntraAppRoleAssignments()) as unknown as Record<string, unknown>[];
     }
   }
+
+  private async readPrincipalPermissionSummary(
+    connection: DuckDBConnection
+  ): Promise<Map<string, EntraPrincipalPermissionSummary>> {
+    const [oauth2PermissionGrants, appRoleAssignments] = await Promise.all([
+      readEntraOAuth2PermissionGrantRows(connection),
+      readEntraAppRoleAssignmentRows(connection)
+    ]);
+    const permissionsByPrincipalId = new Map<string, EntraPrincipalPermissionSummary>();
+
+    for (const grant of oauth2PermissionGrants) {
+      const summary = getOrCreatePrincipalPermissionSummary(permissionsByPrincipalId, grant.clientId);
+      summary.oauthPemrissionsCount += countOAuthPermissionScopes(grant.scope);
+      summary.isAllParticipant = summary.isAllParticipant || grant.consentType === "AllPrincipals";
+    }
+
+    for (const assignment of appRoleAssignments) {
+      const summary = getOrCreatePrincipalPermissionSummary(permissionsByPrincipalId, assignment.principalId);
+      summary.appRolesPermissionCount += 1;
+    }
+
+    return permissionsByPrincipalId;
+  }
+}
+
+function getOrCreatePrincipalPermissionSummary(
+  permissionsByPrincipalId: Map<string, EntraPrincipalPermissionSummary>,
+  principalId: string
+): EntraPrincipalPermissionSummary {
+  const normalizedPrincipalId = principalId.toLowerCase();
+  const existing = permissionsByPrincipalId.get(normalizedPrincipalId);
+
+  if (existing) {
+    return existing;
+  }
+
+  const summary = {
+    oauthPemrissionsCount: 0,
+    appRolesPermissionCount: 0,
+    isAllParticipant: false
+  };
+
+  permissionsByPrincipalId.set(normalizedPrincipalId, summary);
+  return summary;
+}
+
+function countOAuthPermissionScopes(scope: string): number {
+  return scope.split(/\s+/).filter(Boolean).length;
 }
 
 export function parseEntraCollectionId(collectionId: string): LocalEntraReportCollectionId | null {

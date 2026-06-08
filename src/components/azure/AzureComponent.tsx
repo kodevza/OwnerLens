@@ -14,14 +14,14 @@ export function AzureComponent() {
     <section className="flex flex-col gap-4">
       <Tabs value={activeView} onValueChange={(value) => setActiveView(value as AzureView)}>
         <TabsList aria-label="Azure data">
+          <TabsTrigger value="resourceGroups">Resource groups</TabsTrigger>
           <TabsTrigger value="servicePrincipals">Service principals</TabsTrigger>
           <TabsTrigger value="managedIdentities">Managed identities</TabsTrigger>
-          <TabsTrigger value="resourceGroups">Resource groups</TabsTrigger>
         </TabsList>
       </Tabs>
+      {activeView === "resourceGroups" ? <ResourceGroupComponent /> : null}
       {activeView === "servicePrincipals" ? <ServicePrincipalComponent /> : null}
       {activeView === "managedIdentities" ? <ManagedIdentityComponent /> : null}
-      {activeView === "resourceGroups" ? <ResourceGroupComponent /> : null}
     </section>
   );
 }

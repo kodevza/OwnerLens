@@ -25,6 +25,11 @@ const columns = [
   "servicePrincipalType",
   "permissionRisk",
   "azureRbac",
+  "oauthPemrissionsCount",
+  "appRolesPermissionCount",
+  "isAllParticipant",
+  "potentialOwners",
+  "ownerConfidence",
   "accountEnabled",
   "id",
   "appId",
@@ -81,6 +86,9 @@ test("loads service principals through the full table UI and sends filters and p
   expect(getButton("Sort by Type").textContent).toContain("Type");
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
   expect(getButton("Sort by Azure RBAC").textContent).toContain("Azure RBAC");
+  expect(getButton("Sort by Entra permissions").textContent).toContain("Entra permissions");
+  expect(getButton("Sort by Owner").textContent).toContain("Owner");
+  expect(getButton("Sort by Owner confidence").textContent).toContain("Owner confidence");
   expect(getButton("Sort by Enabled").textContent).toContain("Enabled");
   expect(getButton("Sort by Object ID").textContent).toContain("Object ID");
   expect(getButton("Sort by Client/App ID").textContent).toContain("Client/App ID");
@@ -89,7 +97,9 @@ test("loads service principals through the full table UI and sends filters and p
   expect(getButton("Sort by Tags").textContent).toContain("Tags");
   expect(container.textContent).toContain("graph-sp-id");
   expect(container.textContent).toContain("high");
+  expect(container.textContent).toContain("3/1");
   expect(container.textContent).toContain("Owner on subscription");
+  expect(container.textContent).toContain("platform@example.test");
   expect(container.textContent).toContain("payroll-client-id");
   expect(container.textContent).toContain("Microsoft");
   expect(container.textContent).toContain("finance");
@@ -150,10 +160,15 @@ const graphApi = servicePrincipal({
   accountEnabled: true,
   appDisplayName: "Microsoft Graph",
   appId: "graph-client-id",
+  appRolesPermissionCount: 1,
   displayName: "Microsoft Graph",
   id: "graph-sp-id",
   azureRbac: "Owner on subscription (privileged role)",
+  isAllParticipant: true,
+  oauthPemrissionsCount: 3,
+  ownerConfidence: "high",
   permissionRisk: "high",
+  potentialOwners: ["platform@example.test"],
   publisherName: "Microsoft",
   servicePrincipalType: "Application",
   tags: ["windowsAzureActiveDirectoryIntegratedApp"]
@@ -196,6 +211,9 @@ function servicePrincipal(input: Partial<ServicePrincipal> & Pick<ServicePrincip
     permissionRisk: "none",
     azureRbac: "No Azure RBAC assignments",
     roleAssignments: [],
+    oauthPemrissionsCount: 0,
+    appRolesPermissionCount: 0,
+    isAllParticipant: false,
     ...input
   } as ServicePrincipal;
 }

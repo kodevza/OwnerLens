@@ -143,12 +143,28 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
       count: 1,
       page: 1,
       pageSize: 10,
-      rows: [expect.objectContaining({ id: "sp-1", displayName: "Example app" })]
+      rows: [
+        expect.objectContaining({
+          id: "sp-1",
+          displayName: "Example app",
+          oauthPemrissionsCount: 1,
+          appRolesPermissionCount: 1,
+          isAllParticipant: true
+        })
+      ]
     });
     expect(queriedManagedIdentities).toMatchObject({
       collectionId: "entra.managedIdentities",
       count: 1,
-      rows: [expect.objectContaining({ id: "mi-1", servicePrincipalType: "ManagedIdentity" })]
+      rows: [
+        expect.objectContaining({
+          id: "mi-1",
+          servicePrincipalType: "ManagedIdentity",
+          oauthPemrissionsCount: 0,
+          appRolesPermissionCount: 0,
+          isAllParticipant: false
+        })
+      ]
     });
   } finally {
     await runtime.close();
@@ -569,7 +585,15 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       activityLogCount: 0
     },
     subscriptions: [],
-    resourceGroups: [],
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-app",
+        location: "westeurope",
+        tags: { ownerGroup: "alice@example.test" }
+      }
+    ],
     resources: [
       {
         subscriptionId: "sub-1",
@@ -624,6 +648,16 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
     const firstStatus = runtime.getStatus().enrichment;
     const servicePrincipals = await runtime.readServicePrincipals();
     const managedIdentities = await runtime.readManagedIdentities();
+    const queriedServicePrincipals = await runtime.queryCollection({
+      collectionId: "entra.servicePrincipals",
+      page: 1,
+      pageSize: 10
+    });
+    const queriedManagedIdentities = await runtime.queryCollection({
+      collectionId: "entra.managedIdentities",
+      page: 1,
+      pageSize: 10
+    });
 
     expect(firstStatus).toMatchObject({
       calculated: true,
@@ -637,6 +671,16 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       azureRbac: expect.stringContaining("Owner on subscription"),
       roleAssignments: [expect.objectContaining({ roleDefinitionName: "Owner" })]
     });
+    expect(queriedServicePrincipals).toMatchObject({
+      collectionId: "entra.servicePrincipals",
+      rows: [
+        expect.objectContaining({
+          id: "sp-1",
+          potentialOwners: ["alice@example.test"],
+          ownerConfidence: "high"
+        })
+      ]
+    });
     expect(managedIdentities[0]).toMatchObject({
       id: "principal-uami-1",
       permissionRisk: "low",
@@ -644,6 +688,16 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       roleAssignments: [expect.objectContaining({ roleDefinitionName: "Reader" })],
       assignedResourceGroups: ["rg-app"],
       managedIdentityAssignments: [expect.objectContaining({ assignedResourceName: "app-a" })]
+    });
+    expect(queriedManagedIdentities).toMatchObject({
+      collectionId: "entra.managedIdentities",
+      rows: [
+        expect.objectContaining({
+          id: "principal-uami-1",
+          potentialOwners: ["alice@example.test"],
+          ownerConfidence: "high"
+        })
+      ]
     });
 
     await writeFile(path.join(dataDir, "entra-snapshot.json"), "{not-json", "utf8");

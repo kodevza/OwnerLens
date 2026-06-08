@@ -8,7 +8,16 @@ export const azureOwnerColumnHelp = {
       "Shows the resource group name when the row represents a resource group."
     ]
   },
+  resourceGroup: {
+    source: "Computed by app from Azure resource snapshot JSON.",
+    logic: ["Shows the resource group name from the owner row built from the Azure resource snapshot."]
+  },
   subscription: {
+    source: "Direct from Azure resource snapshot JSON.",
+    field: "subscriptionName",
+    logic: ["Copied from the subscription or resource group record used to build the owner row."]
+  },
+  subscriptionName: {
     source: "Direct from Azure resource snapshot JSON.",
     field: "subscriptionName",
     logic: ["Copied from the subscription or resource group record used to build the owner row."]
@@ -27,6 +36,13 @@ export const azureOwnerColumnHelp = {
       "Tag-derived owners use the configured confidence for that tag.",
       "Activity-log fallback is low confidence.",
       "No usable tag or activity caller returns none."
+    ]
+  },
+  ownerConfidence: {
+    source: "Computed by app during owner resolution.",
+    logic: [
+      "Uses the strongest confidence among resource group owner rows targeted by this principal's Azure RBAC scopes.",
+      "No usable owner evidence returns none."
     ]
   },
   source: {
@@ -62,12 +78,27 @@ export const azureManagedIdentityColumnHelp = {
       "When the same identity appears in multiple groups, shows each distinct resource group."
     ]
   },
+  assignedResourceGroups: {
+    source: "Computed by app from Azure resource snapshot JSON.",
+    logic: [
+      "For user-assigned managed identities, uses the managed identity resource group captured in userAssignedManagedIdentities.",
+      "For system-assigned managed identities, uses the resource group of the assigned Azure resource.",
+      "When the same identity appears in multiple groups, shows each distinct resource group."
+    ]
+  },
   potentialOwners: {
     source: "Computed by app from the Owner Report resource group rows.",
     logic: [
       "Looks up the resource group shown for the managed identity in the resolved owner report.",
       "Projects each resource group's owner onto the managed identity.",
       "Shows the distinct resolved owner email addresses separated by commas."
+    ]
+  },
+  ownerConfidence: {
+    source: "Computed by app from the matching resource group owner rows.",
+    logic: [
+      "Uses the strongest confidence among resource group owner rows assigned to this managed identity.",
+      "No usable owner evidence returns none."
     ]
   },
   miAssignment: {
@@ -97,7 +128,39 @@ export const azureManagedIdentityColumnHelp = {
       "Shows no Azure RBAC assignments when no assignment matches."
     ]
   },
+  oauthPemrissionsCount: {
+    source: "Computed by app from Entra OAuth2 permission grants and app role assignments JSON.",
+    field: "oauth2PermissionGrants[].scope and appRoleAssignments[].principalId",
+    logic: [
+      "Finds OAuth2 permission grants whose clientId matches this Entra object ID, case-insensitively.",
+      "Counts individual delegated permission scopes split from the grant scope string.",
+      "Finds app role assignments whose principalId matches this Entra object ID and counts each matching application permission.",
+      "Badge format is delegated/application, for example 0/1 means no delegated scopes and one application app role assignment.",
+      "For Directory.Read.All on a managed identity, resolve the managed identity service principal by Object ID, resolve Microsoft Graph by appId 00000003-0000-0000-c000-000000000000, select the Directory.Read.All application app role, then create the service principal app role assignment with ServicePrincipalId and PrincipalId set to the managed identity service principal Id."
+    ]
+  },
+  appRolesPermissionCount: {
+    source: "Computed by app from Entra app role assignments JSON.",
+    field: "appRoleAssignments[].principalId",
+    logic: [
+      "Finds app role assignments whose principalId matches this Entra object ID, case-insensitively.",
+      "Counts each matching app role assignment.",
+      "No matching assignments returns zero."
+    ]
+  },
+  isAllParticipant: {
+    source: "Computed by app from Entra OAuth2 permission grants JSON.",
+    field: "oauth2PermissionGrants[].consentType",
+    logic: [
+      "Returns true when any matching OAuth2 permission grant has consentType equal to AllPrincipals.",
+      "Returns false when no matching tenant-wide grant exists."
+    ]
+  },
   enabled: {
+    source: "Direct from Entra JSON.",
+    field: "accountEnabled"
+  },
+  accountEnabled: {
     source: "Direct from Entra JSON.",
     field: "accountEnabled"
   },
@@ -145,20 +208,19 @@ export const azureServicePrincipalColumnHelp = {
       "Multiple owners are shown as a comma-separated list."
     ]
   },
-  potentialOwner: {
-    source: "Computed by app from Entra JSON, Service Principal metadata, and Azure owner report rows.",
+  potentialOwners: {
+    source: "Computed by app from Service Principal Azure RBAC assignments and Azure owner report rows.",
     logic: [
-      "First uses explicit owner metadata on the Service Principal or Application, including owner-style tag values.",
-      "Then uses Entra Application or Service Principal owner records when present in the snapshot.",
-      "Finally projects the resolved owner of Azure RBAC target subscription or resource group scopes."
+      "Finds Azure RBAC assignments for this Service Principal.",
+      "Collects resource groups targeted by those RBAC scopes.",
+      "Subscription-scoped RBAC expands to every resource group in the assigned subscription.",
+      "Projects the resolved owner list from those resource group owner rows."
     ]
   },
   ownerConfidence: {
-    source: "Computed by app from the Service Principal potential owner source.",
+    source: "Computed by app from the matching resource group owner rows.",
     logic: [
-      "Explicit Service Principal or Application owner metadata is high confidence.",
-      "Entra Application or Service Principal owners are medium confidence.",
-      "Owners inferred from Azure RBAC target scopes are low confidence.",
+      "Uses the strongest confidence among resource group owner rows targeted by this Service Principal's Azure RBAC scopes.",
       "No usable owner evidence returns none."
     ]
   },
@@ -171,6 +233,11 @@ export const azureServicePrincipalColumnHelp = {
     ]
   },
   type: {
+    source: "Direct from Entra JSON.",
+    field: "servicePrincipalType",
+    logic: ["Displayed as-is, with empty values shown as a dash."]
+  },
+  servicePrincipalType: {
     source: "Direct from Entra JSON.",
     field: "servicePrincipalType",
     logic: ["Displayed as-is, with empty values shown as a dash."]
