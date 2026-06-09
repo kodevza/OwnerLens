@@ -6,8 +6,12 @@ subscriptions and resource groups using tags, cost center mappings, role
 assignments, managed identities, service principals, application registrations,
 groups, and activity-log evidence.
 
-The application is intended to reconcile cloud provider ownership data (currently Azure), 
+The application is intended to: 
+
+👉 reconcile cloud provider ownership data (currently Azure), 
+
 👉 export the resolved ownership results for Identity and Access Management (IAM) systems, 
+
 👉 support remediation ownership for Zero TrustAssessment (ZTA) findings. 
 
 OwnerLens helps split actionable remediations by the
