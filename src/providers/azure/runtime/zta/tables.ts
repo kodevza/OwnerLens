@@ -169,14 +169,35 @@ export async function readZeroTrustAssessmentRemediationSummaries(
         join zta_tests test
           on test.report_id = related.report_id
           and test.ordinal = related.test_ordinal
+      ),
+      resolved_related_tests as (
+        select
+          lower(service_principal.id) as principal_id,
+          related_tests.test_ordinal,
+          related_tests.status,
+          related_tests.risk_rank
+        from related_tests
+        join entra_service_principals service_principal
+          on lower(service_principal.id) = related_tests.related_object_id
+        union
+        select
+          lower(service_principal.id) as principal_id,
+          related_tests.test_ordinal,
+          related_tests.status,
+          related_tests.risk_rank
+        from related_tests
+        join entra_applications application
+          on lower(application.id) = related_tests.related_object_id
+        join entra_service_principals service_principal
+          on lower(service_principal.app_id) = lower(application.app_id)
       )
       select
-        related_object_id,
+        principal_id as related_object_id,
         count(*) as remediation_count_all,
         sum(case when status = 'failed' then 1 else 0 end) as remediation_failed_count,
         max(risk_rank) as max_risk_rank
-      from related_tests
-      group by related_object_id
+      from resolved_related_tests
+      group by principal_id
     `
   );
 

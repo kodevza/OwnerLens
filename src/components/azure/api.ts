@@ -1,7 +1,7 @@
 import type { ManagedIdentity } from "../../core/azure/entra/managedIdentity";
 import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
+import type { ResourceGroupOwnershipRow } from "../../core/azure/resources";
 import type { ZtaReport } from "../../core/azure/ztaReport";
-import type { ResourceGroupOwnershipRow } from "../../providers/azure/runtime/resources/resourceGroupOwnership";
 import type { ColumnFilters } from "../../report/components/reportTableControls";
 import { appendRuntimeCollectionFilters } from "../../report/runtimeCollectionQuery";
 

@@ -1,7 +1,8 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
+import type { AzureSnapshot } from "../../../../core/azure/resources";
 import type { LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
-import type { AzureSnapshot } from "../../domain/resources/AzureSnapshot";
+import type { AzureSnapshot as AzureSnapshotInput } from "../../inputTransferObject/resources/AzureSnapshot";
 import { prepareDisabledOwnerEvidenceTable } from "./disabledOwnerEvidenceTable";
 import { importAzureResourcesSnapshotMetadata, prepareAzureResourcesSnapshotMetadataTables } from "./snapshotMetadataTable";
 import {
@@ -56,7 +57,7 @@ export async function prepareAzureResourcesDuckDbSchema(connection: DuckDBConnec
 
 export async function importAzureResourcesSnapshotToDuckDb(
   connection: DuckDBConnection,
-  snapshot: AzureSnapshot & LocalSnapshotData
+  snapshot: AzureSnapshotInput & LocalSnapshotData
 ): Promise<AzureResourcesDuckDbImportStatus> {
   await connection.run("begin transaction");
   try {

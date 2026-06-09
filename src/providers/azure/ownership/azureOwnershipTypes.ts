@@ -1,11 +1,13 @@
-import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
-import type { EntraServicePrincipal } from "../inputTransferObject/entra/EntraServicePrincipal";
-import type { AzureActivityLog } from "../domain/resources/AzureActivityLog";
-import type { AzureResourceGroup } from "../domain/resources/AzureResourceGroup";
-import type { AzureSnapshot } from "../domain/resources/AzureSnapshot";
-import type { AzureSubscription } from "../domain/resources/AzureSubscription";
+import type {
+  AzureActivityLog,
+  AzureResourceGroup,
+  AzureSnapshot,
+  AzureSubscription
+} from "../../../core/azure/resources";
 import type { OwnerResolver } from "../../../core/ownership/resolveOwner";
 import type { OwnerResolution } from "../../../core/ownership/types";
+import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
+import type { EntraServicePrincipal } from "../inputTransferObject/entra/EntraServicePrincipal";
 
 export type AzureScopeOwnershipTarget =
   | {

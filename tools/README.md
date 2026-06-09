@@ -5,7 +5,7 @@ PowerShell scripts in this directory create the JSON snapshot files consumed by 
 ## Core Files
 
 - `prepare-resource-snapshot.ps1` creates the Azure resource snapshot used by the app. It exports subscriptions, resource groups, resources, managed identities, role assignments, and optional Azure Monitor activity logs.
-- `prepare-entra-snapshot.ps1` creates the Entra snapshot used by the app. It exports service principals and groups so ownership and identity relationships can be resolved.
+- `prepare-entra-snapshot.ps1` creates the Entra snapshot used by the app. It exports service principals, application registrations, and groups so ownership and identity relationships can be resolved.
 
 Run these commands from the repository root so the default output paths write into `.\data`.
 
@@ -81,11 +81,11 @@ After both files exist, start the app with `npm run dev` and refresh the browser
 ## Scripts
 
 - `prepare-resource-snapshot.ps1` exports Azure subscriptions, resource groups, resources, user-assigned managed identities, role assignments, and optional Azure Monitor activity logs.
-- `prepare-entra-snapshot.ps1` exports Entra service principals and groups.
+- `prepare-entra-snapshot.ps1` exports Entra service principals, application registrations, and groups.
 - `azure-activity-check.ps1` is a helper loaded by `prepare-resource-snapshot.ps1`; it is not usually run directly.
 
 ## Notes
 
-- Snapshot files can contain tenant, subscription, resource, identity, group, and activity-log metadata. Review them before sharing.
+- Snapshot files can contain tenant, subscription, resource, identity, application registration, group, credential metadata, and activity-log metadata. Review them before sharing.
 - The app discovers files in `.\data` whose names end with `snapshot.json`, such as `snapshot.json`, `entra-snapshot.json`, or `snapshot-prod.json`.
 - If scripts fail with a missing connection error, run the relevant sign-in command again and retry.

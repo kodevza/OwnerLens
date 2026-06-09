@@ -6,6 +6,7 @@ export type EntraSnapshotMeta = {
   account: string;
   scopes: string[];
   servicePrincipalCount: number;
+  applicationCount?: number;
   oauth2PermissionGrantCount?: number;
   appRoleAssignmentCount?: number;
 };

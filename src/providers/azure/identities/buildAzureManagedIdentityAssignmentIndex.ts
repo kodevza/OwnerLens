@@ -1,4 +1,4 @@
-import type { AzureResource } from "../domain/resources/AzureResource";
+import type { AzureResource } from "../../../core/azure/resources";
 import type { AzureManagedIdentityResourceAssignment } from "./azureIdentityTypes";
 import { normalizeUserAssignedIdentityAssignments } from "./userAssignedIdentityAssignments";
 

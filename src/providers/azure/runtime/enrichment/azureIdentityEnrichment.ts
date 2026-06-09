@@ -12,10 +12,9 @@ import {
   type ManagedIdentityPermissionRiskLevel,
   type ManagedIdentityPermissionRiskSummary
 } from "../../../../core/azure/identityEnrichment";
+import type { AzureResource, AzureRoleAssignment } from "../../../../core/azure/resources";
 import { isBroadAzureScope } from "./azureScopeClassifier";
 import { evaluateAzureRoleAssignmentRisk } from "./evaluateAzureRoleAssignmentRisk";
-import type { AzureResource } from "../../domain/resources/AzureResource";
-import type { AzureRoleAssignment } from "../../domain/resources/AzureRoleAssignment";
 import { getResourceManagedIdentityAssignments } from "../../identities/buildAzureManagedIdentityAssignmentIndex";
 import type { AzureManagedIdentityResourceAssignment } from "../../identities/azureIdentityTypes";
 import type { EntraServicePrincipal } from "../../inputTransferObject/entra/EntraServicePrincipal";

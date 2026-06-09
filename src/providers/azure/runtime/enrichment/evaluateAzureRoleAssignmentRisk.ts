@@ -1,4 +1,4 @@
-import type { AzureRoleAssignment } from "../../domain/resources/AzureRoleAssignment";
+import type { AzureRoleAssignment } from "../../../../core/azure/resources";
 import type {
   ManagedIdentityPermissionRiskAssignment,
   ManagedIdentityPermissionRiskLevel

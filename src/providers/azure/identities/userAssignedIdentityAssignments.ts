@@ -1,4 +1,4 @@
-import type { AzureUserAssignedIdentityAssignment } from "../domain/resources/AzureResource";
+import type { AzureUserAssignedIdentityAssignment } from "../../../core/azure/resources";
 
 export function normalizeUserAssignedIdentityAssignments(
   userAssignedIdentities: unknown

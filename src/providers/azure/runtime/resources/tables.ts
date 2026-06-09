@@ -1,11 +1,19 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
-import type { AzureActivityLog } from "../../domain/resources/AzureActivityLog";
-import type { AzureResource } from "../../domain/resources/AzureResource";
-import type { AzureResourceGroup } from "../../domain/resources/AzureResourceGroup";
-import type { AzureRoleAssignment } from "../../domain/resources/AzureRoleAssignment";
-import type { AzureSubscription } from "../../domain/resources/AzureSubscription";
-import type { AzureUserAssignedManagedIdentity } from "../../domain/resources/AzureUserAssignedManagedIdentity";
+import type {
+  AzureActivityLog,
+  AzureResource,
+  AzureResourceGroup,
+  AzureRoleAssignment,
+  AzureSubscription,
+  AzureUserAssignedManagedIdentity
+} from "../../../../core/azure/resources";
+import type { AzureActivityLog as AzureActivityLogInput } from "../../inputTransferObject/resources/AzureActivityLog";
+import type { AzureResource as AzureResourceInput } from "../../inputTransferObject/resources/AzureResource";
+import type { AzureResourceGroup as AzureResourceGroupInput } from "../../inputTransferObject/resources/AzureResourceGroup";
+import type { AzureRoleAssignment as AzureRoleAssignmentInput } from "../../inputTransferObject/resources/AzureRoleAssignment";
+import type { AzureSubscription as AzureSubscriptionInput } from "../../inputTransferObject/resources/AzureSubscription";
+import type { AzureUserAssignedManagedIdentity as AzureUserAssignedManagedIdentityInput } from "../../inputTransferObject/resources/AzureUserAssignedManagedIdentity";
 
 export async function prepareAzureResourcesTables(connection: DuckDBConnection): Promise<void> {
   await connection.run(`
@@ -120,7 +128,7 @@ export async function prepareAzureResourcesTables(connection: DuckDBConnection):
 
 export async function insertAzureSubscriptionRows(
   connection: DuckDBConnection,
-  subscriptions: AzureSubscription[]
+  subscriptions: AzureSubscriptionInput[]
 ): Promise<void> {
   for (const [ordinal, row] of subscriptions.entries()) {
     await connection.run("insert into azure_subscriptions values ($ordinal, $subscriptionId, $subscriptionName, $tenantId, $state, $tags::json)", {
@@ -136,7 +144,7 @@ export async function insertAzureSubscriptionRows(
 
 export async function insertAzureResourceGroupRows(
   connection: DuckDBConnection,
-  resourceGroups: AzureResourceGroup[]
+  resourceGroups: AzureResourceGroupInput[]
 ): Promise<void> {
   for (const [ordinal, row] of resourceGroups.entries()) {
     await connection.run(
@@ -153,7 +161,7 @@ export async function insertAzureResourceGroupRows(
   }
 }
 
-export async function insertAzureResourceRows(connection: DuckDBConnection, resources: AzureResource[]): Promise<void> {
+export async function insertAzureResourceRows(connection: DuckDBConnection, resources: AzureResourceInput[]): Promise<void> {
   for (const [ordinal, row] of resources.entries()) {
     await connection.run(
       `insert into azure_resources values (
@@ -184,7 +192,7 @@ export async function insertAzureResourceRows(connection: DuckDBConnection, reso
 
 export async function insertAzureUserAssignedManagedIdentityRows(
   connection: DuckDBConnection,
-  identities: AzureUserAssignedManagedIdentity[]
+  identities: AzureUserAssignedManagedIdentityInput[]
 ): Promise<void> {
   for (const [ordinal, row] of identities.entries()) {
     await connection.run(
@@ -211,7 +219,7 @@ export async function insertAzureUserAssignedManagedIdentityRows(
 
 export async function insertAzureRoleAssignmentRows(
   connection: DuckDBConnection,
-  assignments: AzureRoleAssignment[]
+  assignments: AzureRoleAssignmentInput[]
 ): Promise<void> {
   for (const [ordinal, row] of assignments.entries()) {
     await connection.run(
@@ -248,7 +256,7 @@ export async function insertAzureRoleAssignmentRows(
   }
 }
 
-export async function insertAzureActivityLogRows(connection: DuckDBConnection, logs: AzureActivityLog[]): Promise<void> {
+export async function insertAzureActivityLogRows(connection: DuckDBConnection, logs: AzureActivityLogInput[]): Promise<void> {
   for (const [ordinal, row] of logs.entries()) {
     await connection.run(
       `insert into azure_activity_logs values (

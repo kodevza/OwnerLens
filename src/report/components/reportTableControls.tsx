@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { TableHead } from "./ui/table";
 import type { ReportColumnHelp, ReportFieldDescriptor } from "../reportTypes";
@@ -193,11 +194,11 @@ export function ReportTableHead<TRow>({
 
         return (
           <TableHead key={column.id} className={column.className}>
-            <div className="flex min-w-[150px] flex-col gap-2">
-              <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-[132px] flex-col gap-1.5">
+              <div className="flex items-start justify-between gap-1 py-1">
                 <button
                   aria-label={`Sort by ${column.label}`}
-                  className="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-sm border-0 bg-transparent p-0 text-left text-xs font-semibold text-foreground"
+                  className="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-1 rounded-sm border-0 bg-transparent p-0 text-left text-xs font-semibold text-foreground"
                   type="button"
                   onClick={() => onSortToggle(column.id)}
                 >
@@ -222,7 +223,7 @@ export function ReportTableHead<TRow>({
               ) : (
                 <Input
                   aria-label={`Filter ${column.label}`}
-                  className="h-8 min-w-0 bg-card px-2 py-1 text-xs shadow-none"
+                  className="h-7 min-w-0 bg-card px-1.5 py-1 text-xs shadow-none"
                   placeholder="Filter with RegExp"
                   value={filter?.type === "text" ? filter.value : ""}
                   onChange={(event) => onFilterChange(column.id, event.target.value)}
@@ -400,18 +401,20 @@ function ColumnValueFilter<TRow>({
 
   return (
     <div className="relative">
-      <button
+      <Button
         ref={triggerRef}
         aria-label={`Filter ${column.label}`}
-        className="flex h-8 cursor-pointer list-none items-center justify-between gap-2 rounded-md border border-input bg-card px-2 py-1 text-xs font-normal text-foreground shadow-sm marker:hidden"
+        className="h-7 w-full cursor-pointer list-none justify-between gap-1 bg-card px-1.5 py-1 font-normal shadow-sm marker:hidden"
+        size="sm"
         type="button"
+        variant="outline"
         onClick={() => onOpenChange(column.id, !isOpen)}
       >
         <span className="truncate">{label}</span>
         <span aria-hidden="true" className="text-muted-foreground">
           ▾
         </span>
-      </button>
+      </Button>
       {isOpen && menuPosition && typeof document !== "undefined"
         ? createPortal(
             <div
@@ -423,13 +426,15 @@ function ColumnValueFilter<TRow>({
                 maxWidth: menuPosition.maxWidth
               }}
             >
-              <button
-                className="mb-1 w-full cursor-pointer rounded-sm border-0 bg-transparent px-2 py-1 text-left text-xs text-muted-foreground hover:bg-muted"
+              <Button
+                className="mb-1 w-full cursor-pointer justify-start px-2 py-1 text-left text-xs text-muted-foreground"
+                size="sm"
                 type="button"
+                variant="ghost"
                 onClick={() => onClear(column.id, [])}
               >
                 Clear
-              </button>
+              </Button>
               <div className="flex max-h-52 flex-col gap-1 overflow-auto">
                 {options.map((option) => (
                   <label key={option} className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1 hover:bg-muted">

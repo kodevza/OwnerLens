@@ -12,14 +12,17 @@ import type { ManagedIdentity } from "../../../core/azure/entra/managedIdentity"
 import type { ServicePrincipal } from "../../../core/azure/entra/servicePrincipal";
 import type { ZtaReport } from "../../../core/azure/ztaReport";
 import type { AzureIdentityEnrichmentStatus } from "./enrichment/azureIdentityEnrichment";
+import { EntraCollectionQueryService } from "./entra/EntraCollectionQueryService";
 import { LocalEntraReportRuntime } from "./entra/LocalEntraReportRuntime";
 import type { EntraDuckDbImportStatus } from "./entra/snapshotStore";
+import { AzureResourcesCollectionQueryService } from "./resources/AzureResourcesCollectionQueryService";
 import { LocalAzureResourcesReportRuntime } from "./resources/LocalAzureResourcesReportRuntime";
 import type { AzureResourcesDuckDbImportStatus } from "./resources/snapshotStore";
 import { LocalZeroTrustAssessmentReportRuntime } from "./zta/LocalZeroTrustAssessmentReportRuntime";
 import type {
   ZeroTrustAssessmentDuckDbImportStatus
 } from "./zta/snapshotStore";
+import { ZeroTrustAssessmentQueryService } from "./zta/ZeroTrustAssessmentQueryService";
 import {
   type LocalReportCollectionQuery,
   type LocalReportPaginatedCollection
@@ -52,6 +55,9 @@ export class LocalReportRuntime {
   private readonly entra: LocalEntraReportRuntime;
   private readonly azureResources: LocalAzureResourcesReportRuntime;
   private readonly zeroTrustAssessment: LocalZeroTrustAssessmentReportRuntime;
+  private readonly zeroTrustAssessmentQueries: ZeroTrustAssessmentQueryService;
+  private readonly azureResourcesQueries: AzureResourcesCollectionQueryService;
+  private readonly entraQueries: EntraCollectionQueryService;
   private readonly snapshotImporter: SnapshotImporter;
   private readonly enrichmentService: EnrichmentService;
   private readonly disabledEvidenceStore: DisabledEvidenceStore;
@@ -73,6 +79,9 @@ export class LocalReportRuntime {
       dataDir: this.dataDir,
       getConnection: () => this.requireConnection()
     });
+    this.zeroTrustAssessmentQueries = new ZeroTrustAssessmentQueryService({
+      zeroTrustAssessment: this.zeroTrustAssessment
+    });
     this.snapshotImporter = new SnapshotImporter({
       entra: this.entra,
       azureResources: this.azureResources,
@@ -80,11 +89,20 @@ export class LocalReportRuntime {
     });
     this.enrichmentService = new EnrichmentService(() => this.requireConnection());
     this.disabledEvidenceStore = new DisabledEvidenceStore(() => this.requireConnection());
-    this.collectionQueryService = new CollectionQueryService({
+    this.azureResourcesQueries = new AzureResourcesCollectionQueryService({
       entra: this.entra,
       azureResources: this.azureResources,
-      zeroTrustAssessment: this.zeroTrustAssessment,
       disabledEvidenceStore: this.disabledEvidenceStore
+    });
+    this.entraQueries = new EntraCollectionQueryService({
+      entra: this.entra,
+      azureResources: this.azureResources,
+      azureResourcesQueries: this.azureResourcesQueries,
+      zeroTrustAssessmentQueries: this.zeroTrustAssessmentQueries
+    });
+    this.collectionQueryService = new CollectionQueryService({
+      entraQueries: this.entraQueries,
+      azureResourcesQueries: this.azureResourcesQueries
     });
   }
 
@@ -147,7 +165,7 @@ export class LocalReportRuntime {
 
   async readZeroTrustAssessmentReport(): Promise<ZtaReport> {
     await this.initialize();
-    return this.zeroTrustAssessment.readReport();
+    return this.zeroTrustAssessmentQueries.readReport();
   }
 
   async recalculateEnrichment(): Promise<void> {
