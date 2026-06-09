@@ -6,7 +6,7 @@ import { DuckDBInstance } from "@duckdb/node-api";
 
 import { LocalReportRuntime } from "./LocalReportRuntime";
 import { defineLocalReportRuntimeRestEndpoints } from "./localReportRuntimeRest";
-import type { AzureSnapshot } from "../domain/resources/AzureSnapshot";
+import type { AzureSnapshot } from "../../../core/azure/resources";
 import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
 import {
   importZeroTrustAssessmentReportToDuckDb,
@@ -287,6 +287,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
       account: "owner@example.test",
       scopes: ["Application.Read.All"],
       servicePrincipalCount: 2,
+      applicationCount: 1,
       oauth2PermissionGrantCount: 1,
       appRoleAssignmentCount: 1
     },
@@ -337,6 +338,82 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         metadata: null
       }
     ],
+    applications: [
+      {
+        id: "application-object-1",
+        appId: "app-1",
+        displayName: "Example app registration",
+        signInAudience: "AzureADMyOrg",
+        publisherDomain: "example.test",
+        identifierUris: ["api://example"],
+        tags: ["WindowsAzureActiveDirectoryIntegratedApp"],
+        appRoles: [
+          {
+            id: "role-1",
+            value: "Read.All",
+            displayName: "Read",
+            description: "Read access",
+            isEnabled: true,
+            allowedMemberTypes: ["Application"]
+          }
+        ],
+        oauth2PermissionScopes: [
+          {
+            id: "scope-1",
+            value: "user_impersonation",
+            adminConsentDisplayName: "Access Example API",
+            isEnabled: true,
+            type: "User"
+          }
+        ],
+        requiredResourceAccess: [
+          {
+            resourceAppId: "00000003-0000-0000-c000-000000000000",
+            resourceAccess: [{ id: "permission-1", type: "Scope" }]
+          }
+        ],
+        web: {
+          redirectUris: ["https://example.test/callback"],
+          implicitGrantSettings: { enableAccessTokenIssuance: false, enableIdTokenIssuance: true }
+        },
+        spa: {
+          redirectUris: ["https://spa.example.test/callback"]
+        },
+        publicClient: {
+          redirectUris: ["http://localhost"]
+        },
+        passwordCredentials: [
+          {
+            keyId: "password-key-1",
+            displayName: "client secret",
+            hint: "abc",
+            startDateTime: "2026-01-01T00:00:00.000Z",
+            endDateTime: "2026-12-31T00:00:00.000Z",
+            secretText: "must-not-survive"
+          }
+        ],
+        keyCredentials: [
+          {
+            keyId: "certificate-key-1",
+            displayName: "certificate",
+            type: "AsymmetricX509Cert",
+            usage: "Verify",
+            customKeyIdentifier: "AQID",
+            startDateTime: "2026-01-01T00:00:00.000Z",
+            endDateTime: "2026-12-31T00:00:00.000Z"
+          }
+        ],
+        createdDateTime: "2026-01-01T00:00:00.000Z",
+        deletedDateTime: null,
+        disabledByMicrosoftStatus: null,
+        info: {
+          termsOfServiceUrl: "https://example.test/terms",
+          supportUrl: "https://example.test/support"
+        },
+        notes: "Business critical app",
+        owners: [{ id: "app-owner-1", mail: "app-owner@example.test", ownerType: "#microsoft.graph.user" }]
+      }
+    ],
     oauth2PermissionGrants: [
       {
         id: "grant-1",
@@ -369,6 +446,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
     expect(runtime.getStatus().entra).toMatchObject({
       imported: true,
       servicePrincipalCount: 2,
+      applicationCount: 1,
       oauth2PermissionGrantCount: 1,
       appRoleAssignmentCount: 1
     });
@@ -399,6 +477,29 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
       metadata: { source: "test" },
       owners: [{ id: "owner-1" }]
     });
+    expect(imported.applications).toHaveLength(1);
+    expect(imported.applications?.[0]).toMatchObject({
+      id: "application-object-1",
+      appId: "app-1",
+      displayName: "Example app registration",
+      oauth2PermissionScopes: [{ id: "scope-1", value: "user_impersonation" }],
+      requiredResourceAccess: [{ resourceAppId: "00000003-0000-0000-c000-000000000000" }],
+      web: { redirectUris: ["https://example.test/callback"] },
+      spa: { redirectUris: ["https://spa.example.test/callback"] },
+      publicClient: { redirectUris: ["http://localhost"] },
+      passwordCredentials: [
+        {
+          keyId: "password-key-1",
+          displayName: "client secret",
+          hint: "abc",
+          startDateTime: "2026-01-01T00:00:00.000Z",
+          endDateTime: "2026-12-31T00:00:00.000Z"
+        }
+      ],
+      keyCredentials: [{ keyId: "certificate-key-1", usage: "Verify" }],
+      owners: [{ id: "app-owner-1", mail: "app-owner@example.test" }]
+    });
+    expect(imported.applications?.[0].passwordCredentials[0]).not.toHaveProperty("secretText");
     expect(imported.oauth2PermissionGrants).toEqual(snapshot.oauth2PermissionGrants);
     expect(imported.appRoleAssignments).toEqual(snapshot.appRoleAssignments);
     expect(imported.groups).toEqual([{ id: "group-1" }]);
@@ -431,6 +532,44 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         })
       ]
     });
+  } finally {
+    await runtime.close();
+    await rm(dataDir, { force: true, recursive: true });
+  }
+});
+
+test("imports legacy Entra snapshots without applications as an empty applications collection", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "ownerlens-runtime-"));
+  const runtime = new LocalReportRuntime({ dataDir });
+
+  const snapshot: EntraSnapshot = {
+    meta: {
+      provider: "entra",
+      snapshotVersion: "0.3",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      tenantId: "tenant-1",
+      account: "owner@example.test",
+      scopes: ["Application.Read.All"],
+      servicePrincipalCount: 0
+    },
+    servicePrincipals: [],
+    oauth2PermissionGrants: [],
+    appRoleAssignments: []
+  };
+
+  try {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(snapshot), "utf8");
+    await runtime.initialize();
+
+    expect(runtime.getStatus().entra).toMatchObject({
+      imported: true,
+      servicePrincipalCount: 0,
+      applicationCount: 0
+    });
+
+    const imported = await runtime.readSnapshot("entra-snapshot.json");
+
+    expect((imported as EntraSnapshot).applications).toEqual([]);
   } finally {
     await runtime.close();
     await rm(dataDir, { force: true, recursive: true });
@@ -537,6 +676,82 @@ test("enriches Entra runtime collections with latest ZTA remediation summaries",
           ztaRemediationCountAll: 2,
           ztaRemediationFailedCount: 1,
           ztaMaxRisk: "medium"
+        })
+      ]
+    });
+  } finally {
+    await runtime.close();
+    await rm(dataDir, { force: true, recursive: true });
+  }
+});
+
+test("enriches service principals with ZTA remediations related to application object ids", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "ownerlens-runtime-"));
+  const runtime = new LocalReportRuntime({ dataDir });
+  const entraSnapshot: EntraSnapshot = {
+    meta: {
+      provider: "entra",
+      snapshotVersion: "1",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      tenantId: "tenant-1",
+      account: "owner@example.test",
+      scopes: [],
+      servicePrincipalCount: 2,
+      applicationCount: 1
+    },
+    servicePrincipals: [
+      servicePrincipal("sp-1", "app-1", "Application app", "Application"),
+      servicePrincipal("sp-2", "app-2", "Other application app", "Application")
+    ],
+    applications: [application("application-object-1", "app-1", "Application app registration")],
+    oauth2PermissionGrants: [],
+    appRoleAssignments: []
+  };
+  const report: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-1",
+    TestResultSummary: { IdentityFailed: 2 },
+    Tests: [
+      {
+        TestId: "app-object-failed",
+        TestStatus: "Failed",
+        TestRisk: "High",
+        RelatedObjects: [{ id: "application-object-1" }]
+      },
+      {
+        TestId: "app-object-and-sp-deduped",
+        TestStatus: "Passed",
+        TestRisk: "Medium",
+        RelatedObjects: [{ id: "application-object-1" }, { object_id: "sp-1" }]
+      }
+    ]
+  };
+
+  try {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
+    await runtime.initialize();
+
+    const queriedServicePrincipals = await runtime.queryCollection({
+      collectionId: "entra.servicePrincipals",
+      page: 1,
+      pageSize: 10
+    });
+
+    expect(queriedServicePrincipals).toMatchObject({
+      collectionId: "entra.servicePrincipals",
+      rows: [
+        expect.objectContaining({
+          id: "sp-1",
+          ztaRemediationCountAll: 2,
+          ztaRemediationFailedCount: 1,
+          ztaMaxRisk: "high"
+        }),
+        expect.objectContaining({
+          id: "sp-2",
+          ztaRemediationCountAll: 0,
+          ztaRemediationFailedCount: 0,
+          ztaMaxRisk: "none"
         })
       ]
     });
@@ -1526,6 +1741,36 @@ function servicePrincipal(
     appRoles: [],
     owners: [],
     metadata: null
+  };
+}
+
+function application(
+  id: string,
+  appId: string,
+  displayName: string
+): NonNullable<EntraSnapshot["applications"]>[number] {
+  return {
+    id,
+    appId,
+    displayName,
+    signInAudience: null,
+    publisherDomain: null,
+    identifierUris: [],
+    tags: [],
+    appRoles: [],
+    oauth2PermissionScopes: [],
+    requiredResourceAccess: [],
+    web: null,
+    spa: null,
+    publicClient: null,
+    passwordCredentials: [],
+    keyCredentials: [],
+    createdDateTime: null,
+    deletedDateTime: null,
+    disabledByMicrosoftStatus: null,
+    info: null,
+    notes: null,
+    owners: []
   };
 }
 

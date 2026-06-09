@@ -1,5 +1,5 @@
 import type { EntraServicePrincipal } from "../inputTransferObject/entra/EntraServicePrincipal";
-import type { AzureActivityLog } from "../domain/resources/AzureActivityLog";
+import type { AzureActivityLog } from "../../../core/azure/resources";
 
 export function normalizeOwner(value: string): string {
   return value.trim().toLowerCase();

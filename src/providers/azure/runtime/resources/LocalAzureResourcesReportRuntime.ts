@@ -3,14 +3,17 @@ import path from "node:path";
 
 import type { DuckDBConnection } from "@duckdb/node-api";
 
+import type {
+  AzureActivityLog,
+  AzureResource,
+  AzureResourceGroup,
+  AzureRoleAssignment,
+  AzureSnapshot,
+  AzureSubscription,
+  AzureUserAssignedManagedIdentity
+} from "../../../../core/azure/resources";
 import { pathExists, RuntimeHttpError, type LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
-import type { AzureActivityLog } from "../../domain/resources/AzureActivityLog";
-import type { AzureResource } from "../../domain/resources/AzureResource";
-import type { AzureResourceGroup } from "../../domain/resources/AzureResourceGroup";
-import type { AzureRoleAssignment } from "../../domain/resources/AzureRoleAssignment";
-import type { AzureSnapshot } from "../../domain/resources/AzureSnapshot";
-import type { AzureSubscription } from "../../domain/resources/AzureSubscription";
-import type { AzureUserAssignedManagedIdentity } from "../../domain/resources/AzureUserAssignedManagedIdentity";
+import type { AzureSnapshot as AzureSnapshotInput } from "../../inputTransferObject/resources/AzureSnapshot";
 import {
   buildPaginatedCollection,
   type LocalReportCollectionQuery,
@@ -78,7 +81,7 @@ export class LocalAzureResourcesReportRuntime {
       return;
     }
 
-    const snapshot = JSON.parse(await readFile(snapshotPath, "utf8")) as AzureSnapshot & LocalSnapshotData;
+    const snapshot = JSON.parse(await readFile(snapshotPath, "utf8")) as AzureSnapshotInput & LocalSnapshotData;
     this.status = await importAzureResourcesSnapshotToDuckDb(this.getConnection(), snapshot);
   }
 

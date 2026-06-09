@@ -3,8 +3,8 @@
 OwnerLens is a local Azure ownership report. It reads exported Azure resource
 and Microsoft Entra snapshot files, then helps identify likely owners for Azure
 subscriptions and resource groups using tags, cost center mappings, role
-assignments, managed identities, service principals, groups, and activity-log
-evidence.
+assignments, managed identities, service principals, application registrations,
+groups, and activity-log evidence.
 
 The application is intended to reconcile cloud provider ownership data (currently Azure), 
 👉 export the resolved ownership results for Identity and Access Management (IAM) systems, 
@@ -70,7 +70,7 @@ OwnerLens expects these files by default:
 
 - `data/snapshot.json` for Azure resources, role assignments, managed
   identities, and optional Azure Monitor activity logs
-- `data/entra-snapshot.json` for Microsoft Entra service principals and groups
+- `data/entra-snapshot.json` for Microsoft Entra service principals, application registrations, and groups
 
 Sign in to Azure:
 

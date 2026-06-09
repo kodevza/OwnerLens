@@ -2,6 +2,7 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type { EntraSnapshot } from "../../inputTransferObject/entra/EntraSnapshot";
 import type { LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
+import { insertEntraApplicationRows, prepareEntraApplicationsTable, readEntraApplicationRows } from "./applicationsTable";
 import {
   insertEntraAppRoleAssignmentRows,
   prepareEntraAppRoleAssignmentsTable,
@@ -25,6 +26,7 @@ export type EntraDuckDbImportStatus = {
   imported: boolean;
   fileName: string;
   servicePrincipalCount: number;
+  applicationCount: number;
   oauth2PermissionGrantCount: number;
   appRoleAssignmentCount: number;
   importedAt: string | null;
@@ -35,6 +37,7 @@ export function createEmptyEntraImportStatus(): EntraDuckDbImportStatus {
     imported: false,
     fileName: entraSnapshotFileName,
     servicePrincipalCount: 0,
+    applicationCount: 0,
     oauth2PermissionGrantCount: 0,
     appRoleAssignmentCount: 0,
     importedAt: null
@@ -44,6 +47,7 @@ export function createEmptyEntraImportStatus(): EntraDuckDbImportStatus {
 export async function prepareEntraDuckDbSchema(connection: DuckDBConnection): Promise<void> {
   await prepareEntraSnapshotMetadataTables(connection);
   await prepareEntraServicePrincipalsTable(connection);
+  await prepareEntraApplicationsTable(connection);
   await prepareEntraOAuth2PermissionGrantsTable(connection);
   await prepareEntraAppRoleAssignmentsTable(connection);
 }
@@ -57,13 +61,15 @@ export async function importEntraSnapshotToDuckDb(
     await connection.run("delete from entra_snapshot_meta");
     await connection.run("delete from entra_snapshot_extra");
     await connection.run("delete from entra_service_principals");
+    await connection.run("delete from entra_applications");
     await connection.run("delete from entra_oauth2_permission_grants");
     await connection.run("delete from entra_app_role_assignments");
 
-    const { servicePrincipals, oauth2PermissionGrants, appRoleAssignments } = snapshot;
+    const { servicePrincipals, applications, oauth2PermissionGrants, appRoleAssignments } = snapshot;
     await importEntraSnapshotMetadata(connection, snapshot);
 
     await insertEntraServicePrincipalRows(connection, servicePrincipals);
+    await insertEntraApplicationRows(connection, applications);
     await insertEntraOAuth2PermissionGrantRows(connection, oauth2PermissionGrants);
     await insertEntraAppRoleAssignmentRows(connection, appRoleAssignments);
 
@@ -72,6 +78,7 @@ export async function importEntraSnapshotToDuckDb(
       imported: true,
       fileName: entraSnapshotFileName,
       servicePrincipalCount: servicePrincipals.length,
+      applicationCount: applications?.length ?? 0,
       oauth2PermissionGrantCount: oauth2PermissionGrants?.length ?? 0,
       appRoleAssignmentCount: appRoleAssignments?.length ?? 0,
       importedAt: new Date().toISOString()
@@ -88,6 +95,7 @@ export async function readEntraSnapshotFromDuckDb(
   const metaRows = await readRows<{ data: string }>(connection, "select data from entra_snapshot_meta limit 1");
   const extraRows = await readRows<{ data: string }>(connection, "select data from entra_snapshot_extra limit 1");
   const servicePrincipals = await readEntraServicePrincipalRows(connection);
+  const applications = await readEntraApplicationRows(connection);
   const oauth2PermissionGrants = await readEntraOAuth2PermissionGrantRows(connection);
   const appRoleAssignments = await readEntraAppRoleAssignmentRows(connection);
 
@@ -95,6 +103,7 @@ export async function readEntraSnapshotFromDuckDb(
     ...parseJsonObject(extraRows[0]?.data),
     meta: parseJsonObject(metaRows[0]?.data) as EntraSnapshot["meta"],
     servicePrincipals,
+    applications,
     oauth2PermissionGrants,
     appRoleAssignments
   };

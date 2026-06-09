@@ -20,8 +20,9 @@ export async function importEntraSnapshotMetadata(
   connection: DuckDBConnection,
   snapshot: EntraSnapshot & LocalSnapshotData
 ): Promise<void> {
-  const { meta, servicePrincipals, oauth2PermissionGrants, appRoleAssignments, ...extra } = snapshot;
+  const { meta, servicePrincipals, applications, oauth2PermissionGrants, appRoleAssignments, ...extra } = snapshot;
   void servicePrincipals;
+  void applications;
   void oauth2PermissionGrants;
   void appRoleAssignments;
 

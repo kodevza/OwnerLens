@@ -3,7 +3,12 @@ import type { HTMLAttributes, TableHTMLAttributes, TdHTMLAttributes, ThHTMLAttri
 import { cn } from "../../../lib/utils";
 
 export function TableContainer({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("relative w-full overflow-auto rounded-md border border-border", className)} {...props} />;
+  return (
+    <div
+      className={cn("relative w-full overflow-auto rounded-md border border-border bg-card text-card-foreground shadow-sm", className)}
+      {...props}
+    />
+  );
 }
 
 export function Table({ className, ...props }: TableHTMLAttributes<HTMLTableElement>) {
@@ -26,7 +31,7 @@ export function TableHead({ className, ...props }: ThHTMLAttributes<HTMLTableCel
   return (
     <th
       className={cn(
-        "sticky top-0 z-10 h-10 bg-muted px-3 text-left align-middle text-xs font-medium text-muted-foreground",
+        "sticky top-0 z-10 h-10 bg-muted px-1.5 text-left align-middle text-xs font-medium text-muted-foreground",
         className
       )}
       {...props}

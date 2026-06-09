@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
 
-import type { AzureResourceTags } from "../../providers/azure/domain/resources/AzureResourceGroup";
-import type { ResourceGroupOwnershipRow } from "../../providers/azure/runtime/resources/resourceGroupOwnership";
+import type { AzureResourceTags, ResourceGroupOwnershipRow } from "../../core/azure/resources";
 import type { OwnerEvidence } from "../../report/types";
 import { azureOwnerColumnHelp } from "./azureReportConfig";
 import { readResourceGroups, updateDisabledOwnerEvidence } from "./api";
 import { EvidenceList } from "../../report/components/EvidenceList";
 import { GenericTable } from "../../report/components/GenericTable";
 import type { ColumnFilters } from "../../report/components/reportTableControls";
+import { Card } from "../../report/components/ui/card";
 import { getOwnerEvidenceKey, isActivityOwnerRow } from "../../report/ownerManualPrecheck";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
@@ -118,7 +118,7 @@ export function ResourceGroupComponent() {
 
   return (
     <>
-      {toggleError ? <div className="alert">{toggleError}</div> : null}
+      {toggleError ? <Card className="border-red-200 bg-red-50 p-4 text-sm text-red-900">{toggleError}</Card> : null}
       <GenericTable
         columnHelp={azureOwnerColumnHelp}
         emptyMessage="No resource groups match the filter."

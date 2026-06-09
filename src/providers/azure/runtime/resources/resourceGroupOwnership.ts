@@ -1,14 +1,6 @@
 import type { OwnerEvidence } from "../../../../core/ownership/types";
-import type { AzureResourceGroup } from "../../domain/resources/AzureResourceGroup";
+import type { AzureResourceGroup, ResourceGroupOwnershipRow } from "../../../../core/azure/resources";
 import type { OwnerReportRow } from "../../ownership/azureOwnerReportTypes";
-
-export type ResourceGroupOwnershipRow = AzureResourceGroup & {
-  targetKey: string;
-  owner: string | null;
-  confidence: OwnerReportRow["confidence"];
-  source: string;
-  evidence: OwnerEvidence[];
-};
 
 export function buildResourceGroupOwnershipRows(
   resourceGroups: AzureResourceGroup[],

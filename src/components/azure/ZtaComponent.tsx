@@ -6,6 +6,7 @@ import type { ReportColumnRenderers } from "../../report/buildCollectionColumns"
 import { GenericTable } from "../../report/components/GenericTable";
 import type { ColumnFilters } from "../../report/components/reportTableControls";
 import { Badge } from "../../report/components/ui/badge";
+import { Card } from "../../report/components/ui/card";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import { readZeroTrustAssessmentReport } from "./api";
 
@@ -148,11 +149,13 @@ export function ZtaComponent({ initialFilters, onRelatedObjectClick }: ZtaCompon
   }, []);
 
   if (loadState.status === "loading") {
-    return <div className="empty-state p-4 text-sm text-muted-foreground">Loading Zero Trust Assessment report...</div>;
+    return (
+      <Card className="p-8 text-center text-sm text-muted-foreground">Loading Zero Trust Assessment report...</Card>
+    );
   }
 
   if (loadState.status === "error") {
-    return <div className="alert p-4 text-sm">{loadState.message}</div>;
+    return <Card className="border-red-200 bg-red-50 p-4 text-sm text-red-900">{loadState.message}</Card>;
   }
 
   return <ZtaReportView initialFilters={initialFilters} report={loadState.report} onRelatedObjectClick={onRelatedObjectClick} />;
@@ -192,22 +195,20 @@ function ZtaReportView({ initialFilters, report, onRelatedObjectClick }: { repor
 
 function ZtaMetaPanel({ meta, testCount }: { meta: ZtaReportMeta; testCount: number }) {
   return (
-    <>
-      <div className="summary-grid">
-        <SummaryCard label="Tenant" value={meta.TenantName ?? meta.TenantId} />
-        <SummaryCard label="Executed" value={formatDate(meta.ExecutedAt)} />
-        <SummaryCard label="Tests" value={testCount} />
-      </div>
-    </>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <SummaryCard label="Tenant" value={meta.TenantName ?? meta.TenantId} />
+      <SummaryCard label="Executed" value={formatDate(meta.ExecutedAt)} />
+      <SummaryCard label="Tests" value={testCount} />
+    </div>
   );
 }
 
 function SummaryCard({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="summary-card">
-      <span>{label}</span>
-      <strong>{formatValue(value)}</strong>
-    </div>
+    <Card className="flex min-h-24 flex-col gap-2 p-4">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <strong className="[overflow-wrap:anywhere] text-xl leading-tight">{formatValue(value)}</strong>
+    </Card>
   );
 }
 

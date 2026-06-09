@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { buildCollectionColumns, type ReportColumnRenderers } from "../buildCollectionColumns";
 import type { ReportColumnHelp, ReportFieldDescriptor } from "../reportTypes";
+import { Button } from "./ui/button";
+import { Card } from "./ui/card";
 import { Table, TableBody, TableCell, TableContainer, TableHeader, TableRow } from "./ui/table";
 import {
   applyColumnFilterValueToggle,
@@ -122,11 +124,11 @@ function GenericRemoteTable<TRow>({
   );
 
   if (!collection && loadState.status === "loading") {
-    return <div className="empty-state">{loadingMessage}</div>;
+    return <TableState>{loadingMessage}</TableState>;
   }
 
   if (!collection && loadState.status === "error") {
-    return <div className="alert">{loadState.message}</div>;
+    return <TableState variant="error">{loadState.message}</TableState>;
   }
 
   if (!collection) {
@@ -135,7 +137,7 @@ function GenericRemoteTable<TRow>({
 
   return (
     <>
-      {loadState.status === "error" ? <div className="alert">{loadState.message}</div> : null}
+      {loadState.status === "error" ? <TableState variant="error">{loadState.message}</TableState> : null}
       <GenericTableView
         {...tableProps}
         emptyMessage={loadState.status === "loading" ? loadingMessage : tableProps.emptyMessage}
@@ -262,6 +264,20 @@ function GenericTableView<TRow>({
   );
 }
 
+function TableState({ children, variant = "empty" }: { children: string; variant?: "empty" | "error" }) {
+  return (
+    <Card
+      className={
+        variant === "error"
+          ? "border-red-200 bg-red-50 p-4 text-sm text-red-900"
+          : "p-8 text-center text-sm text-muted-foreground"
+      }
+    >
+      {children}
+    </Card>
+  );
+}
+
 function applyColumnTextFilter(filters: ColumnFilters, columnId: string, value: string): ColumnFilters {
   const next = { ...filters };
 
@@ -306,22 +322,24 @@ function TablePagination({
       <span>
         Page {page} of {pageCount}
       </span>
-      <button
-        className="rounded-md border border-input bg-background px-3 py-1.5 text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      <Button
         disabled={page <= 1}
+        size="sm"
         type="button"
+        variant="outline"
         onClick={() => onPageChange(page - 1)}
       >
         Previous
-      </button>
-      <button
-        className="rounded-md border border-input bg-background px-3 py-1.5 text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      </Button>
+      <Button
         disabled={page >= pageCount}
+        size="sm"
         type="button"
+        variant="outline"
         onClick={() => onPageChange(page + 1)}
       >
         Next
-      </button>
+      </Button>
     </div>
   );
 }
