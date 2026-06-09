@@ -10,28 +10,32 @@ import {
 } from "../../../core/runtime/localSnapshotFiles";
 import type { ManagedIdentity } from "../../../core/azure/entra/managedIdentity";
 import type { ServicePrincipal } from "../../../core/azure/entra/servicePrincipal";
-import type { ZtaReport } from "../../../core/azure/ztaReport";
+import type { ZtaReport, ZtaReportTest } from "../../../core/azure/ztaReport";
 import type { AzureIdentityEnrichmentStatus } from "./enrichment/azureIdentityEnrichment";
 import { EntraCollectionQueryService } from "./entra/EntraCollectionQueryService";
-import { LocalEntraReportRuntime } from "./entra/LocalEntraReportRuntime";
+import { LocalEntraReportRuntime, type LocalEntraReportCollectionId } from "./entra/LocalEntraReportRuntime";
 import type { EntraDuckDbImportStatus } from "./entra/snapshotStore";
-import { AzureResourcesCollectionQueryService } from "./resources/AzureResourcesCollectionQueryService";
+import {
+  AzureResourcesCollectionQueryService,
+  type LocalAzureResourcesExtendedCollectionId
+} from "./resources/AzureResourcesCollectionQueryService";
 import { LocalAzureResourcesReportRuntime } from "./resources/LocalAzureResourcesReportRuntime";
 import type { AzureResourcesDuckDbImportStatus } from "./resources/snapshotStore";
 import { LocalZeroTrustAssessmentReportRuntime } from "./zta/LocalZeroTrustAssessmentReportRuntime";
-import type {
-  ZeroTrustAssessmentDuckDbImportStatus
-} from "./zta/snapshotStore";
-import { ZeroTrustAssessmentQueryService } from "./zta/ZeroTrustAssessmentQueryService";
+import type { ZeroTrustAssessmentDuckDbImportStatus } from "./zta/snapshotStore";
 import {
-  type LocalReportCollectionQuery,
+  ZeroTrustAssessmentQueryService,
+  type LocalZeroTrustAssessmentReportCollectionId
+} from "./zta/ZeroTrustAssessmentQueryService";
+import {
+  type LocalReportCollectionQueryOptions,
   type LocalReportPaginatedCollection
 } from "./localReportCollections";
 import { RuntimeHost } from "./RuntimeHost";
 import { SnapshotImporter } from "./SnapshotImporter";
 import { EnrichmentService } from "./EnrichmentService";
 import { DisabledEvidenceStore, type DisabledOwnerKey } from "./DisabledEvidenceStore";
-import { CollectionQueryService, type LocalReportCollectionId } from "./CollectionQueryService";
+import { prepareRuntimeSqlSchema } from "./runtimeSqlSchema";
 
 export type LocalReportRuntimeOptions = {
   dataDir: string;
@@ -47,7 +51,10 @@ export type LocalReportRuntimeStatus = {
   enrichment: AzureIdentityEnrichmentStatus;
 };
 
-export { type LocalReportCollectionId };
+export type LocalReportCollectionId =
+  | LocalEntraReportCollectionId
+  | LocalAzureResourcesExtendedCollectionId
+  | LocalZeroTrustAssessmentReportCollectionId;
 
 export class LocalReportRuntime {
   private readonly dataDir: string;
@@ -61,7 +68,6 @@ export class LocalReportRuntime {
   private readonly snapshotImporter: SnapshotImporter;
   private readonly enrichmentService: EnrichmentService;
   private readonly disabledEvidenceStore: DisabledEvidenceStore;
-  private readonly collectionQueryService: CollectionQueryService;
   private initializePromise: Promise<void> | null = null;
 
   constructor(options: LocalReportRuntimeOptions) {
@@ -99,10 +105,6 @@ export class LocalReportRuntime {
       azureResources: this.azureResources,
       azureResourcesQueries: this.azureResourcesQueries,
       zeroTrustAssessmentQueries: this.zeroTrustAssessmentQueries
-    });
-    this.collectionQueryService = new CollectionQueryService({
-      entraQueries: this.entraQueries,
-      azureResourcesQueries: this.azureResourcesQueries
     });
   }
 
@@ -178,11 +180,90 @@ export class LocalReportRuntime {
     return this.disabledEvidenceStore.setDisabled(key, disabled);
   }
 
-  async queryCollection(
-    query: LocalReportCollectionQuery
-  ): Promise<LocalReportPaginatedCollection<LocalReportCollectionId>> {
+  async queryEntraServicePrincipals(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"entra.servicePrincipals">> {
     await this.initialize();
-    return this.collectionQueryService.queryCollection(query);
+    return this.entraQueries.queryServicePrincipals(options);
+  }
+
+  async queryEntraManagedIdentities(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"entra.managedIdentities">> {
+    await this.initialize();
+    return this.entraQueries.queryManagedIdentities(options);
+  }
+
+  async queryEntraOAuth2PermissionGrants(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"entra.oauth2PermissionGrants">> {
+    await this.initialize();
+    return this.entraQueries.queryOAuth2PermissionGrants(options);
+  }
+
+  async queryEntraAppRoleAssignments(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"entra.appRoleAssignments">> {
+    await this.initialize();
+    return this.entraQueries.queryAppRoleAssignments(options);
+  }
+
+  async queryAzureSubscriptions(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.subscriptions">> {
+    await this.initialize();
+    return this.azureResourcesQueries.querySubscriptions(options);
+  }
+
+  async queryAzureResourceGroups(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.resourceGroups">> {
+    await this.initialize();
+    return this.azureResourcesQueries.queryResourceGroups(options);
+  }
+
+  async queryAzureResourceGroupOwnership(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.resourceGroupOwnership">> {
+    await this.initialize();
+    return this.azureResourcesQueries.queryResourceGroupOwnership(options);
+  }
+
+  async queryAzureResources(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.resources">> {
+    await this.initialize();
+    return this.azureResourcesQueries.queryResources(options);
+  }
+
+  async queryAzureUserAssignedManagedIdentities(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.userAssignedManagedIdentities">> {
+    await this.initialize();
+    return this.azureResourcesQueries.queryUserAssignedManagedIdentities(options);
+  }
+
+  async queryAzureRoleAssignments(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.roleAssignments">> {
+    await this.initialize();
+    return this.azureResourcesQueries.queryRoleAssignments(options);
+  }
+
+  async queryAzureActivityLogs(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.activityLogs">> {
+    await this.initialize();
+    return this.azureResourcesQueries.queryActivityLogs(options);
+  }
+
+  async queryZeroTrustAssessmentReport(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<
+    LocalReportPaginatedCollection<"zeroTrustAssessment.report"> & Pick<ZtaReport, "Meta"> & { Tests: ZtaReportTest[] }
+  > {
+    await this.initialize();
+    return this.zeroTrustAssessmentQueries.queryReport(options);
   }
 
   async close(): Promise<void> {
@@ -192,8 +273,7 @@ export class LocalReportRuntime {
 
   private async initializeInternal(): Promise<void> {
     await this.host.initialize();
-    await this.snapshotImporter.prepareSchema();
-    await this.enrichmentService.prepareSchema();
+    await prepareRuntimeSqlSchema(this.requireConnection());
     await this.snapshotImporter.importSnapshots();
     await this.enrichmentService.recalculate();
     await this.enrichmentService.readStatus();

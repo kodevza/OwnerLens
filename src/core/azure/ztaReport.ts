@@ -28,6 +28,8 @@ export type ZtaReportMeta = {
 export type ZtaRelatedObject = {
   id?: string | null;
   object_id?: string | null;
+  servicePrincipalId?: string | null;
+  applicationId?: string | null;
   displayName?: string | null;
   servicePrincipalType?: string | null;
   userPrincipalName?: string | null;

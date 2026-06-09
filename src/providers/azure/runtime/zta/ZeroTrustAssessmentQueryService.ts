@@ -1,7 +1,19 @@
 import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
-import type { ZtaRemediationSummary, ZtaReport } from "../../../../core/azure/ztaReport";
+import type {
+  ZtaRelatedObject,
+  ZtaRemediationSummary,
+  ZtaReport,
+  ZtaReportTest
+} from "../../../../core/azure/ztaReport";
 
+import {
+  buildPaginatedCollection,
+  type LocalReportCollectionFilter,
+  type LocalReportCollectionQueryOptions
+} from "../localReportCollections";
 import type { LocalZeroTrustAssessmentReportRuntime } from "./LocalZeroTrustAssessmentReportRuntime";
+
+export type LocalZeroTrustAssessmentReportCollectionId = "zeroTrustAssessment.report";
 
 export type ZeroTrustAssessmentQueryServiceOptions = {
   zeroTrustAssessment: LocalZeroTrustAssessmentReportRuntime;
@@ -18,6 +30,23 @@ export class ZeroTrustAssessmentQueryService {
     return this.zeroTrustAssessment.readReport();
   }
 
+  async queryReport(options: LocalReportCollectionQueryOptions) {
+    const report = await this.readReport();
+    const { relatedObjectFilters, remainingFilters } = splitRelatedObjectFilters(options.filters ?? []);
+    const tests = applyRelatedObjectFilters(report.Tests ?? [], relatedObjectFilters);
+    const collection = buildPaginatedCollection(
+      "zeroTrustAssessment.report",
+      tests as Record<string, unknown>[],
+      { ...options, filters: remainingFilters }
+    );
+
+    return {
+      ...collection,
+      Meta: report.Meta,
+      Tests: collection.rows as ZtaReportTest[]
+    };
+  }
+
   async readRemediationSummaries(): Promise<Map<string, ZtaRemediationSummary>> {
     try {
       return await this.zeroTrustAssessment.readRemediationSummaries();
@@ -29,4 +58,50 @@ export class ZeroTrustAssessmentQueryService {
       throw error;
     }
   }
+}
+
+function splitRelatedObjectFilters(filters: LocalReportCollectionFilter[]): {
+  relatedObjectFilters: LocalReportCollectionFilter[];
+  remainingFilters: LocalReportCollectionFilter[];
+} {
+  return {
+    relatedObjectFilters: filters.filter((filter) => filter.column === "RelatedObjects"),
+    remainingFilters: filters.filter((filter) => filter.column !== "RelatedObjects")
+  };
+}
+
+function applyRelatedObjectFilters(
+  tests: ZtaReportTest[],
+  filters: LocalReportCollectionFilter[]
+): ZtaReportTest[] {
+  const activeFilters = filters
+    .map((filter) => filter.values.map((value) => value.trim()).filter(Boolean))
+    .filter((values) => values.length > 0);
+
+  if (activeFilters.length === 0) {
+    return tests;
+  }
+
+  return tests.filter((test) => {
+    const searchableValue = formatRelatedObjectsSearchValue(test.RelatedObjects ?? []).toLocaleLowerCase();
+    return activeFilters.every((values) =>
+      values.some((value) => searchableValue.includes(value.toLocaleLowerCase()))
+    );
+  });
+}
+
+function formatRelatedObjectsSearchValue(relatedObjects: ZtaRelatedObject[]): string {
+  return relatedObjects
+    .flatMap((relatedObject) => [
+      relatedObject.servicePrincipalId,
+      relatedObject.applicationId,
+      relatedObject.id,
+      relatedObject.displayName
+    ])
+    .filter(isNonEmptyString)
+    .join(" ");
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }

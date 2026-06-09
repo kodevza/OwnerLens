@@ -1,7 +1,6 @@
 import { RuntimeHttpError } from "../../../core/runtime/localSnapshotFiles";
 
-export type LocalReportCollectionQuery = {
-  collectionId: string;
+export type LocalReportCollectionQueryOptions = {
   page?: number;
   pageSize?: number;
   filters?: LocalReportCollectionFilter[];
@@ -24,7 +23,7 @@ export type LocalReportPaginatedCollection<CollectionId extends string = string>
 export function buildPaginatedCollection<CollectionId extends string>(
   collectionId: CollectionId,
   rows: Record<string, unknown>[],
-  query: Pick<LocalReportCollectionQuery, "filters" | "page" | "pageSize">
+  query: LocalReportCollectionQueryOptions
 ): LocalReportPaginatedCollection<CollectionId> {
   const columns = buildCollectionColumns(rows);
   const filteredRows = applyRuntimeCollectionFilters(rows, columns, query.filters ?? []);

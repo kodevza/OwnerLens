@@ -4,13 +4,11 @@ import type { DuckDBConnection, DuckDBValue } from "@duckdb/node-api";
 
 import {
   insertZeroTrustAssessmentReport,
-  importZeroTrustAssessmentMetadata,
-  prepareZeroTrustAssessmentMetadataTables
+  importZeroTrustAssessmentMetadata
 } from "./snapshotMetadataTable";
 import {
   insertZeroTrustAssessmentRelatedObjectRows,
   insertZeroTrustAssessmentTestRows,
-  prepareZeroTrustAssessmentTables,
   readZeroTrustAssessmentTestRows
 } from "./tables";
 import type { ZeroTrustAssessmentReport } from "./types";
@@ -33,11 +31,6 @@ export function createEmptyZeroTrustAssessmentImportStatus(): ZeroTrustAssessmen
     testCount: 0,
     importedAt: null
   };
-}
-
-export async function prepareZeroTrustAssessmentDuckDbSchema(connection: DuckDBConnection): Promise<void> {
-  await prepareZeroTrustAssessmentMetadataTables(connection);
-  await prepareZeroTrustAssessmentTables(connection);
 }
 
 export async function importZeroTrustAssessmentReportToDuckDb(

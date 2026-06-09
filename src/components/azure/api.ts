@@ -32,6 +32,15 @@ type ResourceGroupRuntimeResponse = {
   count: number;
 };
 
+type ZeroTrustAssessmentRuntimeResponse = ZtaReport & {
+  collectionId: "zeroTrustAssessment.report";
+  rows: ZtaReport["Tests"];
+  columns: string[];
+  page: number;
+  pageSize: number;
+  count: number;
+};
+
 const pageSize = 50;
 
 export async function readServicePrincipals({
@@ -100,13 +109,32 @@ export async function readResourceGroups({
   return (await response.json()) as ResourceGroupRuntimeResponse;
 }
 
-export async function readZeroTrustAssessmentReport({ signal }: { signal: AbortSignal }): Promise<ZtaReport> {
-  const response = await fetch("/api/data/zeroTrustAssessment/report", { signal });
+export async function readZeroTrustAssessmentReport({
+  filters = {},
+  page,
+  pageSize,
+  signal
+}: {
+  filters?: ColumnFilters;
+  page?: number;
+  pageSize?: number;
+  signal: AbortSignal;
+}): Promise<ZeroTrustAssessmentRuntimeResponse> {
+  const url = new URL("/api/data/zeroTrustAssessment/report", window.location.origin);
+  if (page !== undefined) {
+    url.searchParams.set("page", String(page));
+  }
+  if (pageSize !== undefined) {
+    url.searchParams.set("count", String(pageSize));
+  }
+  appendRuntimeCollectionFilters(url, filters);
+
+  const response = await fetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
     throw new Error(`Zero Trust Assessment report read failed: ${response.status}`);
   }
 
-  return (await response.json()) as ZtaReport;
+  return (await response.json()) as ZeroTrustAssessmentRuntimeResponse;
 }
 
 export async function updateDisabledOwnerEvidence({

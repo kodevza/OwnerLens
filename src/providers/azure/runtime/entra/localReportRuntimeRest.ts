@@ -1,6 +1,6 @@
 import type { RuntimeRestEndpoint } from "../../../../core/runtime/rest";
 import type { LocalReportRuntime } from "../LocalReportRuntime";
-import { queryRuntimeCollection } from "../runtimeRestQuery";
+import { parseRuntimeCollectionQueryOptions } from "../runtimeRestQuery";
 
 export function defineEntraLocalReportRuntimeRestEndpoints(
   runtime: LocalReportRuntime,
@@ -9,19 +9,19 @@ export function defineEntraLocalReportRuntimeRestEndpoints(
   return [
     {
       path: `${restBasePath}/entra/servicePrincipals`,
-      handle: ({ url }) => queryRuntimeCollection(runtime, "entra.servicePrincipals", url)
+      handle: ({ url }) => runtime.queryEntraServicePrincipals(parseRuntimeCollectionQueryOptions(url))
     },
     {
       path: `${restBasePath}/entra/managedIdentities`,
-      handle: ({ url }) => queryRuntimeCollection(runtime, "entra.managedIdentities", url)
+      handle: ({ url }) => runtime.queryEntraManagedIdentities(parseRuntimeCollectionQueryOptions(url))
     },
     {
       path: `${restBasePath}/entra/oauth2PermissionGrants`,
-      handle: ({ url }) => queryRuntimeCollection(runtime, "entra.oauth2PermissionGrants", url)
+      handle: ({ url }) => runtime.queryEntraOAuth2PermissionGrants(parseRuntimeCollectionQueryOptions(url))
     },
     {
       path: `${restBasePath}/entra/appRoleAssignments`,
-      handle: ({ url }) => queryRuntimeCollection(runtime, "entra.appRoleAssignments", url)
+      handle: ({ url }) => runtime.queryEntraAppRoleAssignments(parseRuntimeCollectionQueryOptions(url))
     }
   ];
 }

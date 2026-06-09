@@ -6,7 +6,6 @@ import { compareByNewestDateField, discoverJsonFile, type JsonDiscoveryDescripti
 import {
   createEmptyZeroTrustAssessmentImportStatus,
   importZeroTrustAssessmentReportToDuckDb,
-  prepareZeroTrustAssessmentDuckDbSchema,
   readZeroTrustAssessmentReportFromDuckDb,
   type ZeroTrustAssessmentDuckDbImportStatus
 } from "./snapshotStore";
@@ -37,10 +36,6 @@ export class LocalZeroTrustAssessmentReportRuntime {
 
   getStatus(): ZeroTrustAssessmentDuckDbImportStatus {
     return this.status;
-  }
-
-  async prepareSchema(): Promise<void> {
-    await prepareZeroTrustAssessmentDuckDbSchema(this.getConnection());
   }
 
   async importSnapshot(): Promise<void> {

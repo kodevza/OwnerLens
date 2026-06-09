@@ -3,8 +3,7 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 import type { AzureSnapshot } from "../../../../core/azure/resources";
 import type { LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
 import type { AzureSnapshot as AzureSnapshotInput } from "../../inputTransferObject/resources/AzureSnapshot";
-import { prepareDisabledOwnerEvidenceTable } from "./disabledOwnerEvidenceTable";
-import { importAzureResourcesSnapshotMetadata, prepareAzureResourcesSnapshotMetadataTables } from "./snapshotMetadataTable";
+import { importAzureResourcesSnapshotMetadata } from "./snapshotMetadataTable";
 import {
   insertAzureActivityLogRows,
   insertAzureResourceGroupRows,
@@ -12,7 +11,6 @@ import {
   insertAzureRoleAssignmentRows,
   insertAzureSubscriptionRows,
   insertAzureUserAssignedManagedIdentityRows,
-  prepareAzureResourcesTables,
   readAzureActivityLogRows,
   readAzureResourceGroupRows,
   readAzureResourceRows,
@@ -47,12 +45,6 @@ export function createEmptyAzureResourcesImportStatus(): AzureResourcesDuckDbImp
     activityLogCount: 0,
     importedAt: null
   };
-}
-
-export async function prepareAzureResourcesDuckDbSchema(connection: DuckDBConnection): Promise<void> {
-  await prepareAzureResourcesSnapshotMetadataTables(connection);
-  await prepareAzureResourcesTables(connection);
-  await prepareDisabledOwnerEvidenceTable(connection);
 }
 
 export async function importAzureResourcesSnapshotToDuckDb(

@@ -1,7 +1,7 @@
 import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
 import type { RuntimeRestEndpoint } from "../../../../core/runtime/rest";
 import type { LocalReportRuntime } from "../LocalReportRuntime";
-import { queryRuntimeCollection } from "../runtimeRestQuery";
+import { parseRuntimeCollectionQueryOptions } from "../runtimeRestQuery";
 
 export function defineAzureResourcesLocalReportRuntimeRestEndpoints(
   runtime: LocalReportRuntime,
@@ -10,15 +10,15 @@ export function defineAzureResourcesLocalReportRuntimeRestEndpoints(
   return [
     {
       path: `${restBasePath}/azureResources/subscriptions`,
-      handle: ({ url }) => queryRuntimeCollection(runtime, "azureResources.subscriptions", url)
+      handle: ({ url }) => runtime.queryAzureSubscriptions(parseRuntimeCollectionQueryOptions(url))
     },
     {
       path: `${restBasePath}/azureResources/resourceGroups`,
-      handle: ({ url }) => queryRuntimeCollection(runtime, "azureResources.resourceGroups", url)
+      handle: ({ url }) => runtime.queryAzureResourceGroups(parseRuntimeCollectionQueryOptions(url))
     },
     {
       path: `${restBasePath}/azureResources/resourceGroupOwnership`,
-      handle: ({ url }) => queryRuntimeCollection(runtime, "azureResources.resourceGroupOwnership", url)
+      handle: ({ url }) => runtime.queryAzureResourceGroupOwnership(parseRuntimeCollectionQueryOptions(url))
     },
     {
       path: `${restBasePath}/azureResources/resourceGroupOwnership/disabledEvidence`,
@@ -36,19 +36,19 @@ export function defineAzureResourcesLocalReportRuntimeRestEndpoints(
     },
     {
       path: `${restBasePath}/azureResources/resources`,
-      handle: ({ url }) => queryRuntimeCollection(runtime, "azureResources.resources", url)
+      handle: ({ url }) => runtime.queryAzureResources(parseRuntimeCollectionQueryOptions(url))
     },
     {
       path: `${restBasePath}/azureResources/userAssignedManagedIdentities`,
-      handle: ({ url }) => queryRuntimeCollection(runtime, "azureResources.userAssignedManagedIdentities", url)
+      handle: ({ url }) => runtime.queryAzureUserAssignedManagedIdentities(parseRuntimeCollectionQueryOptions(url))
     },
     {
       path: `${restBasePath}/azureResources/roleAssignments`,
-      handle: ({ url }) => queryRuntimeCollection(runtime, "azureResources.roleAssignments", url)
+      handle: ({ url }) => runtime.queryAzureRoleAssignments(parseRuntimeCollectionQueryOptions(url))
     },
     {
       path: `${restBasePath}/azureResources/activityLogs`,
-      handle: ({ url }) => queryRuntimeCollection(runtime, "azureResources.activityLogs", url)
+      handle: ({ url }) => runtime.queryAzureActivityLogs(parseRuntimeCollectionQueryOptions(url))
     }
   ];
 }

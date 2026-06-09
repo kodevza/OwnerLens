@@ -14,11 +14,6 @@ import type { EntraAppRoleAssignment } from "../../inputTransferObject/entra/Ent
 import type { EntraOAuth2PermissionGrant } from "../../inputTransferObject/entra/EntraOAuth2PermissionGrant";
 import type { EntraServicePrincipal } from "../../inputTransferObject/entra/EntraServicePrincipal";
 import type { EntraSnapshot } from "../../inputTransferObject/entra/EntraSnapshot";
-import {
-  buildPaginatedCollection,
-  type LocalReportCollectionQuery,
-  type LocalReportPaginatedCollection
-} from "../localReportCollections";
 import { readEntraAppRoleAssignmentRows } from "./appRoleAssignmentsTable";
 import { readEntraOAuth2PermissionGrantRows } from "./oauth2PermissionGrantsTable";
 import { readLatestAzureIdentityEnrichment } from "../enrichment/azureIdentityEnrichment";
@@ -27,7 +22,6 @@ import {
   createEmptyEntraImportStatus,
   entraSnapshotFileName,
   importEntraSnapshotToDuckDb,
-  prepareEntraDuckDbSchema,
   readEntraSnapshotFromDuckDb,
   type EntraDuckDbImportStatus
 } from "./snapshotStore";
@@ -60,14 +54,6 @@ export class LocalEntraReportRuntime {
 
   canReadSnapshot(name: string): boolean {
     return name === entraSnapshotFileName;
-  }
-
-  canQueryCollection(collectionId: string): collectionId is LocalEntraReportCollectionId {
-    return parseEntraCollectionId(collectionId) !== null;
-  }
-
-  async prepareSchema(): Promise<void> {
-    await prepareEntraDuckDbSchema(this.getConnection());
   }
 
   async importSnapshot(): Promise<void> {
@@ -124,33 +110,9 @@ export class LocalEntraReportRuntime {
     return readEntraAppRoleAssignmentRows(this.getConnection());
   }
 
-  async queryCollection(
-    query: LocalReportCollectionQuery
-  ): Promise<LocalReportPaginatedCollection<LocalEntraReportCollectionId>> {
-    const collectionId = parseEntraCollectionId(query.collectionId);
-    if (!collectionId) {
-      throw new RuntimeHttpError(`Unknown Entra report collection: ${query.collectionId}`, 400);
-    }
-
-    return buildPaginatedCollection(collectionId, await this.readCollectionRows(collectionId), query);
-  }
-
   private assertImported(): void {
     if (!this.status.imported) {
       throw new RuntimeHttpError(`Snapshot file ./data/${entraSnapshotFileName} was not found.`, 404);
-    }
-  }
-
-  private async readCollectionRows(collectionId: LocalEntraReportCollectionId): Promise<Record<string, unknown>[]> {
-    switch (collectionId) {
-      case "entra.servicePrincipals":
-        return (await this.readServicePrincipals()) as unknown as Record<string, unknown>[];
-      case "entra.managedIdentities":
-        return (await this.readManagedIdentities()) as unknown as Record<string, unknown>[];
-      case "entra.oauth2PermissionGrants":
-        return (await this.readEntraOAuth2PermissionGrants()) as unknown as Record<string, unknown>[];
-      case "entra.appRoleAssignments":
-        return (await this.readEntraAppRoleAssignments()) as unknown as Record<string, unknown>[];
     }
   }
 
@@ -201,17 +163,4 @@ function getOrCreatePrincipalPermissionSummary(
 
 function countOAuthPermissionScopes(scope: string): number {
   return scope.split(/\s+/).filter(Boolean).length;
-}
-
-export function parseEntraCollectionId(collectionId: string): LocalEntraReportCollectionId | null {
-  if (
-    collectionId === "entra.servicePrincipals" ||
-    collectionId === "entra.managedIdentities" ||
-    collectionId === "entra.oauth2PermissionGrants" ||
-    collectionId === "entra.appRoleAssignments"
-  ) {
-    return collectionId;
-  }
-
-  return null;
 }

@@ -2,22 +2,6 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type { EntraAppRoleAssignment } from "../../inputTransferObject/entra/EntraAppRoleAssignment";
 
-export async function prepareEntraAppRoleAssignmentsTable(connection: DuckDBConnection): Promise<void> {
-  await connection.run(`
-    create table if not exists entra_app_role_assignments (
-      ordinal integer not null,
-      id varchar primary key,
-      app_role_id varchar not null,
-      app_role_display_name varchar,
-      app_role_value varchar,
-      principal_id varchar not null,
-      principal_display_name varchar,
-      resource_id varchar not null,
-      resource_display_name varchar
-    )
-  `);
-}
-
 export async function insertEntraAppRoleAssignmentRows(
   connection: DuckDBConnection,
   appRoleAssignments: EntraAppRoleAssignment[] = []

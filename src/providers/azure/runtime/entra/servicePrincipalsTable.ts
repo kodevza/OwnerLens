@@ -2,33 +2,6 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type { EntraServicePrincipal } from "../../inputTransferObject/entra/EntraServicePrincipal";
 
-export async function prepareEntraServicePrincipalsTable(connection: DuckDBConnection): Promise<void> {
-  await connection.run(`
-    create table if not exists entra_service_principals (
-      ordinal integer not null,
-      id varchar primary key,
-      app_id varchar not null,
-      display_name varchar not null,
-      app_display_name varchar,
-      service_principal_type varchar not null,
-      publisher_name varchar,
-      account_enabled boolean not null,
-      app_owner_organization_id varchar,
-      homepage varchar,
-      login_url varchar,
-      reply_urls json not null,
-      service_principal_names json not null,
-      tags json not null,
-      app_roles json not null,
-      owners json not null,
-      app_owners json not null,
-      service_principal_owners json not null,
-      application_owners json not null,
-      metadata json
-    )
-  `);
-}
-
 export async function insertEntraServicePrincipalRows(
   connection: DuckDBConnection,
   servicePrincipals: EntraServicePrincipal[]

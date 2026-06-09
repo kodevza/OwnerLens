@@ -2,15 +2,6 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 
 export type DisabledOwnerKey = string;
 
-export async function prepareDisabledOwnerEvidenceTable(connection: DuckDBConnection): Promise<void> {
-  await connection.run(`
-    create table if not exists azure_disabled_owner_evidence_keys (
-      owner_key varchar primary key,
-      disabled_at varchar not null
-    )
-  `);
-}
-
 export async function readDisabledOwnerEvidenceKeys(
   connection: DuckDBConnection
 ): Promise<Set<DisabledOwnerKey>> {

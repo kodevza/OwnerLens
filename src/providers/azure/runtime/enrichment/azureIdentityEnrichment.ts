@@ -37,51 +37,6 @@ const emptyStatus: AzureIdentityEnrichmentStatus = {
   calculatedAt: null
 };
 
-export async function prepareAzureIdentityEnrichmentTables(connection: DuckDBConnection): Promise<void> {
-  await connection.run(`
-    create table if not exists azure_runtime_enrichment_runs (
-      run_id varchar primary key,
-      started_at varchar not null,
-      completed_at varchar,
-      status varchar not null,
-      identity_role_assignment_count integer not null,
-      access_risk_identity_count integer not null,
-      managed_identity_assignment_count integer not null,
-      error_message varchar
-    )
-  `);
-  await connection.run(`
-    create table if not exists azure_identity_role_assignment_enrichment (
-      run_id varchar not null,
-      principal_id varchar not null,
-      assignment_count integer not null,
-      role_assignments json not null
-    )
-  `);
-  await connection.run(`
-    create table if not exists azure_identity_access_risk_enrichment (
-      run_id varchar not null,
-      principal_id varchar not null,
-      risk_level varchar not null,
-      assignment_count integer not null,
-      high_risk_assignment_count integer not null,
-      broad_scope_assignment_count integer not null,
-      role_assignments json not null
-    )
-  `);
-  await connection.run(`
-    create table if not exists azure_managed_identity_assignment_enrichment (
-      run_id varchar not null,
-      service_principal_id varchar not null,
-      principal_id varchar not null,
-      client_id varchar not null,
-      assignment_count integer not null,
-      assigned_resource_groups json not null,
-      managed_identity_assignments json not null
-    )
-  `);
-}
-
 export async function recalculateAzureIdentityEnrichment(
   connection: DuckDBConnection
 ): Promise<AzureIdentityEnrichmentStatus> {
