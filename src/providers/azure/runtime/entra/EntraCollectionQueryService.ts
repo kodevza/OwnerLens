@@ -10,16 +10,13 @@ import type { OwnerConfidence } from "../../../../core/ownership/types";
 
 import {
   buildPaginatedCollection,
-  type LocalReportCollectionQuery,
+  type LocalReportCollectionQueryOptions,
   type LocalReportPaginatedCollection
 } from "../localReportCollections";
 import type { AzureResourcesCollectionQueryService } from "../resources/AzureResourcesCollectionQueryService";
 import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
 import type { ZeroTrustAssessmentQueryService } from "../zta/ZeroTrustAssessmentQueryService";
-import {
-  type LocalEntraReportCollectionId,
-  type LocalEntraReportRuntime
-} from "./LocalEntraReportRuntime";
+import type { LocalEntraReportRuntime } from "./LocalEntraReportRuntime";
 
 export type EntraCollectionQueryServiceOptions = {
   entra: LocalEntraReportRuntime;
@@ -41,22 +38,36 @@ export class EntraCollectionQueryService {
     this.zeroTrustAssessmentQueries = options.zeroTrustAssessmentQueries;
   }
 
-  canQueryCollection(collectionId: string): collectionId is LocalEntraReportCollectionId {
-    return this.entra.canQueryCollection(collectionId);
+  async queryServicePrincipals(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"entra.servicePrincipals">> {
+    return buildPaginatedCollection("entra.servicePrincipals", await this.readServicePrincipalRows(), options);
   }
 
-  async queryCollection(
-    query: LocalReportCollectionQuery
-  ): Promise<LocalReportPaginatedCollection<LocalEntraReportCollectionId>> {
-    if (query.collectionId === "entra.servicePrincipals") {
-      return buildPaginatedCollection(query.collectionId, await this.readServicePrincipalRows(), query);
-    }
+  async queryManagedIdentities(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"entra.managedIdentities">> {
+    return buildPaginatedCollection("entra.managedIdentities", await this.readManagedIdentityRows(), options);
+  }
 
-    if (query.collectionId === "entra.managedIdentities") {
-      return buildPaginatedCollection(query.collectionId, await this.readManagedIdentityRows(), query);
-    }
+  async queryOAuth2PermissionGrants(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"entra.oauth2PermissionGrants">> {
+    return buildPaginatedCollection(
+      "entra.oauth2PermissionGrants",
+      (await this.entra.readEntraOAuth2PermissionGrants()) as unknown as Record<string, unknown>[],
+      options
+    );
+  }
 
-    return this.entra.queryCollection(query);
+  async queryAppRoleAssignments(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"entra.appRoleAssignments">> {
+    return buildPaginatedCollection(
+      "entra.appRoleAssignments",
+      (await this.entra.readEntraAppRoleAssignments()) as unknown as Record<string, unknown>[],
+      options
+    );
   }
 
   private async readManagedIdentityRows(): Promise<Record<string, unknown>[]> {

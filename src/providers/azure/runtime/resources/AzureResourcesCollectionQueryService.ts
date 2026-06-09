@@ -3,7 +3,7 @@ import type { ResourceGroupOwnershipRow } from "../../../../core/azure/resources
 import { buildAzureOwnershipReport } from "../../ownership/buildAzureOwnershipReport";
 import {
   buildPaginatedCollection,
-  type LocalReportCollectionQuery,
+  type LocalReportCollectionQueryOptions,
   type LocalReportPaginatedCollection
 } from "../localReportCollections";
 import type { DisabledEvidenceStore } from "../DisabledEvidenceStore";
@@ -38,18 +38,74 @@ export class AzureResourcesCollectionQueryService {
     this.disabledEvidenceStore = options.disabledEvidenceStore;
   }
 
-  canQueryCollection(collectionId: string): collectionId is LocalAzureResourcesExtendedCollectionId {
-    return collectionId === "azureResources.resourceGroupOwnership" || this.azureResources.canQueryCollection(collectionId);
+  async querySubscriptions(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.subscriptions">> {
+    return buildPaginatedCollection(
+      "azureResources.subscriptions",
+      (await this.azureResources.readAzureSubscriptions()) as unknown as Record<string, unknown>[],
+      options
+    );
   }
 
-  async queryCollection(
-    query: LocalReportCollectionQuery
-  ): Promise<LocalReportPaginatedCollection<LocalAzureResourcesExtendedCollectionId>> {
-    if (query.collectionId === "azureResources.resourceGroupOwnership") {
-      return buildPaginatedCollection(query.collectionId, await this.readResourceGroupOwnershipRows(), query);
-    }
+  async queryResourceGroups(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.resourceGroups">> {
+    return buildPaginatedCollection(
+      "azureResources.resourceGroups",
+      (await this.azureResources.readAzureResourceGroups()) as unknown as Record<string, unknown>[],
+      options
+    );
+  }
 
-    return this.azureResources.queryCollection(query);
+  async queryResourceGroupOwnership(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.resourceGroupOwnership">> {
+    return buildPaginatedCollection(
+      "azureResources.resourceGroupOwnership",
+      await this.readResourceGroupOwnershipRows(),
+      options
+    );
+  }
+
+  async queryResources(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.resources">> {
+    return buildPaginatedCollection(
+      "azureResources.resources",
+      (await this.azureResources.readAzureResources()) as unknown as Record<string, unknown>[],
+      options
+    );
+  }
+
+  async queryUserAssignedManagedIdentities(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.userAssignedManagedIdentities">> {
+    return buildPaginatedCollection(
+      "azureResources.userAssignedManagedIdentities",
+      (await this.azureResources.readAzureUserAssignedManagedIdentities()) as unknown as Record<string, unknown>[],
+      options
+    );
+  }
+
+  async queryRoleAssignments(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.roleAssignments">> {
+    return buildPaginatedCollection(
+      "azureResources.roleAssignments",
+      (await this.azureResources.readAzureRoleAssignments()) as unknown as Record<string, unknown>[],
+      options
+    );
+  }
+
+  async queryActivityLogs(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureResources.activityLogs">> {
+    return buildPaginatedCollection(
+      "azureResources.activityLogs",
+      (await this.azureResources.readAzureActivityLogs()) as unknown as Record<string, unknown>[],
+      options
+    );
   }
 
   async readResourceGroupOwnershipRows(): Promise<ResourceGroupOwnershipRow[]> {

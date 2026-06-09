@@ -2,35 +2,6 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type { EntraApplication } from "../../inputTransferObject/entra/EntraApplication";
 
-export async function prepareEntraApplicationsTable(connection: DuckDBConnection): Promise<void> {
-  await connection.run(`
-    create table if not exists entra_applications (
-      ordinal integer not null,
-      id varchar primary key,
-      app_id varchar not null,
-      display_name varchar not null,
-      sign_in_audience varchar,
-      publisher_domain varchar,
-      identifier_uris json not null,
-      tags json not null,
-      app_roles json not null,
-      oauth2_permission_scopes json not null,
-      required_resource_access json not null,
-      web json,
-      spa json,
-      public_client json,
-      password_credentials json not null,
-      key_credentials json not null,
-      created_date_time varchar,
-      deleted_date_time varchar,
-      disabled_by_microsoft_status varchar,
-      info json,
-      notes varchar,
-      owners json not null
-    )
-  `);
-}
-
 export async function insertEntraApplicationRows(
   connection: DuckDBConnection,
   applications: EntraApplication[] = []

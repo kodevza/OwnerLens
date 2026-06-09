@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
-import type { ZtaRelatedObject, ZtaReport, ZtaReportMeta, ZtaReportTest } from "../../core/azure/ztaReport";
+import type { ZtaRelatedObject, ZtaReportMeta, ZtaReportTest } from "../../core/azure/ztaReport";
 import { formatDate, formatValue } from "../../lib/utils";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import { GenericTable } from "../../report/components/GenericTable";
@@ -9,19 +9,6 @@ import { Badge } from "../../report/components/ui/badge";
 import { Card } from "../../report/components/ui/card";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import { readZeroTrustAssessmentReport } from "./api";
-
-type ZtaLoadState =
-  | {
-      status: "loading";
-    }
-  | {
-      status: "ready";
-      report: ZtaReport;
-    }
-  | {
-      status: "error";
-      message: string;
-    };
 
 type ZtaTestRow = ZtaReportTest & {
   rowIndex: number;
@@ -58,7 +45,7 @@ const ztaTestFields: ReportFieldDescriptor<ZtaTestRow>[] = [
     id: "RelatedObjects",
     label: "Related objects",
     valueType: "list",
-    getValue: getRelatedObjectIds,
+    getValue: getRelatedObjectSearchValues,
     filter: { kind: "text" }
   },
   {
@@ -120,53 +107,8 @@ const ztaTestFields: ReportFieldDescriptor<ZtaTestRow>[] = [
 ];
 
 export function ZtaComponent({ initialFilters, onRelatedObjectClick }: ZtaComponentProps = {}) {
-  const [loadState, setLoadState] = useState<ZtaLoadState>({ status: "loading" });
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function loadReport() {
-      setLoadState({ status: "loading" });
-
-      try {
-        const report = await readZeroTrustAssessmentReport({ signal: controller.signal });
-        setLoadState({ status: "ready", report });
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return;
-        }
-
-        setLoadState({
-          status: "error",
-          message: error instanceof Error ? error.message : "Could not load Zero Trust Assessment report."
-        });
-      }
-    }
-
-    loadReport();
-
-    return () => controller.abort();
-  }, []);
-
-  if (loadState.status === "loading") {
-    return (
-      <Card className="p-8 text-center text-sm text-muted-foreground">Loading Zero Trust Assessment report...</Card>
-    );
-  }
-
-  if (loadState.status === "error") {
-    return <Card className="border-red-200 bg-red-50 p-4 text-sm text-red-900">{loadState.message}</Card>;
-  }
-
-  return <ZtaReportView initialFilters={initialFilters} report={loadState.report} onRelatedObjectClick={onRelatedObjectClick} />;
-}
-
-function ZtaReportView({ initialFilters, report, onRelatedObjectClick }: { report: ZtaReport } & ZtaComponentProps) {
-  const [filters, setFilters] = useState<ColumnFilters>(() => initialFilters ?? {});
-  const rows = useMemo<ZtaTestRow[]>(
-    () => (report.Tests ?? []).map((test, rowIndex) => ({ ...test, rowIndex })),
-    [report.Tests]
-  );
+  const [meta, setMeta] = useState<ZtaReportMeta | null>(null);
+  const [testCount, setTestCount] = useState(0);
   const fieldRenderers = useMemo<ReportColumnRenderers<ZtaTestRow>>(
     () => ({
       RelatedObjects: (test) => (
@@ -175,19 +117,41 @@ function ZtaReportView({ initialFilters, report, onRelatedObjectClick }: { repor
     }),
     [onRelatedObjectClick]
   );
+  const loadPage = useCallback(
+    async ({ filters, page, signal }: { filters: ColumnFilters; page: number; signal: AbortSignal }) => {
+      const report = await readZeroTrustAssessmentReport({ filters, page, signal });
+      const responsePage = report.page;
+      const responsePageSize = report.pageSize;
+      const rows = (report.Tests ?? report.rows ?? []).map((test, rowIndex) => ({
+        ...test,
+        rowIndex: (responsePage - 1) * responsePageSize + rowIndex
+      }));
+
+      setMeta(report.Meta);
+      setTestCount(report.count);
+
+      return {
+        rows,
+        page: responsePage,
+        pageSize: responsePageSize,
+        count: report.count
+      };
+    },
+    []
+  );
 
   return (
     <section className="flex flex-col gap-4">
-      <ZtaMetaPanel meta={report.Meta} testCount={rows.length} />
+      {meta ? <ZtaMetaPanel meta={meta} testCount={testCount} /> : null}
       <GenericTable
         emptyMessage="No Zero Trust Assessment tests found."
         fields={ztaTestFields}
         fieldRenderers={fieldRenderers}
-        filters={filters}
         getRowKey={(row) => `${formatValue(row.TestId)}:${row.rowIndex}`}
+        initialFilters={initialFilters}
+        loadPage={loadPage}
+        loadingMessage="Loading Zero Trust Assessment report..."
         minWidthClassName="min-w-[2200px]"
-        onFiltersChange={setFilters}
-        rows={rows}
       />
     </section>
   );
@@ -254,8 +218,20 @@ function RelatedObjectBadges({
   );
 }
 
-function getRelatedObjectIds(test: ZtaReportTest): string[] {
-  return getRelatedObjectsWithIds(test).map(getRelatedObjectId);
+function getRelatedObjectSearchValues(test: ZtaReportTest): string[] {
+  return getRelatedObjectsWithIds(test).flatMap(getRelatedObjectSearchValuesForObject);
+}
+
+function getRelatedObjectSearchValuesForObject(object: ZtaRelatedObject): string[] {
+  return [
+    object.id,
+    object.object_id,
+    object.applicationId,
+    object.displayName,
+    object.servicePrincipalType,
+    object.userPrincipalName,
+    ...(object.tags ?? [])
+  ].filter(isNonEmptyString);
 }
 
 function getRelatedObjectsWithIds(test: ZtaReportTest): ZtaRelatedObject[] {

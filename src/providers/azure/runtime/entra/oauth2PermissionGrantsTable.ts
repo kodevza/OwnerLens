@@ -2,20 +2,6 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type { EntraOAuth2PermissionGrant } from "../../inputTransferObject/entra/EntraOAuth2PermissionGrant";
 
-export async function prepareEntraOAuth2PermissionGrantsTable(connection: DuckDBConnection): Promise<void> {
-  await connection.run(`
-    create table if not exists entra_oauth2_permission_grants (
-      ordinal integer not null,
-      id varchar primary key,
-      client_id varchar not null,
-      consent_type varchar not null,
-      principal_id varchar,
-      resource_id varchar not null,
-      scope varchar not null
-    )
-  `);
-}
-
 export async function insertEntraOAuth2PermissionGrantRows(
   connection: DuckDBConnection,
   oauth2PermissionGrants: EntraOAuth2PermissionGrant[] = []

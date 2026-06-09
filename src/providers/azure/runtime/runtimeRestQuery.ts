@@ -1,12 +1,11 @@
-import type { LocalReportRuntime } from "./LocalReportRuntime";
+import type { LocalReportCollectionQueryOptions } from "./localReportCollections";
 
-export function queryRuntimeCollection(runtime: LocalReportRuntime, collectionId: string, url: URL) {
-  return runtime.queryCollection({
-    collectionId,
+export function parseRuntimeCollectionQueryOptions(url: URL): LocalReportCollectionQueryOptions {
+  return {
     filters: parseRuntimeCollectionFilters(url),
     page: parseOptionalInteger(url.searchParams.get("page")),
     pageSize: parseOptionalInteger(url.searchParams.get("pageSize") ?? url.searchParams.get("count"))
-  });
+  };
 }
 
 function parseRuntimeCollectionFilters(url: URL): Array<{ column: string; values: string[] }> {

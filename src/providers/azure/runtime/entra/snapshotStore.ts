@@ -2,23 +2,11 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type { EntraSnapshot } from "../../inputTransferObject/entra/EntraSnapshot";
 import type { LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
-import { insertEntraApplicationRows, prepareEntraApplicationsTable, readEntraApplicationRows } from "./applicationsTable";
-import {
-  insertEntraAppRoleAssignmentRows,
-  prepareEntraAppRoleAssignmentsTable,
-  readEntraAppRoleAssignmentRows
-} from "./appRoleAssignmentsTable";
-import {
-  insertEntraOAuth2PermissionGrantRows,
-  prepareEntraOAuth2PermissionGrantsTable,
-  readEntraOAuth2PermissionGrantRows
-} from "./oauth2PermissionGrantsTable";
-import {
-  insertEntraServicePrincipalRows,
-  prepareEntraServicePrincipalsTable,
-  readEntraServicePrincipalRows
-} from "./servicePrincipalsTable";
-import { importEntraSnapshotMetadata, prepareEntraSnapshotMetadataTables } from "./snapshotMetadataTable";
+import { insertEntraApplicationRows, readEntraApplicationRows } from "./applicationsTable";
+import { insertEntraAppRoleAssignmentRows, readEntraAppRoleAssignmentRows } from "./appRoleAssignmentsTable";
+import { insertEntraOAuth2PermissionGrantRows, readEntraOAuth2PermissionGrantRows } from "./oauth2PermissionGrantsTable";
+import { insertEntraServicePrincipalRows, readEntraServicePrincipalRows } from "./servicePrincipalsTable";
+import { importEntraSnapshotMetadata } from "./snapshotMetadataTable";
 
 export const entraSnapshotFileName = "entra-snapshot.json";
 
@@ -42,14 +30,6 @@ export function createEmptyEntraImportStatus(): EntraDuckDbImportStatus {
     appRoleAssignmentCount: 0,
     importedAt: null
   };
-}
-
-export async function prepareEntraDuckDbSchema(connection: DuckDBConnection): Promise<void> {
-  await prepareEntraSnapshotMetadataTables(connection);
-  await prepareEntraServicePrincipalsTable(connection);
-  await prepareEntraApplicationsTable(connection);
-  await prepareEntraOAuth2PermissionGrantsTable(connection);
-  await prepareEntraAppRoleAssignmentsTable(connection);
 }
 
 export async function importEntraSnapshotToDuckDb(

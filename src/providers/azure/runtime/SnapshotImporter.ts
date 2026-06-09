@@ -36,12 +36,6 @@ export class SnapshotImporter {
     };
   }
 
-  async prepareSchema(): Promise<void> {
-    await this.entra.prepareSchema();
-    await this.azureResources.prepareSchema();
-    await this.zeroTrustAssessment.prepareSchema();
-  }
-
   async importSnapshots(): Promise<void> {
     await this.entra.importSnapshot();
     await this.azureResources.importSnapshot();

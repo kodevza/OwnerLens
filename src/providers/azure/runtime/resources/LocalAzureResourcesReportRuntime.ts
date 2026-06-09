@@ -15,15 +15,9 @@ import type {
 import { pathExists, RuntimeHttpError, type LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
 import type { AzureSnapshot as AzureSnapshotInput } from "../../inputTransferObject/resources/AzureSnapshot";
 import {
-  buildPaginatedCollection,
-  type LocalReportCollectionQuery,
-  type LocalReportPaginatedCollection
-} from "../localReportCollections";
-import {
   azureResourcesSnapshotFileName,
   createEmptyAzureResourcesImportStatus,
   importAzureResourcesSnapshotToDuckDb,
-  prepareAzureResourcesDuckDbSchema,
   readAzureResourcesSnapshotFromDuckDb,
   type AzureResourcesDuckDbImportStatus
 } from "./snapshotStore";
@@ -65,14 +59,6 @@ export class LocalAzureResourcesReportRuntime {
 
   canReadSnapshot(name: string): boolean {
     return name === azureResourcesSnapshotFileName;
-  }
-
-  canQueryCollection(collectionId: string): collectionId is LocalAzureResourcesReportCollectionId {
-    return parseAzureResourcesCollectionId(collectionId) !== null;
-  }
-
-  async prepareSchema(): Promise<void> {
-    await prepareAzureResourcesDuckDbSchema(this.getConnection());
   }
 
   async importSnapshot(): Promise<void> {
@@ -120,54 +106,9 @@ export class LocalAzureResourcesReportRuntime {
     return readAzureActivityLogRows(this.getConnection());
   }
 
-  async queryCollection(
-    query: LocalReportCollectionQuery
-  ): Promise<LocalReportPaginatedCollection<LocalAzureResourcesReportCollectionId>> {
-    const collectionId = parseAzureResourcesCollectionId(query.collectionId);
-    if (!collectionId) {
-      throw new RuntimeHttpError(`Unknown Azure Resources report collection: ${query.collectionId}`, 400);
-    }
-
-    return buildPaginatedCollection(collectionId, await this.readCollectionRows(collectionId), query);
-  }
-
   private assertImported(): void {
     if (!this.status.imported) {
       throw new RuntimeHttpError(`Snapshot file ./data/${azureResourcesSnapshotFileName} was not found.`, 404);
     }
   }
-
-  private async readCollectionRows(
-    collectionId: LocalAzureResourcesReportCollectionId
-  ): Promise<Record<string, unknown>[]> {
-    switch (collectionId) {
-      case "azureResources.subscriptions":
-        return (await this.readAzureSubscriptions()) as unknown as Record<string, unknown>[];
-      case "azureResources.resourceGroups":
-        return (await this.readAzureResourceGroups()) as unknown as Record<string, unknown>[];
-      case "azureResources.resources":
-        return (await this.readAzureResources()) as unknown as Record<string, unknown>[];
-      case "azureResources.userAssignedManagedIdentities":
-        return (await this.readAzureUserAssignedManagedIdentities()) as unknown as Record<string, unknown>[];
-      case "azureResources.roleAssignments":
-        return (await this.readAzureRoleAssignments()) as unknown as Record<string, unknown>[];
-      case "azureResources.activityLogs":
-        return (await this.readAzureActivityLogs()) as unknown as Record<string, unknown>[];
-    }
-  }
-}
-
-export function parseAzureResourcesCollectionId(collectionId: string): LocalAzureResourcesReportCollectionId | null {
-  if (
-    collectionId === "azureResources.subscriptions" ||
-    collectionId === "azureResources.resourceGroups" ||
-    collectionId === "azureResources.resources" ||
-    collectionId === "azureResources.userAssignedManagedIdentities" ||
-    collectionId === "azureResources.roleAssignments" ||
-    collectionId === "azureResources.activityLogs"
-  ) {
-    return collectionId;
-  }
-
-  return null;
 }

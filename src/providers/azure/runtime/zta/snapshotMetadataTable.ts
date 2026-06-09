@@ -2,29 +2,6 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type { ZeroTrustAssessmentReport } from "./types";
 
-export async function prepareZeroTrustAssessmentMetadataTables(connection: DuckDBConnection): Promise<void> {
-  await connection.run(`
-    create table if not exists zta_report (
-      id varchar not null primary key,
-      file_name varchar not null,
-      executed_at varchar,
-      imported_at varchar not null
-    )
-  `);
-  await connection.run(`
-    create table if not exists zta_report_meta (
-      report_id varchar not null primary key,
-      data json not null
-    )
-  `);
-  await connection.run(`
-    create table if not exists zta_report_extra (
-      report_id varchar not null primary key,
-      data json not null
-    )
-  `);
-}
-
 export async function insertZeroTrustAssessmentReport(
   connection: DuckDBConnection,
   reportId: string,

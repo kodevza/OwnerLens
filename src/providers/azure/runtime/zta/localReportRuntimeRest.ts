@@ -1,5 +1,6 @@
 import type { RuntimeRestEndpoint } from "../../../../core/runtime/rest";
 import type { LocalReportRuntime } from "../LocalReportRuntime";
+import { parseRuntimeCollectionQueryOptions } from "../runtimeRestQuery";
 
 export function defineZeroTrustAssessmentLocalReportRuntimeRestEndpoints(
   runtime: LocalReportRuntime,
@@ -8,7 +9,7 @@ export function defineZeroTrustAssessmentLocalReportRuntimeRestEndpoints(
   return [
     {
       path: `${restBasePath}/zeroTrustAssessment/report`,
-      handle: () => runtime.readZeroTrustAssessmentReport()
+      handle: ({ url }) => runtime.queryZeroTrustAssessmentReport(parseRuntimeCollectionQueryOptions(url))
     }
   ];
 }

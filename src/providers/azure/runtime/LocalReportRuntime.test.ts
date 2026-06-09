@@ -10,10 +10,11 @@ import type { AzureSnapshot } from "../../../core/azure/resources";
 import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
 import {
   importZeroTrustAssessmentReportToDuckDb,
-  prepareZeroTrustAssessmentDuckDbSchema,
   readZeroTrustAssessmentReportFromDuckDb
 } from "./zta/snapshotStore";
-import { insertEntraServicePrincipalRows, prepareEntraServicePrincipalsTable } from "./entra/servicePrincipalsTable";
+import { insertEntraServicePrincipalRows } from "./entra/servicePrincipalsTable";
+import { insertEntraApplicationRows } from "./entra/applicationsTable";
+import { prepareRuntimeSqlSchema } from "./runtimeSqlSchema";
 import type { ZeroTrustAssessmentReport } from "./zta/types";
 
 test("imports Zero Trust Assessment report into DuckDB and reads it back through the runtime", async () => {
@@ -55,7 +56,15 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
         TestRisk: "Medium",
         TestSfiPillar: "Protect tenants and isolate production systems",
         TestAppliesTo: ["Identity"],
-        RelatedObjects: [{ object_id: "object-1" }]
+        RelatedObjects: [
+          {
+            object_id: "object-1",
+            id: "principal-id-1",
+            applicationId: "app-client-1",
+            displayName: "Searchable owner app",
+            servicePrincipalType: "Application"
+          }
+        ]
       },
       {
         TestId: 21823,
@@ -121,18 +130,165 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
         url: new URL("http://localhost/api/data/zeroTrustAssessment/report")
       })
     ).resolves.toMatchObject({
-      Meta: {
-        TenantId: "tenant-1",
-        ExecutedAt: "2026-06-02T16:06:31.3057648+02:00"
-      },
-      Tests: [
+      collectionId: "zeroTrustAssessment.report",
+      rows: [
         expect.objectContaining({
           TestId: "21791"
         }),
         expect.objectContaining({
           TestId: 21823
         })
+      ],
+      page: 1,
+      pageSize: 50,
+      count: 2
+    });
+    await expect(
+      ztaReportEndpoint?.handle({
+        req: {},
+        url: new URL(
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=app-client-1"
+        )
+      })
+    ).resolves.toMatchObject({
+      rows: [expect.objectContaining({ TestId: "21791" })],
+      count: 1
+    });
+    await expect(
+      ztaReportEndpoint?.handle({
+        req: {},
+        url: new URL(
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=principal-id-1"
+        )
+      })
+    ).resolves.toMatchObject({
+      rows: [expect.objectContaining({ TestId: "21791" })],
+      count: 1
+    });
+    await expect(
+      ztaReportEndpoint?.handle({
+        req: {},
+        url: new URL(
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=Searchable%20owner"
+        )
+      })
+    ).resolves.toMatchObject({
+      rows: [expect.objectContaining({ TestId: "21791" })],
+      count: 1
+    });
+    await expect(
+      ztaReportEndpoint?.handle({
+        req: {},
+        url: new URL(
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=object-1"
+        )
+      })
+    ).resolves.toMatchObject({
+      rows: [],
+      count: 0
+    });
+    await expect(
+      ztaReportEndpoint?.handle({
+        req: {},
+        url: new URL(
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=Application"
+        )
+      })
+    ).resolves.toMatchObject({
+      rows: [],
+      count: 0
+    });
+  } finally {
+    await runtime.close();
+    await rm(dataDir, { force: true, recursive: true });
+  }
+});
+
+test("fills Zero Trust Assessment related object application ids through the REST endpoint", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "ownerlens-runtime-"));
+  const runtime = new LocalReportRuntime({ dataDir });
+  const entraSnapshot: EntraSnapshot = {
+    meta: {
+      provider: "entra",
+      snapshotVersion: "1",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      tenantId: "tenant-1",
+      account: "owner@example.test",
+      scopes: [],
+      servicePrincipalCount: 1
+    },
+    servicePrincipals: [servicePrincipal("sp-1", "client-app-1", "Payroll API", "Application")],
+    applications: [application("application-object-1", "client-app-1", "Payroll app registration")],
+    oauth2PermissionGrants: [],
+    appRoleAssignments: []
+  };
+  const report: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-1",
+    TestResultSummary: { IdentityFailed: 1 },
+    Tests: [
+      {
+        TestId: "sp-test",
+        TestStatus: "Failed",
+        RelatedObjects: [
+          {
+            object_id: "sp-1",
+            displayName: "Payroll API",
+            servicePrincipalType: "Application"
+          }
+        ]
+      }
+    ]
+  };
+
+  try {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
+    await runtime.initialize();
+
+    const endpoint = defineLocalReportRuntimeRestEndpoints(runtime).find(
+      (candidate) => candidate.path === "/api/data/zeroTrustAssessment/report"
+    );
+
+    await expect(
+      endpoint?.handle({
+        req: {},
+        url: new URL("http://localhost/api/data/zeroTrustAssessment/report")
+      })
+    ).resolves.toMatchObject({
+      rows: [
+        expect.objectContaining({
+          RelatedObjects: [
+            expect.objectContaining({
+              object_id: "sp-1",
+              servicePrincipalId: "sp-1",
+              applicationId: "application-object-1"
+            })
+          ]
+        })
+      ],
+      Tests: [
+        expect.objectContaining({
+          RelatedObjects: [
+            expect.objectContaining({
+              object_id: "sp-1",
+              servicePrincipalId: "sp-1",
+              applicationId: "application-object-1"
+            })
+          ]
+        })
       ]
+    });
+    await expect(
+      endpoint?.handle({
+        req: {},
+        url: new URL(
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=sp-1"
+        )
+      })
+    ).resolves.toMatchObject({
+      rows: [expect.objectContaining({ TestId: "sp-test" })],
+      count: 1
     });
   } finally {
     await runtime.close();
@@ -158,7 +314,7 @@ test("reads the latest Zero Trust Assessment report from DuckDB by execution tim
   };
 
   try {
-    await prepareZeroTrustAssessmentDuckDbSchema(connection);
+    await prepareRuntimeSqlSchema(connection);
     await importZeroTrustAssessmentReportToDuckDb(connection, olderReport, "older-zta-report.json");
     await importZeroTrustAssessmentReportToDuckDb(connection, latestReport, "latest-zta-report.json");
 
@@ -201,8 +357,7 @@ test("imports Zero Trust Assessment related object ids for service principal joi
   };
 
   try {
-    await prepareEntraServicePrincipalsTable(connection);
-    await prepareZeroTrustAssessmentDuckDbSchema(connection);
+    await prepareRuntimeSqlSchema(connection);
     await insertEntraServicePrincipalRows(connection, [
       servicePrincipal("sp-1", "app-1", "Application app", "Application"),
       servicePrincipal("sp-2", "app-2", "Application app by id", "Application"),
@@ -267,6 +422,76 @@ test("imports Zero Trust Assessment related object ids for service principal joi
         related_object_id: "sp-2",
         service_principal_type: "Application"
       }
+    ]);
+  } finally {
+    connection.disconnectSync();
+    instance.closeSync();
+  }
+});
+
+test("enriches Zero Trust Assessment related objects with application object ids", async () => {
+  const instance = await DuckDBInstance.create(":memory:");
+  const connection = await instance.connect();
+  const report: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-1",
+    Tests: [
+      {
+        TestId: "sp-test",
+        TestStatus: "Failed",
+        RelatedObjects: [
+          { object_id: "sp-1", displayName: "Application app", servicePrincipalType: "Application" },
+          { id: "sp-2", displayName: "Application without registration", servicePrincipalType: "Application" },
+          { object_id: "user-1", userPrincipalName: "user@example.test" }
+        ]
+      }
+    ]
+  };
+
+  try {
+    await prepareRuntimeSqlSchema(connection);
+    await insertEntraServicePrincipalRows(connection, [
+      servicePrincipal("sp-1", "app-1", "Application app", "Application"),
+      servicePrincipal("sp-2", "app-2", "Application without registration", "Application")
+    ]);
+    await insertEntraApplicationRows(connection, [
+      application("application-object-1", "app-1", "Application app registration")
+    ]);
+
+    await importZeroTrustAssessmentReportToDuckDb(connection, report, "zta-report.json");
+
+    await expect(readZeroTrustAssessmentReportFromDuckDb(connection)).resolves.toMatchObject({
+      Tests: [
+        {
+          RelatedObjects: [
+            expect.objectContaining({
+              object_id: "sp-1",
+              applicationId: "application-object-1"
+            }),
+            expect.objectContaining({
+              id: "sp-2",
+              applicationId: null
+            }),
+            expect.not.objectContaining({
+              applicationId: expect.anything()
+            })
+          ]
+        }
+      ]
+    });
+
+    const relatedRows = await connection.runAndReadAll(
+      `
+        select related_object_id
+        from zta_test_related_objects
+        order by related_object_id
+      `
+    );
+    expect(relatedRows.getRowObjectsJson()).toEqual([
+      { related_object_id: "application-object-1" },
+      { related_object_id: "sp-1" },
+      { related_object_id: "sp-2" },
+      { related_object_id: "user-1" }
     ]);
   } finally {
     connection.disconnectSync();
@@ -454,8 +679,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
     const imported = (await runtime.readSnapshot("entra-snapshot.json")) as EntraSnapshot & {
       groups: Array<{ id: string }>;
     };
-    const queried = await runtime.queryCollection({
-      collectionId: "entra.servicePrincipals",
+    const queried = await runtime.queryEntraServicePrincipals({
       filters: [
         { column: "displayName", values: ["Example", "Missing"] },
         { column: "accountEnabled", values: ["true"] }
@@ -463,8 +687,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
       page: 1,
       pageSize: 10
     });
-    const queriedManagedIdentities = await runtime.queryCollection({
-      collectionId: "entra.managedIdentities",
+    const queriedManagedIdentities = await runtime.queryEntraManagedIdentities({
       page: 1,
       pageSize: 10
     });
@@ -644,13 +867,11 @@ test("enriches Entra runtime collections with latest ZTA remediation summaries",
     await writeFile(path.join(dataDir, "latest-zta-report.json"), JSON.stringify(latestReport), "utf8");
     await runtime.initialize();
 
-    const queriedServicePrincipals = await runtime.queryCollection({
-      collectionId: "entra.servicePrincipals",
+    const queriedServicePrincipals = await runtime.queryEntraServicePrincipals({
       page: 1,
       pageSize: 10
     });
-    const queriedManagedIdentities = await runtime.queryCollection({
-      collectionId: "entra.managedIdentities",
+    const queriedManagedIdentities = await runtime.queryEntraManagedIdentities({
       page: 1,
       pageSize: 10
     });
@@ -732,8 +953,7 @@ test("enriches service principals with ZTA remediations related to application o
     await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
     await runtime.initialize();
 
-    const queriedServicePrincipals = await runtime.queryCollection({
-      collectionId: "entra.servicePrincipals",
+    const queriedServicePrincipals = await runtime.queryEntraServicePrincipals({
       page: 1,
       pageSize: 10
     });
@@ -908,8 +1128,7 @@ test("imports Azure resources snapshot into DuckDB and reads it back through the
     const imported = (await runtime.readSnapshot("snapshot.json")) as AzureSnapshot & {
       ownershipHints: Array<{ id: string }>;
     };
-    const queried = await runtime.queryCollection({
-      collectionId: "azureResources.resources",
+    const queried = await runtime.queryAzureResources({
       filters: [{ column: "resourceType", values: ["web"] }],
       page: 1,
       pageSize: 10
@@ -1237,13 +1456,11 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
     const firstStatus = runtime.getStatus().enrichment;
     const servicePrincipals = await runtime.readServicePrincipals();
     const managedIdentities = await runtime.readManagedIdentities();
-    const queriedServicePrincipals = await runtime.queryCollection({
-      collectionId: "entra.servicePrincipals",
+    const queriedServicePrincipals = await runtime.queryEntraServicePrincipals({
       page: 1,
       pageSize: 10
     });
-    const queriedManagedIdentities = await runtime.queryCollection({
-      collectionId: "entra.managedIdentities",
+    const queriedManagedIdentities = await runtime.queryEntraManagedIdentities({
       page: 1,
       pageSize: 10
     });
@@ -1407,6 +1624,17 @@ test("defines local report runtime REST endpoints", async () => {
   };
   const disabledOwnerKeys = new Set<string>();
   const disabledAliceKey = "resourceGroup:sub-1:rg-activity:alice@example.test:2026-06-05T10:00:00.000Z";
+  const emptyCollection = (
+    collectionId: string,
+    options: { page?: number; pageSize?: number }
+  ): { collectionId: string; rows: unknown[]; columns: string[]; page: number; pageSize: number; count: number } => ({
+    collectionId,
+    rows: [],
+    columns: [],
+    page: options.page ?? 2,
+    pageSize: options.pageSize ?? 25,
+    count: 0
+  });
   const runtime = {
     listSnapshots: jest.fn().mockResolvedValue({ files: [] }),
     readSnapshot: jest.fn((name: string) => {
@@ -1438,45 +1666,72 @@ test("defines local report runtime REST endpoints", async () => {
     readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([{ resourceId: "uami-1" }]),
     readAzureRoleAssignments: jest.fn().mockResolvedValue([{ roleAssignmentId: "ra-1" }]),
     readAzureActivityLogs: jest.fn().mockResolvedValue([{ eventTimestamp: "2026-06-05T00:00:00.000Z" }]),
-    queryCollection: jest.fn((query: { collectionId: string; page?: number; pageSize?: number }) => {
-      if (query.collectionId === "azureResources.resourceGroupOwnership") {
-        const aliceDisabled = disabledOwnerKeys.has(disabledAliceKey);
+    queryEntraServicePrincipals: jest.fn((options) =>
+      Promise.resolve(emptyCollection("entra.servicePrincipals", options))
+    ),
+    queryEntraManagedIdentities: jest.fn((options) =>
+      Promise.resolve(emptyCollection("entra.managedIdentities", options))
+    ),
+    queryEntraOAuth2PermissionGrants: jest.fn((options) =>
+      Promise.resolve(emptyCollection("entra.oauth2PermissionGrants", options))
+    ),
+    queryEntraAppRoleAssignments: jest.fn((options) =>
+      Promise.resolve(emptyCollection("entra.appRoleAssignments", options))
+    ),
+    queryAzureSubscriptions: jest.fn((options) =>
+      Promise.resolve(emptyCollection("azureResources.subscriptions", options))
+    ),
+    queryAzureResourceGroups: jest.fn((options) =>
+      Promise.resolve(emptyCollection("azureResources.resourceGroups", options))
+    ),
+    queryAzureResourceGroupOwnership: jest.fn((options: { page?: number; pageSize?: number }) => {
+      const aliceDisabled = disabledOwnerKeys.has(disabledAliceKey);
 
-        return Promise.resolve({
-          collectionId: query.collectionId,
-          columns: [],
-          rows: [
-            {
-              resourceGroup: "rg-1",
-              owner: "alice@example.test",
-              confidence: "high",
-              source: "tag.ownerGroup",
-              evidence: [{ user: "ownerGroup=alice@example.test", date: null }]
-            },
-            {
-              resourceGroup: "rg-activity",
-              targetKey: "resourceGroup:sub-1:rg-activity",
-              owner: aliceDisabled ? "bob@example.test" : "alice@example.test",
-              confidence: "low",
-              source: "activity.lastModifier",
-              evidence: [
-                {
-                  user: "alice@example.test",
-                  date: "2026-06-05T10:00:00.000Z",
-                  disabled: aliceDisabled || undefined
-                },
-                { user: "bob@example.test", date: "2026-06-04T10:00:00.000Z" }
-              ]
-            }
-          ],
-          page: query.page ?? 1,
-          pageSize: query.pageSize ?? 10,
-          count: 2
-        });
-      }
-
-      return Promise.resolve({ rows: [], columns: [], page: 2, pageSize: 25, count: 0 });
+      return Promise.resolve({
+        collectionId: "azureResources.resourceGroupOwnership",
+        columns: [],
+        rows: [
+          {
+            resourceGroup: "rg-1",
+            owner: "alice@example.test",
+            confidence: "high",
+            source: "tag.ownerGroup",
+            evidence: [{ user: "ownerGroup=alice@example.test", date: null }]
+          },
+          {
+            resourceGroup: "rg-activity",
+            targetKey: "resourceGroup:sub-1:rg-activity",
+            owner: aliceDisabled ? "bob@example.test" : "alice@example.test",
+            confidence: "low",
+            source: "activity.lastModifier",
+            evidence: [
+              {
+                user: "alice@example.test",
+                date: "2026-06-05T10:00:00.000Z",
+                disabled: aliceDisabled || undefined
+              },
+              { user: "bob@example.test", date: "2026-06-04T10:00:00.000Z" }
+            ]
+          }
+        ],
+        page: options.page ?? 1,
+        pageSize: options.pageSize ?? 10,
+        count: 2
+      });
     }),
+    queryAzureResources: jest.fn((options) => Promise.resolve(emptyCollection("azureResources.resources", options))),
+    queryAzureUserAssignedManagedIdentities: jest.fn((options) =>
+      Promise.resolve(emptyCollection("azureResources.userAssignedManagedIdentities", options))
+    ),
+    queryAzureRoleAssignments: jest.fn((options) =>
+      Promise.resolve(emptyCollection("azureResources.roleAssignments", options))
+    ),
+    queryAzureActivityLogs: jest.fn((options) =>
+      Promise.resolve(emptyCollection("azureResources.activityLogs", options))
+    ),
+    queryZeroTrustAssessmentReport: jest.fn((options) =>
+      Promise.resolve(emptyCollection("zeroTrustAssessment.report", options))
+    ),
     readDisabledOwnerEvidenceKeys: jest.fn(() => Promise.resolve(new Set(disabledOwnerKeys))),
     setOwnerEvidenceDisabled: jest.fn((key: string, disabled: boolean) => {
       if (disabled) {
@@ -1522,7 +1777,14 @@ test("defines local report runtime REST endpoints", async () => {
         "http://localhost/api/data/entra/servicePrincipals?page=2&count=25&filter[0][column]=displayName&filter[0][value][0]=app&filter[0][value][1]=api&filter[1][column]=accountEnabled&filter[1][value]=true"
       )
     })
-  ).resolves.toEqual({ rows: [], columns: [], page: 2, pageSize: 25, count: 0 });
+  ).resolves.toEqual({
+    collectionId: "entra.servicePrincipals",
+    rows: [],
+    columns: [],
+    page: 2,
+    pageSize: 25,
+    count: 0
+  });
   await endpoints[3].handle({
     req: {},
     url: new URL("http://localhost/api/data/entra/managedIdentities?page=1&count=10")
@@ -1623,14 +1885,15 @@ test("defines local report runtime REST endpoints", async () => {
   await expect(
     endpoints[14].handle({
       req: {},
-      url: new URL("http://localhost/api/data/zeroTrustAssessment/report")
+      url: new URL("http://localhost/api/data/zeroTrustAssessment/report?page=1&count=10")
     })
   ).resolves.toEqual({
-    Meta: {
-      TenantId: "tenant-1",
-      ExecutedAt: "2026-06-05T00:00:00.000Z"
-    },
-    Tests: [{ TestId: "zta-1", TestStatus: "Passed" }]
+    collectionId: "zeroTrustAssessment.report",
+    rows: [],
+    columns: [],
+    page: 1,
+    pageSize: 10,
+    count: 0
   });
   await expect(
     endpoints[15].handle({
@@ -1639,10 +1902,9 @@ test("defines local report runtime REST endpoints", async () => {
     })
   ).resolves.toBeUndefined();
   expect(runtime.recalculateEnrichment).toHaveBeenCalledTimes(1);
-  expect(runtime.readZeroTrustAssessmentReport).toHaveBeenCalledTimes(1);
+  expect(runtime.readZeroTrustAssessmentReport).not.toHaveBeenCalled();
   expect(runtime.readSnapshot).toHaveBeenCalledWith("entra-snapshot.json");
-  expect(runtime.queryCollection).toHaveBeenNthCalledWith(1, {
-    collectionId: "entra.servicePrincipals",
+  expect(runtime.queryEntraServicePrincipals).toHaveBeenCalledWith({
     filters: [
       { column: "displayName", values: ["app", "api"] },
       { column: "accountEnabled", values: ["true"] }
@@ -1650,68 +1912,62 @@ test("defines local report runtime REST endpoints", async () => {
     page: 2,
     pageSize: 25
   });
-  expect(runtime.queryCollection).toHaveBeenNthCalledWith(2, {
-    collectionId: "entra.managedIdentities",
+  expect(runtime.queryEntraManagedIdentities).toHaveBeenCalledWith({
     filters: [],
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryCollection).toHaveBeenNthCalledWith(3, {
-    collectionId: "entra.oauth2PermissionGrants",
+  expect(runtime.queryEntraOAuth2PermissionGrants).toHaveBeenCalledWith({
     filters: [],
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryCollection).toHaveBeenNthCalledWith(4, {
-    collectionId: "entra.appRoleAssignments",
+  expect(runtime.queryEntraAppRoleAssignments).toHaveBeenCalledWith({
     filters: [],
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryCollection).toHaveBeenNthCalledWith(5, {
-    collectionId: "azureResources.subscriptions",
+  expect(runtime.queryAzureSubscriptions).toHaveBeenCalledWith({
     filters: [],
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryCollection).toHaveBeenNthCalledWith(6, {
-    collectionId: "azureResources.resourceGroups",
+  expect(runtime.queryAzureResourceGroups).toHaveBeenCalledWith({
     filters: [],
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryCollection).toHaveBeenNthCalledWith(7, {
-    collectionId: "azureResources.resourceGroupOwnership",
+  expect(runtime.queryAzureResourceGroupOwnership).toHaveBeenNthCalledWith(1, {
     filters: [],
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryCollection).toHaveBeenNthCalledWith(8, {
-    collectionId: "azureResources.resourceGroupOwnership",
+  expect(runtime.queryAzureResourceGroupOwnership).toHaveBeenNthCalledWith(2, {
     filters: [],
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryCollection).toHaveBeenNthCalledWith(9, {
-    collectionId: "azureResources.resources",
+  expect(runtime.queryAzureResources).toHaveBeenCalledWith({
     filters: [],
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryCollection).toHaveBeenNthCalledWith(10, {
-    collectionId: "azureResources.userAssignedManagedIdentities",
+  expect(runtime.queryAzureUserAssignedManagedIdentities).toHaveBeenCalledWith({
     filters: [],
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryCollection).toHaveBeenNthCalledWith(11, {
-    collectionId: "azureResources.roleAssignments",
+  expect(runtime.queryAzureRoleAssignments).toHaveBeenCalledWith({
     filters: [],
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryCollection).toHaveBeenNthCalledWith(12, {
-    collectionId: "azureResources.activityLogs",
+  expect(runtime.queryAzureActivityLogs).toHaveBeenCalledWith({
+    filters: [],
+    page: 1,
+    pageSize: 10
+  });
+  expect(runtime.queryZeroTrustAssessmentReport).toHaveBeenCalledWith({
     filters: [],
     page: 1,
     pageSize: 10

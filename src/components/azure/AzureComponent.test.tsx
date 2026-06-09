@@ -25,7 +25,7 @@ test("opens related managed identity from Zero Trust Assessment with an Object I
     const requestUrl = String(input);
 
     if (requestUrl.startsWith("/api/data/zeroTrustAssessment/report")) {
-      return jsonResponse(ztaReport);
+      return zeroTrustAssessmentJsonResponse(ztaReport);
     }
 
     if (requestUrl.startsWith("/api/data/entra/managedIdentities")) {
@@ -102,25 +102,32 @@ test("opens Zero Trust Assessment filtered by related object from a principal ZT
     const requestUrl = String(input);
 
     if (requestUrl.startsWith("/api/data/zeroTrustAssessment/report")) {
-      return jsonResponse({
+      const tests: ZtaReport["Tests"] = [
+        {
+          TestId: "zta-sp-1",
+          TestStatus: "Failed",
+          TestTitle: "Service principal exposure",
+          RelatedObjects: [{ id: "sp-object-id", servicePrincipalType: "Application" }]
+        },
+        {
+          TestId: "zta-other-1",
+          TestStatus: "Failed",
+          TestTitle: "Unrelated exposure",
+          RelatedObjects: [{ id: "other-object-id", servicePrincipalType: "Application" }]
+        }
+      ];
+      const url = new URL(requestUrl, window.location.origin);
+      const relatedObjectFilter = url.searchParams.get("filter[0][value][0]");
+      const filteredTests = relatedObjectFilter
+        ? tests.filter((test) => JSON.stringify(test).includes(relatedObjectFilter))
+        : tests;
+
+      return zeroTrustAssessmentJsonResponse({
         Meta: {
           TenantId: "tenant-1",
           TenantName: "Example Tenant"
         },
-        Tests: [
-          {
-            TestId: "zta-sp-1",
-            TestStatus: "Failed",
-            TestTitle: "Service principal exposure",
-            RelatedObjects: [{ id: "sp-object-id", servicePrincipalType: "Application" }]
-          },
-          {
-            TestId: "zta-other-1",
-            TestStatus: "Failed",
-            TestTitle: "Unrelated exposure",
-            RelatedObjects: [{ id: "other-object-id", servicePrincipalType: "Application" }]
-          }
-        ]
+        Tests: filteredTests
       });
     }
 
@@ -201,6 +208,18 @@ function jsonResponse(body: unknown): Response {
     ok: true,
     status: 200
   } as Response;
+}
+
+function zeroTrustAssessmentJsonResponse(body: ZtaReport): Response {
+  return jsonResponse({
+    collectionId: "zeroTrustAssessment.report",
+    rows: body.Tests,
+    columns: [],
+    page: 1,
+    pageSize: 50,
+    count: body.Tests.length,
+    ...body
+  });
 }
 
 function renderComponent(component: React.ReactNode): { container: HTMLElement; root: Root } {

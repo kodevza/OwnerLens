@@ -1,7 +1,6 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 import {
-  prepareAzureIdentityEnrichmentTables,
   readAzureIdentityEnrichmentStatus,
   recalculateAzureIdentityEnrichment,
   type AzureIdentityEnrichmentStatus
@@ -24,10 +23,6 @@ export class EnrichmentService {
 
   getStatus(): AzureIdentityEnrichmentStatus {
     return this.status;
-  }
-
-  async prepareSchema(): Promise<void> {
-    await prepareAzureIdentityEnrichmentTables(this.getConnection());
   }
 
   async recalculate(): Promise<void> {

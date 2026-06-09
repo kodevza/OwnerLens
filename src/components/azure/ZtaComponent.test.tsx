@@ -79,7 +79,7 @@ test("loads Zero Trust Assessment report metadata and tests", async () => {
 
   await waitForText(container, "Require MFA for administrators");
 
-  expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/data/zeroTrustAssessment/report");
+  expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/data/zeroTrustAssessment/report?page=1");
   expect(getButton("Sort by Test ID").textContent).toContain("Test ID");
   expect(getButton("Sort by Related objects").textContent).toContain("Related objects");
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
@@ -93,6 +93,73 @@ test("loads Zero Trust Assessment report metadata and tests", async () => {
   expect(container.textContent).toContain("Free");
   expect(container.textContent).toContain("mfa");
   expect(container.textContent).toContain("Feature disabled");
+
+  act(() => root.unmount());
+});
+
+test("filters related objects by non-rendered related object fields", async () => {
+  const tests: ZtaReport["Tests"] = [
+    {
+      TestId: "21791",
+      RelatedObjects: [
+        {
+          id: "related-object-1",
+          displayName: "Privileged automation app",
+          servicePrincipalType: "Application"
+        }
+      ],
+      TestStatus: "Completed",
+      TestTitle: "Require MFA for administrators"
+    },
+    {
+      TestId: "21823",
+      RelatedObjects: [
+        {
+          id: "related-object-2",
+          displayName: "Break glass account",
+          userPrincipalName: "breakglass@example.test"
+        }
+      ],
+      TestStatus: "Completed",
+      TestTitle: "Require compliant devices"
+    }
+  ];
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const url = new URL(String(input), window.location.origin);
+    const filterValue = url.searchParams.get("filter[0][value][0]");
+    const filteredTests = filterValue ? tests.filter((test) => JSON.stringify(test).includes(filterValue)) : tests;
+
+    return jsonResponse({
+      Meta: {
+        TenantName: "Example Tenant"
+      },
+      Tests: filteredTests
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<ZtaComponent />);
+
+  await waitForText(container, "Require MFA for administrators");
+  expect(container.textContent).not.toContain("Privileged automation app");
+
+  act(() => {
+    changeInputValue(getInput("Filter Related objects"), "Privileged automation");
+  });
+
+  await waitFor(() => {
+    const filteredRequest = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .find((requestUrl) => {
+        const url = new URL(requestUrl, window.location.origin);
+        return url.searchParams.get("filter[0][column]") === "RelatedObjects";
+      });
+    expect(filteredRequest).toBeDefined();
+    expect(container.textContent).toContain("Require MFA for administrators");
+    expect(container.textContent).not.toContain("Require compliant devices");
+    expect(container.textContent).toContain("related-object-1");
+    expect(container.textContent).not.toContain("Privileged automation app");
+  });
 
   act(() => root.unmount());
 });
@@ -115,7 +182,15 @@ test("renders HTTP errors", async () => {
 
 function jsonResponse(body: ZtaReport): Response {
   return {
-    json: async () => body,
+    json: async () => ({
+      collectionId: "zeroTrustAssessment.report",
+      rows: body.Tests,
+      columns: [],
+      page: 1,
+      pageSize: 50,
+      count: body.Tests.length,
+      ...body
+    }),
     ok: true,
     status: 200
   } as Response;
@@ -149,6 +224,21 @@ function queryButton(label: string): HTMLButtonElement | null {
   }
 
   return button;
+}
+
+function getInput(label: string): HTMLInputElement {
+  const input = [...document.querySelectorAll("input")].find((candidate) => candidate.getAttribute("aria-label") === label);
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error(`Expected input ${label}.`);
+  }
+
+  return input;
+}
+
+function changeInputValue(input: HTMLInputElement, value: string): void {
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  valueSetter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 async function waitForText(container: HTMLElement, text: string) {

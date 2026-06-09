@@ -1,52 +1,18 @@
 import type { DuckDBConnection, DuckDBValue } from "@duckdb/node-api";
 
-import type { ZtaRemediationSummary } from "../../../../core/azure/ztaReport";
+import type { ZtaRelatedObject, ZtaRemediationSummary } from "../../../../core/azure/ztaReport";
 import type { ZeroTrustAssessmentTest } from "./types";
-
-export async function prepareZeroTrustAssessmentTables(connection: DuckDBConnection): Promise<void> {
-  await connection.run(`
-    create table if not exists zta_tests (
-      report_id varchar not null,
-      ordinal integer not null,
-      test_id varchar not null,
-      title varchar,
-      pillar varchar,
-      status varchar,
-      risk varchar,
-      impact varchar,
-      implementation_cost varchar,
-      category varchar,
-      sfi_pillar varchar,
-      skipped_reason varchar,
-      skipped_code varchar,
-      minimum_license json,
-      applies_to json,
-      tags json,
-      related_objects json,
-      result varchar,
-      description varchar,
-      data json not null,
-      primary key (report_id, ordinal)
-    )
-  `);
-
-  await connection.run(`
-    create table if not exists zta_test_related_objects (
-      report_id varchar not null,
-      test_ordinal integer not null,
-      related_object_id varchar not null,
-      primary key (report_id, test_ordinal, related_object_id)
-    )
-  `);
-}
 
 export async function insertZeroTrustAssessmentTestRows(
   connection: DuckDBConnection,
   reportId: string,
   tests: ZeroTrustAssessmentTest[]
 ): Promise<void> {
+  const servicePrincipalRelatedObjectIds = await readServicePrincipalRelatedObjectIds(connection);
+
   for (const [ordinal, originalTest] of tests.entries()) {
-    const test = normalizeZeroTrustAssessmentRiskFields(originalTest);
+    const enrichedTest = enrichRelatedObjectsWithServicePrincipalIds(originalTest, servicePrincipalRelatedObjectIds);
+    const test = normalizeZeroTrustAssessmentRiskFields(enrichedTest);
 
     await connection.run(
       `insert into zta_tests values (
@@ -102,8 +68,12 @@ export async function insertZeroTrustAssessmentRelatedObjectRows(
   reportId: string,
   tests: ZeroTrustAssessmentTest[]
 ): Promise<void> {
+  const servicePrincipalRelatedObjectIds = await readServicePrincipalRelatedObjectIds(connection);
+
   for (const [testOrdinal, test] of tests.entries()) {
-    const relatedObjectIds = getRelatedObjectIds(test);
+    const relatedObjectIds = getRelatedObjectIds(
+      enrichRelatedObjectsWithServicePrincipalIds(test, servicePrincipalRelatedObjectIds)
+    );
 
     for (const relatedObjectId of relatedObjectIds) {
       await connection.run(
@@ -222,6 +192,91 @@ async function readRows<Row extends Record<string, unknown>>(
   return reader.getRowObjectsJson() as Row[];
 }
 
+type ServicePrincipalRelatedObjectIds = {
+  servicePrincipalId: string;
+  applicationId: string | null;
+};
+
+async function readServicePrincipalRelatedObjectIds(
+  connection: DuckDBConnection
+): Promise<Map<string, ServicePrincipalRelatedObjectIds>> {
+  const rows = await readRows<{ service_principal_id: string; application_id: string | null }>(
+    connection,
+    `
+      select
+        lower(service_principal.id) as service_principal_id,
+        application.id as application_id
+      from entra_service_principals service_principal
+      left join entra_applications application
+        on lower(application.app_id) = lower(service_principal.app_id)
+    `
+  );
+
+  const relatedObjectIds = new Map<string, ServicePrincipalRelatedObjectIds>();
+
+  for (const row of rows) {
+    const value = {
+      servicePrincipalId: row.service_principal_id,
+      applicationId: row.application_id
+    };
+    relatedObjectIds.set(row.service_principal_id, value);
+
+    if (row.application_id) {
+      relatedObjectIds.set(row.application_id.toLowerCase(), value);
+    }
+  }
+
+  return relatedObjectIds;
+}
+
+function enrichRelatedObjectsWithServicePrincipalIds(
+  test: ZeroTrustAssessmentTest,
+  servicePrincipalRelatedObjectIds: Map<string, ServicePrincipalRelatedObjectIds>
+): ZeroTrustAssessmentTest {
+  if (!servicePrincipalRelatedObjectIds.size || !test.RelatedObjects?.length) {
+    return test;
+  }
+
+  const relatedObjects = test.RelatedObjects.map((relatedObject) => {
+    if (!relatedObject || typeof relatedObject !== "object" || Array.isArray(relatedObject)) {
+      return relatedObject;
+    }
+
+    const ids = resolveRelatedObjectIds(relatedObject, servicePrincipalRelatedObjectIds);
+    return ids === undefined
+      ? relatedObject
+      : {
+          ...relatedObject,
+          servicePrincipalId: ids.servicePrincipalId,
+          applicationId: ids.applicationId
+        };
+  });
+
+  return {
+    ...test,
+    RelatedObjects: relatedObjects
+  };
+}
+
+function resolveRelatedObjectIds(
+  relatedObject: ZtaRelatedObject,
+  servicePrincipalRelatedObjectIds: Map<string, ServicePrincipalRelatedObjectIds>
+): ServicePrincipalRelatedObjectIds | undefined {
+  for (const id of [
+    toNullableString(relatedObject.servicePrincipalId),
+    toNullableString(relatedObject.object_id),
+    toNullableString(relatedObject.id),
+    toNullableString(relatedObject.applicationId)
+  ]) {
+    const ids = id ? servicePrincipalRelatedObjectIds.get(id.toLowerCase()) : undefined;
+    if (ids !== undefined) {
+      return ids;
+    }
+  }
+
+  return undefined;
+}
+
 function toJsonArray(value: unknown): unknown[] {
   if (Array.isArray(value)) {
     return value;
@@ -261,7 +316,12 @@ function getRelatedObjectIds(test: ZeroTrustAssessmentTest): string[] {
       continue;
     }
 
-    for (const id of [toNullableString(relatedObject.object_id), toNullableString(relatedObject.id)]) {
+    for (const id of [
+      toNullableString(relatedObject.object_id),
+      toNullableString(relatedObject.id),
+      toNullableString(relatedObject.servicePrincipalId),
+      toNullableString(relatedObject.applicationId)
+    ]) {
       if (id) {
         ids.add(id);
       }
