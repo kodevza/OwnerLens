@@ -30,7 +30,7 @@ const columns = [
   "azureRbac",
   "oauthPemrissionsCount",
   "appRolesPermissionCount",
-  "isAllParticipant",
+  "entraPermissionRisk",
   "potentialOwners",
   "ownerConfidence",
   "accountEnabled",
@@ -69,6 +69,18 @@ test("loads service principals through the full table UI and sends filters and p
       return jsonResponse(collection([disabledLegacyApp], { page: 1, count: 1 }));
     }
 
+    if (filters.rbacRoleLevel?.includes("high")) {
+      return jsonResponse(collection([graphApi], { page: 1, count: 1 }));
+    }
+
+    if (filters.entraPermissionRisk?.includes("high")) {
+      return jsonResponse(collection([graphApi], { page: 1, count: 1 }));
+    }
+
+    if (filters.ztaMaxRisk?.includes("high")) {
+      return jsonResponse(collection([graphApi], { page: 1, count: 1 }));
+    }
+
     return jsonResponse(
       collection(page === 1 ? [graphApi, payrollApi] : [disabledLegacyApp], {
         page,
@@ -84,7 +96,7 @@ test("loads service principals through the full table UI and sends filters and p
 
   await waitForText(container, "Microsoft Graph");
 
-  expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/data/entra/servicePrincipals?page=1&count=50");
+  expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/data/entra/servicePrincipals?page=1&count=20");
   expect(getButton("Sort by Display name").textContent).toContain("Display name");
   expect(getButton("Sort by Type").textContent).toContain("Type");
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
@@ -101,11 +113,41 @@ test("loads service principals through the full table UI and sends filters and p
   expect(container.textContent).toContain("high");
   expect(container.textContent).toContain("2/4");
   expect(container.textContent).toContain("3/1");
-  expect(container.textContent).toContain("Owner on subscription");
+  expect(container.textContent).toContain("1/1");
   expect(container.textContent).toContain("platform@example.test");
   expect(container.textContent).toContain("Microsoft");
   expect(container.textContent).toContain("finance");
-  expect(container.textContent).toContain("Page 1 of 2");
+  expect(container.textContent).toContain("Page 1 of 4");
+
+  await openValueFilter("Filter Azure RBAC");
+  await toggleCheckbox("high", true);
+  await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=rbacRoleLevel");
+  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=high");
+  await waitForText(container, "Microsoft Graph");
+  expect(container.textContent).not.toContain("Payroll API");
+
+  await clearValueFilter("Filter Azure RBAC");
+  await waitForText(container, "Page 1 of 4");
+
+  await openValueFilter("Filter Entra permissions");
+  await toggleCheckbox("high", true);
+  await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=entraPermissionRisk");
+  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=high");
+  await waitForText(container, "Microsoft Graph");
+  expect(container.textContent).not.toContain("Payroll API");
+
+  await clearValueFilter("Filter Entra permissions");
+  await waitForText(container, "Page 1 of 4");
+
+  await openValueFilter("Filter ZTA remediations");
+  await toggleCheckbox("high", true);
+  await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=ztaMaxRisk");
+  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=high");
+  await waitForText(container, "Microsoft Graph");
+  expect(container.textContent).not.toContain("Payroll API");
+
+  await clearValueFilter("Filter ZTA remediations");
+  await waitForText(container, "Page 1 of 4");
 
   await changeInput("Filter Display name", "Payroll");
   await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=displayName");
@@ -124,7 +166,7 @@ test("loads service principals through the full table UI and sends filters and p
   expect(container.textContent).toContain("Payroll API");
 
   await clearValueFilter("Filter Type");
-  await waitForText(container, "Page 1 of 2");
+  await waitForText(container, "Page 1 of 4");
 
   await openValueFilter("Filter Enabled");
   await toggleCheckbox("false", true);
@@ -133,12 +175,12 @@ test("loads service principals through the full table UI and sends filters and p
   await waitForText(container, "Legacy disabled app");
 
   await clearValueFilter("Filter Enabled");
-  await waitForText(container, "Page 1 of 2");
+  await waitForText(container, "Page 1 of 4");
 
   await clickButton("Next");
-  await waitForRequestContaining("page=2&count=50");
+  await waitForRequestContaining("page=2&count=20");
   await waitForText(container, "Legacy disabled app");
-  expect(container.textContent).toContain("Page 2 of 2");
+  expect(container.textContent).toContain("Page 2 of 4");
 
   act(() => root.unmount());
 
@@ -158,6 +200,29 @@ test("loads service principals through the full table UI and sends filters and p
   }
 });
 
+test("closes an open value filter when the table is clicked", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
+    jsonResponse(collection([graphApi, payrollApi], { page: 1, count: 2 }))
+  );
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<ServicePrincipalComponent />);
+
+  await waitForText(container, "Microsoft Graph");
+  await openValueFilter("Filter Azure RBAC");
+  expect(findButton("Clear")).toBeDefined();
+
+  await act(async () => {
+    getCell("Microsoft Graph").dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  });
+
+  await waitFor(() => {
+    expect(findButton("Clear")).toBeUndefined();
+  });
+
+  act(() => root.unmount());
+});
+
 const graphApi = servicePrincipal({
   accountEnabled: true,
   appDisplayName: "Microsoft Graph",
@@ -166,12 +231,15 @@ const graphApi = servicePrincipal({
   displayName: "Microsoft Graph",
   id: "graph-sp-id",
   azureRbac: "Owner on subscription (privileged role)",
-  isAllParticipant: true,
+  entraPermissionRisk: "high",
   oauthPemrissionsCount: 3,
   ownerConfidence: "high",
   permissionRisk: "high",
   potentialOwners: ["platform@example.test"],
   publisherName: "Microsoft",
+  rbacRoleAssignmentCount: 1,
+  rbacRoleLevel: "high",
+  rbacSubscriptionCount: 1,
   servicePrincipalType: "Application",
   tags: ["windowsAzureActiveDirectoryIntegratedApp"],
   ztaMaxRisk: "high",
@@ -216,9 +284,12 @@ function servicePrincipal(input: Partial<ServicePrincipal> & Pick<ServicePrincip
     permissionRisk: "none",
     azureRbac: "No Azure RBAC assignments",
     roleAssignments: [],
+    rbacRoleAssignmentCount: 0,
+    rbacRoleLevel: "none",
+    rbacSubscriptionCount: 0,
     oauthPemrissionsCount: 0,
     appRolesPermissionCount: 0,
-    isAllParticipant: false,
+    entraPermissionRisk: "none",
     ztaRemediationCountAll: 0,
     ztaRemediationFailedCount: 0,
     ztaMaxRisk: "none",
@@ -232,7 +303,7 @@ function collection(rows: ServicePrincipal[], { page, count }: { page: number; c
     columns,
     count,
     page,
-    pageSize: 50,
+    pageSize: 20,
     rows
   };
 }
@@ -351,6 +422,17 @@ function getButton(label: string): HTMLButtonElement {
   }
 
   return button;
+}
+
+function getCell(text: string): HTMLTableCellElement {
+  const cell = [...document.querySelectorAll<HTMLTableCellElement>("td")].find((element) =>
+    element.textContent?.includes(text)
+  );
+  if (!cell) {
+    throw new Error(`Could not find table cell: ${text}`);
+  }
+
+  return cell;
 }
 
 function findButton(label: string): HTMLButtonElement | undefined {

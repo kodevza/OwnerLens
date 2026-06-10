@@ -4,12 +4,9 @@ import path from "node:path";
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 import { pathExists, RuntimeHttpError, type LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
-import { toManagedIdentities, type ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
-import {
-  toServicePrincipals,
-  type EntraPrincipalPermissionSummary,
-  type ServicePrincipal
-} from "../../../../core/azure/entra/servicePrincipal";
+import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
+import type { EntraPrincipalPermissionSummary, ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
+import type { PermissionRiskLevel } from "../../../../core/risk/types";
 import type { EntraAppRoleAssignment } from "../../inputTransferObject/entra/EntraAppRoleAssignment";
 import type { EntraOAuth2PermissionGrant } from "../../inputTransferObject/entra/EntraOAuth2PermissionGrant";
 import type { EntraServicePrincipal } from "../../inputTransferObject/entra/EntraServicePrincipal";
@@ -26,12 +23,19 @@ import {
   type EntraDuckDbImportStatus
 } from "./snapshotStore";
 import { mapEntraServicePrincipalsToCore } from "./entraServicePrincipalMapper";
+import { toManagedIdentities, toServicePrincipals } from "./principalProjection";
 
 export type LocalEntraReportCollectionId =
   | "entra.servicePrincipals"
   | "entra.managedIdentities"
   | "entra.oauth2PermissionGrants"
   | "entra.appRoleAssignments";
+
+export type EntraPrincipalPermissions = {
+  principalId: string;
+  oauth2PermissionGrants: EntraOAuth2PermissionGrant[];
+  appRoleAssignments: EntraAppRoleAssignment[];
+};
 
 export type LocalEntraReportRuntimeOptions = {
   dataDir: string;
@@ -110,6 +114,25 @@ export class LocalEntraReportRuntime {
     return readEntraAppRoleAssignmentRows(this.getConnection());
   }
 
+  async readEntraPrincipalPermissions(principalId: string): Promise<EntraPrincipalPermissions> {
+    this.assertImported();
+    const normalizedPrincipalId = principalId.toLowerCase();
+    const [oauth2PermissionGrants, appRoleAssignments] = await Promise.all([
+      readEntraOAuth2PermissionGrantRows(this.getConnection()),
+      readEntraAppRoleAssignmentRows(this.getConnection())
+    ]);
+
+    return {
+      principalId,
+      oauth2PermissionGrants: oauth2PermissionGrants.filter(
+        (grant) => grant.clientId.toLowerCase() === normalizedPrincipalId
+      ),
+      appRoleAssignments: appRoleAssignments.filter(
+        (assignment) => assignment.principalId.toLowerCase() === normalizedPrincipalId
+      )
+    };
+  }
+
   private assertImported(): void {
     if (!this.status.imported) {
       throw new RuntimeHttpError(`Snapshot file ./data/${entraSnapshotFileName} was not found.`, 404);
@@ -127,13 +150,20 @@ export class LocalEntraReportRuntime {
 
     for (const grant of oauth2PermissionGrants) {
       const summary = getOrCreatePrincipalPermissionSummary(permissionsByPrincipalId, grant.clientId);
-      summary.oauthPemrissionsCount += countOAuthPermissionScopes(grant.scope);
-      summary.isAllParticipant = summary.isAllParticipant || grant.consentType === "AllPrincipals";
+      const scopeCount = countOAuthPermissionScopes(grant.scope);
+      summary.oauthPemrissionsCount += scopeCount;
+      if (scopeCount > 0) {
+        summary.entraPermissionRisk = maxPermissionRisk(
+          summary.entraPermissionRisk,
+          grant.consentType === "AllPrincipals" ? "high" : "medium"
+        );
+      }
     }
 
     for (const assignment of appRoleAssignments) {
       const summary = getOrCreatePrincipalPermissionSummary(permissionsByPrincipalId, assignment.principalId);
       summary.appRolesPermissionCount += 1;
+      summary.entraPermissionRisk = maxPermissionRisk(summary.entraPermissionRisk, "medium");
     }
 
     return permissionsByPrincipalId;
@@ -154,7 +184,7 @@ function getOrCreatePrincipalPermissionSummary(
   const summary = {
     oauthPemrissionsCount: 0,
     appRolesPermissionCount: 0,
-    isAllParticipant: false
+    entraPermissionRisk: "none" as PermissionRiskLevel
   };
 
   permissionsByPrincipalId.set(normalizedPrincipalId, summary);
@@ -163,4 +193,15 @@ function getOrCreatePrincipalPermissionSummary(
 
 function countOAuthPermissionScopes(scope: string): number {
   return scope.split(/\s+/).filter(Boolean).length;
+}
+
+const permissionRiskRank: Record<PermissionRiskLevel, number> = {
+  none: 0,
+  low: 1,
+  medium: 2,
+  high: 3
+};
+
+function maxPermissionRisk(left: PermissionRiskLevel, right: PermissionRiskLevel): PermissionRiskLevel {
+  return permissionRiskRank[left] >= permissionRiskRank[right] ? left : right;
 }

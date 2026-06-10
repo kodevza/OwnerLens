@@ -19,6 +19,9 @@ type ZtaComponentProps = {
   onRelatedObjectClick?: (relatedObject: ZtaRelatedObject) => void;
 };
 
+const ztaStatusOptions = ["Completed", "Skipped", "Passed", "Failed"];
+const ztaRiskOptions = ["High", "Medium", "Low", "None"];
+
 const ztaTestFields: ReportFieldDescriptor<ZtaTestRow>[] = [
   {
     id: "TestId",
@@ -39,7 +42,7 @@ const ztaTestFields: ReportFieldDescriptor<ZtaTestRow>[] = [
     label: "Status",
     valueType: "text",
     getValue: (test) => test.TestStatus,
-    filter: { kind: "multiSelect" }
+    filter: { kind: "multiSelect", options: ztaStatusOptions }
   },
   {
     id: "RelatedObjects",
@@ -53,21 +56,21 @@ const ztaTestFields: ReportFieldDescriptor<ZtaTestRow>[] = [
     label: "Risk",
     valueType: "riskLevel",
     getValue: (test) => test.TestRisk,
-    filter: { kind: "multiSelect" }
+    filter: { kind: "multiSelect", options: ztaRiskOptions }
   },
   {
     id: "TestPillar",
     label: "Pillar",
     valueType: "text",
     getValue: (test) => test.TestPillar,
-    filter: { kind: "multiSelect" }
+    filter: { kind: "text" }
   },
   {
     id: "TestCategory",
     label: "Category",
     valueType: "text",
     getValue: (test) => test.TestCategory,
-    filter: { kind: "multiSelect" }
+    filter: { kind: "text" }
   },
   {
     id: "TestImpact",

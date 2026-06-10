@@ -647,6 +647,14 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         principalId: null,
         resourceId: "graph",
         scope: "User.Read"
+      },
+      {
+        id: "grant-2",
+        clientId: "mi-1",
+        consentType: "Principal",
+        principalId: "user-1",
+        resourceId: "sharepoint",
+        scope: "Sites.Read.All Files.Read.All"
       }
     ],
     appRoleAssignments: [
@@ -659,6 +667,16 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         principalDisplayName: "Example app",
         resourceId: "graph",
         resourceDisplayName: "Microsoft Graph"
+      },
+      {
+        id: "assignment-2",
+        appRoleId: "role-2",
+        appRoleDisplayName: null,
+        appRoleValue: null,
+        principalId: "mi-1",
+        principalDisplayName: null,
+        resourceId: "sharepoint",
+        resourceDisplayName: null
       }
     ],
     groups: [{ id: "group-1" }]
@@ -672,8 +690,8 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
       imported: true,
       servicePrincipalCount: 2,
       applicationCount: 1,
-      oauth2PermissionGrantCount: 1,
-      appRoleAssignmentCount: 1
+      oauth2PermissionGrantCount: 2,
+      appRoleAssignmentCount: 2
     });
 
     const imported = (await runtime.readSnapshot("entra-snapshot.json")) as EntraSnapshot & {
@@ -690,6 +708,25 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
     const queriedManagedIdentities = await runtime.queryEntraManagedIdentities({
       page: 1,
       pageSize: 10
+    });
+    const principalPermissions = await runtime.readEntraPrincipalPermissions("SP-1");
+    const endpoints = defineLocalReportRuntimeRestEndpoints(runtime);
+    const servicePrincipalsEndpoint = endpoints.find(
+      (endpoint) => endpoint.path === "/api/data/entra/servicePrincipals"
+    );
+    const managedIdentitiesEndpoint = endpoints.find((endpoint) => endpoint.path === "/api/data/entra/managedIdentities");
+
+    if (!servicePrincipalsEndpoint || !managedIdentitiesEndpoint) {
+      throw new Error("Expected Entra REST endpoints to be registered.");
+    }
+
+    const restServicePrincipals = await servicePrincipalsEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/entra/servicePrincipals?page=1&count=10")
+    });
+    const restManagedIdentities = await managedIdentitiesEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/entra/managedIdentities?page=1&count=10")
     });
 
     expect(imported.meta?.provider).toBe("entra");
@@ -725,6 +762,31 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
     expect(imported.applications?.[0].passwordCredentials[0]).not.toHaveProperty("secretText");
     expect(imported.oauth2PermissionGrants).toEqual(snapshot.oauth2PermissionGrants);
     expect(imported.appRoleAssignments).toEqual(snapshot.appRoleAssignments);
+    expect(principalPermissions).toEqual({
+      principalId: "SP-1",
+      oauth2PermissionGrants: [
+        {
+          id: "grant-1",
+          clientId: "sp-1",
+          consentType: "AllPrincipals",
+          principalId: null,
+          resourceId: "graph",
+          scope: "User.Read"
+        }
+      ],
+      appRoleAssignments: [
+        {
+          id: "assignment-1",
+          appRoleId: "role-1",
+          appRoleDisplayName: "Read",
+          appRoleValue: "Read.All",
+          principalId: "sp-1",
+          principalDisplayName: "Example app",
+          resourceId: "graph",
+          resourceDisplayName: "Microsoft Graph"
+        }
+      ]
+    });
     expect(imported.groups).toEqual([{ id: "group-1" }]);
     expect(queried).toMatchObject({
       collectionId: "entra.servicePrincipals",
@@ -738,7 +800,10 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
           displayName: "Example app",
           oauthPemrissionsCount: 1,
           appRolesPermissionCount: 1,
-          isAllParticipant: true
+          entraPermissionRisk: "high",
+          rbacRoleAssignmentCount: 0,
+          rbacRoleLevel: "none",
+          rbacSubscriptionCount: 0
         })
       ]
     });
@@ -749,9 +814,36 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         expect.objectContaining({
           id: "mi-1",
           servicePrincipalType: "ManagedIdentity",
-          oauthPemrissionsCount: 0,
-          appRolesPermissionCount: 0,
-          isAllParticipant: false
+          oauthPemrissionsCount: 2,
+          appRolesPermissionCount: 1,
+          entraPermissionRisk: "medium",
+          rbacRoleAssignmentCount: 0,
+          rbacRoleLevel: "none",
+          rbacSubscriptionCount: 0
+        })
+      ]
+    });
+    expect(restServicePrincipals).toMatchObject({
+      collectionId: "entra.servicePrincipals",
+      columns: expect.arrayContaining(["oauthPemrissionsCount", "appRolesPermissionCount", "entraPermissionRisk"]),
+      rows: [
+        expect.objectContaining({
+          id: "sp-1",
+          oauthPemrissionsCount: 1,
+          appRolesPermissionCount: 1,
+          entraPermissionRisk: "high"
+        })
+      ]
+    });
+    expect(restManagedIdentities).toMatchObject({
+      collectionId: "entra.managedIdentities",
+      columns: expect.arrayContaining(["oauthPemrissionsCount", "appRolesPermissionCount", "entraPermissionRisk"]),
+      rows: [
+        expect.objectContaining({
+          id: "mi-1",
+          oauthPemrissionsCount: 2,
+          appRolesPermissionCount: 1,
+          entraPermissionRisk: "medium"
         })
       ]
     });
@@ -1253,7 +1345,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
     let endpoints = defineLocalReportRuntimeRestEndpoints(firstRuntime);
 
     await expect(
-      endpoints[8].handle({
+      endpoints[9].handle({
         req: {},
         url: new URL("http://localhost/api/data/azureResources/resourceGroupOwnership?page=1&count=10")
       })
@@ -1272,7 +1364,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
       ]
     });
     await expect(
-      endpoints[9].handle({
+      endpoints[10].handle({
         req: {},
         url: new URL(
           `http://localhost/api/data/azureResources/resourceGroupOwnership/disabledEvidence?key=${encodeURIComponent(disabledKey)}&disabled=true`
@@ -1280,7 +1372,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
       })
     ).resolves.toEqual({ key: disabledKey, disabled: true, disabledCount: 1 });
     await expect(
-      endpoints[8].handle({
+      endpoints[9].handle({
         req: {},
         url: new URL("http://localhost/api/data/azureResources/resourceGroupOwnership?page=1&count=10")
       })
@@ -1305,7 +1397,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
     await secondRuntime.initialize();
     endpoints = defineLocalReportRuntimeRestEndpoints(secondRuntime);
     await expect(
-      endpoints[8].handle({
+      endpoints[9].handle({
         req: {},
         url: new URL("http://localhost/api/data/azureResources/resourceGroupOwnership?page=1&count=10")
       })
@@ -1323,7 +1415,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
       ]
     });
     await expect(
-      endpoints[9].handle({
+      endpoints[10].handle({
         req: {},
         url: new URL(
           `http://localhost/api/data/azureResources/resourceGroupOwnership/disabledEvidence?key=${encodeURIComponent(disabledKey)}&disabled=false`
@@ -1331,7 +1423,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
       })
     ).resolves.toEqual({ key: disabledKey, disabled: false, disabledCount: 0 });
     await expect(
-      endpoints[8].handle({
+      endpoints[9].handle({
         req: {},
         url: new URL("http://localhost/api/data/azureResources/resourceGroupOwnership?page=1&count=10")
       })
@@ -1464,6 +1556,10 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       page: 1,
       pageSize: 10
     });
+    const queriedAzureRbac = await runtime.queryAzureRbac("sp-1", {
+      page: 1,
+      pageSize: 10
+    });
 
     expect(firstStatus).toMatchObject({
       calculated: true,
@@ -1475,7 +1571,10 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       id: "sp-1",
       permissionRisk: "high",
       azureRbac: expect.stringContaining("Owner on subscription"),
-      roleAssignments: [expect.objectContaining({ roleDefinitionName: "Owner" })]
+      roleAssignments: [expect.objectContaining({ roleDefinitionName: "Owner" })],
+      rbacRoleAssignmentCount: 1,
+      rbacRoleLevel: "high",
+      rbacSubscriptionCount: 1
     });
     expect(queriedServicePrincipals).toMatchObject({
       collectionId: "entra.servicePrincipals",
@@ -1492,6 +1591,9 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       permissionRisk: "low",
       azureRbac: expect.stringContaining("Reader on rg/rg-app"),
       roleAssignments: [expect.objectContaining({ roleDefinitionName: "Reader" })],
+      rbacRoleAssignmentCount: 1,
+      rbacRoleLevel: "low",
+      rbacSubscriptionCount: 1,
       assignedResourceGroups: ["rg-app"],
       managedIdentityAssignments: [expect.objectContaining({ assignedResourceName: "app-a" })]
     });
@@ -1504,6 +1606,21 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
           ownerConfidence: "high"
         })
       ]
+    });
+    expect(queriedAzureRbac).toMatchObject({
+      collectionId: "azureRbac",
+      rows: [
+        expect.objectContaining({
+          servicePrincipalId: "sp-1",
+          principalId: "sp-1",
+          roleDefinitionName: "Owner",
+          accessScope: "/subscriptions/sub-1",
+          accessScopeType: "Subscription",
+          accessSubscriptionId: "sub-1",
+          accessDisplayName: "Owner on subscription Subscription One"
+        })
+      ],
+      count: 1
     });
 
     await writeFile(path.join(dataDir, "entra-snapshot.json"), "{not-json", "utf8");
@@ -1660,6 +1777,13 @@ test("defines local report runtime REST endpoints", async () => {
     readManagedIdentities: jest.fn().mockResolvedValue([{ id: "mi-1" }]),
     readEntraOAuth2PermissionGrants: jest.fn().mockResolvedValue([{ id: "grant-1" }]),
     readEntraAppRoleAssignments: jest.fn().mockResolvedValue([{ id: "assignment-1" }]),
+    readEntraPrincipalPermissions: jest.fn((principalId: string) =>
+      Promise.resolve({
+        principalId,
+        oauth2PermissionGrants: [{ id: "grant-1", clientId: principalId }],
+        appRoleAssignments: [{ id: "assignment-1", principalId }]
+      })
+    ),
     readAzureSubscriptions: jest.fn().mockResolvedValue([{ subscriptionId: "sub-1" }]),
     readAzureResourceGroups: jest.fn().mockResolvedValue([{ resourceGroup: "rg-1" }]),
     readAzureResources: jest.fn().mockResolvedValue([{ resourceId: "res-1" }]),
@@ -1726,6 +1850,22 @@ test("defines local report runtime REST endpoints", async () => {
     queryAzureRoleAssignments: jest.fn((options) =>
       Promise.resolve(emptyCollection("azureResources.roleAssignments", options))
     ),
+    queryAzureRbac: jest.fn((servicePrincipalId: string, options: { page?: number; pageSize?: number }) =>
+      Promise.resolve({
+        collectionId: "azureRbac",
+        rows: [
+          {
+            servicePrincipalId,
+            accessScope: "/subscriptions/sub-1/resourceGroups/rg-1",
+            accessScopeType: "ResourceGroup"
+          }
+        ],
+        columns: ["servicePrincipalId", "accessScope", "accessScopeType"],
+        page: options.page ?? 1,
+        pageSize: options.pageSize ?? 10,
+        count: 1
+      })
+    ),
     queryAzureActivityLogs: jest.fn((options) =>
       Promise.resolve(emptyCollection("azureResources.activityLogs", options))
     ),
@@ -1753,6 +1893,7 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/read",
     "/api/data/entra/servicePrincipals",
     "/api/data/entra/managedIdentities",
+    "/api/data/entra/permissions",
     "/api/data/entra/oauth2PermissionGrants",
     "/api/data/entra/appRoleAssignments",
     "/api/data/azureResources/subscriptions",
@@ -1762,6 +1903,7 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/azureResources/resources",
     "/api/data/azureResources/userAssignedManagedIdentities",
     "/api/data/azureResources/roleAssignments",
+    "/api/data/azureRbac",
     "/api/data/azureResources/activityLogs",
     "/api/data/zeroTrustAssessment/report",
     "/api/data/runtime/enrichment/recalculate",
@@ -1789,24 +1931,40 @@ test("defines local report runtime REST endpoints", async () => {
     req: {},
     url: new URL("http://localhost/api/data/entra/managedIdentities?page=1&count=10")
   });
-  await endpoints[4].handle({
+  await expect(
+    endpoints[4].handle({
+      req: {},
+      url: new URL("http://localhost/api/data/entra/permissions?principalId=sp-1")
+    })
+  ).resolves.toEqual({
+    principalId: "sp-1",
+    oauth2PermissionGrants: [{ id: "grant-1", clientId: "sp-1" }],
+    appRoleAssignments: [{ id: "assignment-1", principalId: "sp-1" }]
+  });
+  expect(() =>
+    endpoints[4].handle({
+      req: {},
+      url: new URL("http://localhost/api/data/entra/permissions")
+    })
+  ).toThrow("Missing required query parameter: principalId");
+  await endpoints[5].handle({
     req: {},
     url: new URL("http://localhost/api/data/entra/oauth2PermissionGrants?page=1&count=10")
   });
-  await endpoints[5].handle({
+  await endpoints[6].handle({
     req: {},
     url: new URL("http://localhost/api/data/entra/appRoleAssignments?page=1&count=10")
   });
-  await endpoints[6].handle({
+  await endpoints[7].handle({
     req: {},
     url: new URL("http://localhost/api/data/azureResources/subscriptions?page=1&count=10")
   });
-  await endpoints[7].handle({
+  await endpoints[8].handle({
     req: {},
     url: new URL("http://localhost/api/data/azureResources/resourceGroups?page=1&count=10")
   });
   await expect(
-    endpoints[8].handle({
+    endpoints[9].handle({
       req: {},
       url: new URL("http://localhost/api/data/azureResources/resourceGroupOwnership?page=1&count=10")
     })
@@ -1837,7 +1995,7 @@ test("defines local report runtime REST endpoints", async () => {
     count: 2
   });
   await expect(
-    endpoints[9].handle({
+    endpoints[10].handle({
       req: {},
       url: new URL(
         "http://localhost/api/data/azureResources/resourceGroupOwnership/disabledEvidence?key=resourceGroup%3Asub-1%3Arg-activity%3Aalice%40example.test%3A2026-06-05T10%3A00%3A00.000Z&disabled=true"
@@ -1849,7 +2007,7 @@ test("defines local report runtime REST endpoints", async () => {
     disabledCount: 1
   });
   await expect(
-    endpoints[8].handle({
+    endpoints[9].handle({
       req: {},
       url: new URL("http://localhost/api/data/azureResources/resourceGroupOwnership?page=1&count=10")
     })
@@ -1866,24 +2024,48 @@ test("defines local report runtime REST endpoints", async () => {
       })
     ])
   });
-  await endpoints[10].handle({
+  await endpoints[11].handle({
     req: {},
     url: new URL("http://localhost/api/data/azureResources/resources?page=1&count=10")
   });
-  await endpoints[11].handle({
+  await endpoints[12].handle({
     req: {},
     url: new URL("http://localhost/api/data/azureResources/userAssignedManagedIdentities?page=1&count=10")
   });
-  await endpoints[12].handle({
+  await endpoints[13].handle({
     req: {},
     url: new URL("http://localhost/api/data/azureResources/roleAssignments?page=1&count=10")
   });
-  await endpoints[13].handle({
+  await expect(
+    endpoints[14].handle({
+      req: {},
+      url: new URL("http://localhost/api/data/azureRbac?servicePrincipalId=sp-1&page=1&count=10")
+    })
+  ).resolves.toMatchObject({
+    collectionId: "azureRbac",
+    rows: [
+      {
+        servicePrincipalId: "sp-1",
+        accessScope: "/subscriptions/sub-1/resourceGroups/rg-1",
+        accessScopeType: "ResourceGroup"
+      }
+    ],
+    page: 1,
+    pageSize: 10,
+    count: 1
+  });
+  expect(() =>
+    endpoints[14].handle({
+      req: {},
+      url: new URL("http://localhost/api/data/azureRbac?page=1&count=10")
+    })
+  ).toThrow("Missing required query parameter: servicePrincipalId");
+  await endpoints[15].handle({
     req: {},
     url: new URL("http://localhost/api/data/azureResources/activityLogs?page=1&count=10")
   });
   await expect(
-    endpoints[14].handle({
+    endpoints[16].handle({
       req: {},
       url: new URL("http://localhost/api/data/zeroTrustAssessment/report?page=1&count=10")
     })
@@ -1896,7 +2078,7 @@ test("defines local report runtime REST endpoints", async () => {
     count: 0
   });
   await expect(
-    endpoints[15].handle({
+    endpoints[17].handle({
       req: {},
       url: new URL("http://localhost/api/data/runtime/enrichment/recalculate")
     })
@@ -1917,6 +2099,7 @@ test("defines local report runtime REST endpoints", async () => {
     page: 1,
     pageSize: 10
   });
+  expect(runtime.readEntraPrincipalPermissions).toHaveBeenCalledWith("sp-1");
   expect(runtime.queryEntraOAuth2PermissionGrants).toHaveBeenCalledWith({
     filters: [],
     page: 1,
@@ -1958,6 +2141,11 @@ test("defines local report runtime REST endpoints", async () => {
     pageSize: 10
   });
   expect(runtime.queryAzureRoleAssignments).toHaveBeenCalledWith({
+    filters: [],
+    page: 1,
+    pageSize: 10
+  });
+  expect(runtime.queryAzureRbac).toHaveBeenCalledWith("sp-1", {
     filters: [],
     page: 1,
     pageSize: 10

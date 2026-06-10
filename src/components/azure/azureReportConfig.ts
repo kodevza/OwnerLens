@@ -136,6 +136,7 @@ export const azureManagedIdentityColumnHelp = {
       "Counts individual delegated permission scopes split from the grant scope string.",
       "Finds app role assignments whose principalId matches this Entra object ID and counts each matching application permission.",
       "Badge format is delegated/application, for example 0/1 means no delegated scopes and one application app role assignment.",
+      "Badge risk is high when any matching OAuth2 permission grant has tenant-wide AllPrincipals consent, medium when any non-tenant-wide delegated or application permission exists, and none when no permissions exist.",
       "For Directory.Read.All on a managed identity, resolve the managed identity service principal by Object ID, resolve Microsoft Graph by appId 00000003-0000-0000-c000-000000000000, select the Directory.Read.All application app role, then create the service principal app role assignment with ServicePrincipalId and PrincipalId set to the managed identity service principal Id."
     ]
   },
@@ -148,12 +149,13 @@ export const azureManagedIdentityColumnHelp = {
       "No matching assignments returns zero."
     ]
   },
-  isAllParticipant: {
-    source: "Computed by app from Entra OAuth2 permission grants JSON.",
-    field: "oauth2PermissionGrants[].consentType",
+  entraPermissionRisk: {
+    source: "Computed by app from Entra OAuth2 permission grants and app role assignments JSON.",
+    field: "oauth2PermissionGrants[].consentType and appRoleAssignments[].principalId",
     logic: [
-      "Returns true when any matching OAuth2 permission grant has consentType equal to AllPrincipals.",
-      "Returns false when no matching tenant-wide grant exists."
+      "Returns high when any matching OAuth2 permission grant has consentType equal to AllPrincipals.",
+      "Returns medium when matching delegated scopes or app role assignments exist without tenant-wide delegated consent.",
+      "Returns none when no matching Entra permissions exist."
     ]
   },
   enabled: {

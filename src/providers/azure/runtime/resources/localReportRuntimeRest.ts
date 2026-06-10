@@ -47,6 +47,11 @@ export function defineAzureResourcesLocalReportRuntimeRestEndpoints(
       handle: ({ url }) => runtime.queryAzureRoleAssignments(parseRuntimeCollectionQueryOptions(url))
     },
     {
+      path: `${restBasePath}/azureRbac`,
+      handle: ({ url }) =>
+        runtime.queryAzureRbac(readRequiredSearchParam(url, "servicePrincipalId"), parseRuntimeCollectionQueryOptions(url))
+    },
+    {
       path: `${restBasePath}/azureResources/activityLogs`,
       handle: ({ url }) => runtime.queryAzureActivityLogs(parseRuntimeCollectionQueryOptions(url))
     }
