@@ -1,6 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 
 import { DuckDBInstance } from "@duckdb/node-api";
 
@@ -16,6 +18,13 @@ import { insertEntraServicePrincipalRows } from "./entra/servicePrincipalsTable"
 import { insertEntraApplicationRows } from "./entra/applicationsTable";
 import { prepareRuntimeSqlSchema } from "./runtimeSqlSchema";
 import type { ZeroTrustAssessmentReport } from "./zta/types";
+
+afterAll(() => {
+  // DuckDB's native result wrappers release their libuv handles through finalizers.
+  setFlagsFromString("--expose_gc");
+  const gc = runInNewContext("gc") as () => void;
+  gc();
+});
 
 test("imports Zero Trust Assessment report into DuckDB and reads it back through the runtime", async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), "ownerlens-runtime-"));
