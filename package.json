@@ -17,6 +17,7 @@
   "files": [
     "bin",
     "dist",
+    "index.html",
     "src",
     "tools",
     "vite.config.ts"
