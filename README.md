@@ -65,7 +65,7 @@ flowchart TD
 ## Install
 
 ```bash
-npm install
+npx ownerlens start
 ```
 
 ## Create Snapshot Files
