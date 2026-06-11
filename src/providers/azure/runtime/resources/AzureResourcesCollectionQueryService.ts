@@ -2,6 +2,7 @@ import { mapRoleAssignmentToAzureRbac } from "../../../../core/azure/azureRbac";
 import type { AzureRbac } from "../../../../core/azure/azureRbac";
 import type { ResourceGroupOwnershipRow } from "../../../../core/azure/resources";
 
+import { evaluateAzureRoleAssignmentRisk } from "../enrichment/evaluateAzureRoleAssignmentRisk";
 import { buildAzureOwnershipReport } from "../../ownership/buildAzureOwnershipReport";
 import {
   buildPaginatedCollection,
@@ -139,6 +140,6 @@ export class AzureResourcesCollectionQueryService {
 
     return (await this.azureResources.readAzureRoleAssignments())
       .filter((assignment) => assignment.principalId.toLowerCase() === normalizedServicePrincipalId)
-      .map(mapRoleAssignmentToAzureRbac);
+      .map((assignment) => mapRoleAssignmentToAzureRbac(assignment, evaluateAzureRoleAssignmentRisk(assignment).riskLevel));
   }
 }

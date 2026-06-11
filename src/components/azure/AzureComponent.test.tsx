@@ -202,6 +202,7 @@ test("opens Azure RBAC tab for the selected service principal from its RBAC badg
         rows: [
           {
             accessDisplayName: "Owner on subscription Platform",
+            accessRisk: "high",
             accessResourceGroup: null,
             accessResourceId: null,
             accessScope: "/subscriptions/sub-1",
@@ -275,6 +276,7 @@ test("opens Azure RBAC tab for the selected service principal from its RBAC badg
   await waitForText(container, "Owner on subscription Platform");
 
   expect(getButton("Service principal app")).toBeDefined();
+  expect(container.textContent).toContain("high");
 
   const azureRbacRequest = fetchMock.mock.calls
     .map(([input]) => String(input))
@@ -307,6 +309,7 @@ test("opens Entra permissions tab for the selected service principal from its pe
             consentType: "AllPrincipals",
             principalId: null,
             resourceId: "graph-sp-id",
+            risk: "high",
             scope: "User.Read Directory.Read.All"
           }
         ],
@@ -372,6 +375,8 @@ test("opens Entra permissions tab for the selected service principal from its pe
   await clickButton("Open Entra permissions 2/1");
   await waitForText(container, "User.Read Directory.Read.All");
   await waitForText(container, "Read directory data");
+  await waitForText(container, "Risk");
+  await waitForText(container, "high");
 
   expect(getButton("Service principal app permissions")).toBeDefined();
 
@@ -406,6 +411,7 @@ test("opens Azure RBAC tab for the selected managed identity from its RBAC badge
         rows: [
           {
             accessDisplayName: "Contributor on resource group rg-app",
+            accessRisk: "high",
             accessResourceGroup: "rg-app",
             accessResourceId: null,
             accessScope: "/subscriptions/sub-1/resourceGroups/rg-app",
@@ -494,6 +500,7 @@ test("opens Azure RBAC tab for the selected managed identity from its RBAC badge
   await waitForText(container, "Contributor on resource group rg-app");
 
   expect(getButton("uami-prod")).toBeDefined();
+  expect(container.textContent).toContain("high");
 
   const azureRbacRequest = fetchMock.mock.calls
     .map(([input]) => String(input))

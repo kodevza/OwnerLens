@@ -6,9 +6,10 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 import { pathExists, RuntimeHttpError, type LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
 import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
 import type { EntraPrincipalPermissionSummary, ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
+import type { EntraOAuth2PermissionGrant } from "../../../../core/azure/entra/types";
 import type { PermissionRiskLevel } from "../../../../core/risk/types";
 import type { EntraAppRoleAssignment } from "../../inputTransferObject/entra/EntraAppRoleAssignment";
-import type { EntraOAuth2PermissionGrant } from "../../inputTransferObject/entra/EntraOAuth2PermissionGrant";
+import type { EntraOAuth2PermissionGrant as InputEntraOAuth2PermissionGrant } from "../../inputTransferObject/entra/EntraOAuth2PermissionGrant";
 import type { EntraServicePrincipal } from "../../inputTransferObject/entra/EntraServicePrincipal";
 import type { EntraSnapshot } from "../../inputTransferObject/entra/EntraSnapshot";
 import { readEntraAppRoleAssignmentRows } from "./appRoleAssignmentsTable";
@@ -106,7 +107,7 @@ export class LocalEntraReportRuntime {
 
   async readEntraOAuth2PermissionGrants(): Promise<EntraOAuth2PermissionGrant[]> {
     this.assertImported();
-    return readEntraOAuth2PermissionGrantRows(this.getConnection());
+    return (await readEntraOAuth2PermissionGrantRows(this.getConnection())).map(toCoreEntraOAuth2PermissionGrant);
   }
 
   async readEntraAppRoleAssignments(): Promise<EntraAppRoleAssignment[]> {
@@ -126,7 +127,7 @@ export class LocalEntraReportRuntime {
       principalId,
       oauth2PermissionGrants: oauth2PermissionGrants.filter(
         (grant) => grant.clientId.toLowerCase() === normalizedPrincipalId
-      ),
+      ).map(toCoreEntraOAuth2PermissionGrant),
       appRoleAssignments: appRoleAssignments.filter(
         (assignment) => assignment.principalId.toLowerCase() === normalizedPrincipalId
       )
@@ -193,6 +194,25 @@ function getOrCreatePrincipalPermissionSummary(
 
 function countOAuthPermissionScopes(scope: string): number {
   return scope.split(/\s+/).filter(Boolean).length;
+}
+
+function toCoreEntraOAuth2PermissionGrant(grant: InputEntraOAuth2PermissionGrant): EntraOAuth2PermissionGrant {
+  return {
+    ...grant,
+    risk: getOAuth2PermissionGrantRisk(grant)
+  };
+}
+
+function getOAuth2PermissionGrantRisk(grant: Pick<InputEntraOAuth2PermissionGrant, "consentType">): PermissionRiskLevel {
+  if (grant.consentType === "AllPrincipals") {
+    return "high";
+  }
+
+  if (grant.consentType === "Principal") {
+    return "low";
+  }
+
+  return "medium";
 }
 
 const permissionRiskRank: Record<PermissionRiskLevel, number> = {

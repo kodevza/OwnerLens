@@ -1,7 +1,9 @@
 import type { AzureRoleAssignment } from "./resources";
+import type { PermissionRiskLevel } from "../risk/types";
 
 export type AzureRbac = AzureRoleAssignment & {
   servicePrincipalId: string;
+  accessRisk: PermissionRiskLevel;
   accessScope: string;
   accessScopeType: AzureRoleAssignment["scopeType"];
   accessResourceId: string | null;
@@ -10,10 +12,14 @@ export type AzureRbac = AzureRoleAssignment & {
   accessDisplayName: string;
 };
 
-export function mapRoleAssignmentToAzureRbac(assignment: AzureRoleAssignment): AzureRbac {
+export function mapRoleAssignmentToAzureRbac(
+  assignment: AzureRoleAssignment,
+  permissionRiskLevel: PermissionRiskLevel
+): AzureRbac {
   return {
     ...assignment,
     servicePrincipalId: assignment.principalId,
+    accessRisk: permissionRiskLevel,
     accessScope: assignment.scope,
     accessScopeType: assignment.scopeType ?? "Unknown",
     accessResourceId: getResourceScopeId(assignment),

@@ -45,7 +45,7 @@ Connect-MgGraph -TenantId "<tenant-id>" -Scopes "Application.Read.All","Group.Re
 Create the Azure resource snapshot:
 
 ```powershell
-.\tools\prepare-resource-snapshot.ps1
+.\tools\collect-azure.ps1
 ```
 
 By default this writes `.\data\snapshot.json`, using the current Azure subscription and the last 90 days of activity logs.
@@ -53,11 +53,11 @@ By default this writes `.\data\snapshot.json`, using the current Azure subscript
 Common resource snapshot options:
 
 ```powershell
-.\tools\prepare-resource-snapshot.ps1 -SubscriptionIds "sub-id-1,sub-id-2"
-.\tools\prepare-resource-snapshot.ps1 -OutputPath ".\data\snapshot-prod.json"
-.\tools\prepare-resource-snapshot.ps1 -ActivityDays 30 -MaxActivityRecords 5000
-.\tools\prepare-resource-snapshot.ps1 -SkipAuditLogsExport
-.\tools\prepare-resource-snapshot.ps1 -ExpandResourceProperties
+.\tools\collect-azure.ps1 -SubscriptionIds "sub-id-1,sub-id-2"
+.\tools\collect-azure.ps1 -OutputPath ".\data\snapshot-prod.json"
+.\tools\collect-azure.ps1 -ActivityDays 30 -MaxActivityRecords 5000
+.\tools\collect-azure.ps1 -SkipAuditLogsExport
+.\tools\collect-azure.ps1 -ExpandResourceProperties
 ```
 
 Resource property expansion is disabled by default because OwnerLens reads the standard resource fields plus identity data from the resource list response. Use `-ExpandResourceProperties` only when debugging or when you need Azure's additional expanded metadata in a raw snapshot.
@@ -65,7 +65,7 @@ Resource property expansion is disabled by default because OwnerLens reads the s
 Create the Entra snapshot:
 
 ```powershell
-.\tools\prepare-entra-snapshot.ps1
+.\tools\collect-entra.ps1
 ```
 
 By default this writes `.\data\entra-snapshot.json`.
@@ -73,13 +73,30 @@ By default this writes `.\data\entra-snapshot.json`.
 Common Entra snapshot option:
 
 ```powershell
-.\tools\prepare-entra-snapshot.ps1 -OutputPath ".\data\entra-snapshot-prod.json"
+.\tools\collect-entra.ps1 -TenantId "<tenant-id>"
+.\tools\collect-entra.ps1 -OutputPath ".\data\entra-snapshot-prod.json"
 ```
 
 After both files exist, start the app with `npm run dev` and refresh the browser.
 
+The same collectors are available through npm scripts:
+
+```bash
+npm run collect:azure -- -SubscriptionIds "sub-id-1,sub-id-2"
+npm run collect:entra -- -TenantId "<tenant-id>"
+```
+
+After publishing the package, the equivalent `npx` commands are:
+
+```bash
+npx ownerlens collect:azure -SubscriptionIds "sub-id-1,sub-id-2"
+npx ownerlens collect:entra -TenantId "<tenant-id>"
+```
+
 ## Scripts
 
+- `collect-azure.ps1` signs in when needed, then calls `prepare-resource-snapshot.ps1`.
+- `collect-entra.ps1` signs in when needed, then calls `prepare-entra-snapshot.ps1`.
 - `prepare-resource-snapshot.ps1` exports Azure subscriptions, resource groups, resources, user-assigned managed identities, role assignments, and optional Azure Monitor activity logs.
 - `prepare-entra-snapshot.ps1` exports Entra service principals, application registrations, and groups.
 - `azure-activity-check.ps1` is a helper loaded by `prepare-resource-snapshot.ps1`; it is not usually run directly.

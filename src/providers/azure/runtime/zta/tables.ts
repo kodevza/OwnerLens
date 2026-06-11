@@ -195,17 +195,19 @@ async function readRows<Row extends Record<string, unknown>>(
 type ServicePrincipalRelatedObjectIds = {
   servicePrincipalId: string;
   applicationId: string | null;
+  tags: string[];
 };
 
 async function readServicePrincipalRelatedObjectIds(
   connection: DuckDBConnection
 ): Promise<Map<string, ServicePrincipalRelatedObjectIds>> {
-  const rows = await readRows<{ service_principal_id: string; application_id: string | null }>(
+  const rows = await readRows<{ service_principal_id: string; application_id: string | null; tags: string | null }>(
     connection,
     `
       select
         lower(service_principal.id) as service_principal_id,
-        application.id as application_id
+        application.id as application_id,
+        service_principal.tags
       from entra_service_principals service_principal
       left join entra_applications application
         on lower(application.app_id) = lower(service_principal.app_id)
@@ -217,7 +219,8 @@ async function readServicePrincipalRelatedObjectIds(
   for (const row of rows) {
     const value = {
       servicePrincipalId: row.service_principal_id,
-      applicationId: row.application_id
+      applicationId: row.application_id,
+      tags: parseJsonArray<string>(row.tags)
     };
     relatedObjectIds.set(row.service_principal_id, value);
 
@@ -248,6 +251,7 @@ function enrichRelatedObjectsWithServicePrincipalIds(
       : {
           ...relatedObject,
           servicePrincipalId: ids.servicePrincipalId,
+          tags: ids.tags,
           applicationId: ids.applicationId
         };
   });
@@ -283,6 +287,15 @@ function toJsonArray(value: unknown): unknown[] {
   }
 
   return value == null || value === "" ? [] : [value];
+}
+
+function parseJsonArray<T>(value: string | null | undefined): T[] {
+  if (!value) {
+    return [];
+  }
+
+  const parsed = JSON.parse(value) as unknown;
+  return Array.isArray(parsed) ? (parsed as T[]) : [];
 }
 
 function toNullableString(value: unknown): string | null {

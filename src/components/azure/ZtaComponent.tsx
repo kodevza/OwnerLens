@@ -194,7 +194,7 @@ function RelatedObjectBadges({
     <div className="flex max-w-96 flex-wrap gap-1">
       {objects.map((object) => {
         const id = getRelatedObjectId(object);
-        const title = object.servicePrincipalType ? `${id} (${object.servicePrincipalType})` : id;
+        const title = getRelatedObjectTooltipTitle(object);
 
         if (!onRelatedObjectClick) {
           return (
@@ -229,6 +229,7 @@ function getRelatedObjectSearchValuesForObject(object: ZtaRelatedObject): string
   return [
     object.id,
     object.object_id,
+    object.servicePrincipalId,
     object.applicationId,
     object.displayName,
     object.servicePrincipalType,
@@ -245,6 +246,29 @@ function getRelatedObjectsWithIds(test: ZtaReportTest): ZtaRelatedObject[] {
 
 function getRelatedObjectId(object: ZtaRelatedObject): string {
   return object.id ?? object.object_id ?? "";
+}
+
+function getRelatedObjectTooltipTitle(object: ZtaRelatedObject): string {
+  return [
+    ["id", object.id],
+    ["object_id", object.object_id],
+    ["servicePrincipalId", object.servicePrincipalId],
+    ["tags", object.tags],
+    ["applicationId", object.applicationId],
+    ["displayName", object.displayName],
+    ["servicePrincipalType", object.servicePrincipalType],
+    ["userPrincipalName", object.userPrincipalName]
+  ]
+    .map(([label, value]) => `${label}: ${formatTooltipValue(value)}`)
+    .join("\n");
+}
+
+function formatTooltipValue(value: string | string[] | null | undefined): string {
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.join(", ") : "-";
+  }
+
+  return isNonEmptyString(value) ? value : "-";
 }
 
 function isNonEmptyString(value: string | null | undefined): value is string {

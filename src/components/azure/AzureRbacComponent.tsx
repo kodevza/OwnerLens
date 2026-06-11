@@ -4,8 +4,10 @@ import type { AzureRbac } from "../../core/azure/azureRbac";
 import { GenericTable } from "../../report/components/GenericTable";
 import type { ColumnFilters } from "../../report/components/reportTableControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
+import type { PermissionRiskLevel } from "../../core/risk/types";
 import { readAzureRbac } from "./api";
 
+const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 const azureScopeTypeOptions = ["ManagementGroup", "Subscription", "ResourceGroup", "Resource", "Unknown"];
 const azurePrincipalTypeOptions = ["User", "Group", "ServicePrincipal", "ForeignGroup", "Device", "ManagedIdentity"];
 
@@ -16,6 +18,13 @@ const azureRbacFields: ReportFieldDescriptor<AzureRbac>[] = [
     valueType: "text",
     getValue: (assignment) => assignment.accessDisplayName,
     filter: { kind: "text" }
+  },
+  {
+    id: "accessRisk",
+    label: "Risk",
+    valueType: "riskLevel",
+    getValue: (assignment) => assignment.accessRisk,
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
     id: "roleDefinitionName",

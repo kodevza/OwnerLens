@@ -29,11 +29,11 @@ export type ZtaRelatedObject = {
   id?: string | null;
   object_id?: string | null;
   servicePrincipalId?: string | null;
+  tags?: string[] | null;
   applicationId?: string | null;
   displayName?: string | null;
   servicePrincipalType?: string | null;
   userPrincipalName?: string | null;
-  tags?: string[] | null;
 };
 
 export type ZtaReportTest = {

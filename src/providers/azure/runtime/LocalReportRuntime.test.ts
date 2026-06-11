@@ -63,6 +63,13 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
             applicationId: "app-client-1",
             displayName: "Searchable owner app",
             servicePrincipalType: "Application"
+          },
+          {
+            object_id: "object-2",
+            id: "principal-id-2",
+            applicationId: "app-client-2",
+            displayName: "Other owner app",
+            servicePrincipalType: "ManagedIdentity"
           }
         ]
       },
@@ -114,9 +121,14 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
       TestId: "21791",
       TestImpact: "medium",
       TestRisk: "medium",
-      TestStatus: "Failed",
-      RelatedObjects: [{ object_id: "object-1" }]
+      TestStatus: "Failed"
     });
+    expect(imported.Tests[0].RelatedObjects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ object_id: "object-1" }),
+        expect.objectContaining({ object_id: "object-2" })
+      ])
+    );
     expect(imported.Tests[1]).toMatchObject({
       TestId: 21823,
       TestMinimumLicense: ["Free"]
@@ -150,10 +162,22 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
           "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=app-client-1"
         )
       })
-    ).resolves.toMatchObject({
-      rows: [expect.objectContaining({ TestId: "21791" })],
-      count: 1
-    });
+    ).resolves.toEqual(
+      expect.objectContaining({
+        rows: [
+          expect.objectContaining({
+            TestId: "21791",
+            RelatedObjects: [
+              expect.objectContaining({
+                object_id: "object-1",
+                applicationId: "app-client-1"
+              })
+            ]
+          })
+        ],
+        count: 1
+      })
+    );
     await expect(
       ztaReportEndpoint?.handle({
         req: {},
@@ -207,6 +231,8 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
 test("fills Zero Trust Assessment related object application ids through the REST endpoint", async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), "ownerlens-runtime-"));
   const runtime = new LocalReportRuntime({ dataDir });
+  const payrollServicePrincipal = servicePrincipal("sp-1", "client-app-1", "Payroll API", "Application");
+  payrollServicePrincipal.tags = ["WindowsAzureActiveDirectoryIntegratedApp", "HideApp"];
   const entraSnapshot: EntraSnapshot = {
     meta: {
       provider: "entra",
@@ -217,7 +243,7 @@ test("fills Zero Trust Assessment related object application ids through the RES
       scopes: [],
       servicePrincipalCount: 1
     },
-    servicePrincipals: [servicePrincipal("sp-1", "client-app-1", "Payroll API", "Application")],
+    servicePrincipals: [payrollServicePrincipal],
     applications: [application("application-object-1", "client-app-1", "Payroll app registration")],
     oauth2PermissionGrants: [],
     appRoleAssignments: []
@@ -262,6 +288,7 @@ test("fills Zero Trust Assessment related object application ids through the RES
             expect.objectContaining({
               object_id: "sp-1",
               servicePrincipalId: "sp-1",
+              tags: ["WindowsAzureActiveDirectoryIntegratedApp", "HideApp"],
               applicationId: "application-object-1"
             })
           ]
@@ -273,6 +300,7 @@ test("fills Zero Trust Assessment related object application ids through the RES
             expect.objectContaining({
               object_id: "sp-1",
               servicePrincipalId: "sp-1",
+              tags: ["WindowsAzureActiveDirectoryIntegratedApp", "HideApp"],
               applicationId: "application-object-1"
             })
           ]
@@ -284,6 +312,17 @@ test("fills Zero Trust Assessment related object application ids through the RES
         req: {},
         url: new URL(
           "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=sp-1"
+        )
+      })
+    ).resolves.toMatchObject({
+      rows: [expect.objectContaining({ TestId: "sp-test" })],
+      count: 1
+    });
+    await expect(
+      endpoint?.handle({
+        req: {},
+        url: new URL(
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=HideApp"
         )
       })
     ).resolves.toMatchObject({
@@ -450,8 +489,10 @@ test("enriches Zero Trust Assessment related objects with application object ids
 
   try {
     await prepareRuntimeSqlSchema(connection);
+    const taggedServicePrincipal = servicePrincipal("sp-1", "app-1", "Application app", "Application");
+    taggedServicePrincipal.tags = ["WindowsAzureActiveDirectoryIntegratedApp", "HideApp"];
     await insertEntraServicePrincipalRows(connection, [
-      servicePrincipal("sp-1", "app-1", "Application app", "Application"),
+      taggedServicePrincipal,
       servicePrincipal("sp-2", "app-2", "Application without registration", "Application")
     ]);
     await insertEntraApplicationRows(connection, [
@@ -466,7 +507,8 @@ test("enriches Zero Trust Assessment related objects with application object ids
           RelatedObjects: [
             expect.objectContaining({
               object_id: "sp-1",
-              applicationId: "application-object-1"
+              applicationId: "application-object-1",
+              tags: ["WindowsAzureActiveDirectoryIntegratedApp", "HideApp"]
             }),
             expect.objectContaining({
               id: "sp-2",
@@ -655,6 +697,14 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         principalId: "user-1",
         resourceId: "sharepoint",
         scope: "Sites.Read.All Files.Read.All"
+      },
+      {
+        id: "grant-3",
+        clientId: "external-1",
+        consentType: "FutureConsentType",
+        principalId: null,
+        resourceId: "graph",
+        scope: "Mail.Read"
       }
     ],
     appRoleAssignments: [
@@ -690,7 +740,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
       imported: true,
       servicePrincipalCount: 2,
       applicationCount: 1,
-      oauth2PermissionGrantCount: 2,
+      oauth2PermissionGrantCount: 3,
       appRoleAssignmentCount: 2
     });
 
@@ -715,8 +765,11 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
       (endpoint) => endpoint.path === "/api/data/entra/servicePrincipals"
     );
     const managedIdentitiesEndpoint = endpoints.find((endpoint) => endpoint.path === "/api/data/entra/managedIdentities");
+    const oauth2PermissionGrantsEndpoint = endpoints.find(
+      (endpoint) => endpoint.path === "/api/data/entra/oauth2PermissionGrants"
+    );
 
-    if (!servicePrincipalsEndpoint || !managedIdentitiesEndpoint) {
+    if (!servicePrincipalsEndpoint || !managedIdentitiesEndpoint || !oauth2PermissionGrantsEndpoint) {
       throw new Error("Expected Entra REST endpoints to be registered.");
     }
 
@@ -727,6 +780,10 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
     const restManagedIdentities = await managedIdentitiesEndpoint.handle({
       req: {},
       url: new URL("http://localhost/api/data/entra/managedIdentities?page=1&count=10")
+    });
+    const restOAuth2PermissionGrants = await oauth2PermissionGrantsEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/entra/oauth2PermissionGrants?page=1&count=10")
     });
 
     expect(imported.meta?.provider).toBe("entra");
@@ -761,6 +818,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
     });
     expect(imported.applications?.[0].passwordCredentials[0]).not.toHaveProperty("secretText");
     expect(imported.oauth2PermissionGrants).toEqual(snapshot.oauth2PermissionGrants);
+    expect(imported.oauth2PermissionGrants?.[0]).not.toHaveProperty("risk");
     expect(imported.appRoleAssignments).toEqual(snapshot.appRoleAssignments);
     expect(principalPermissions).toEqual({
       principalId: "SP-1",
@@ -771,6 +829,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
           consentType: "AllPrincipals",
           principalId: null,
           resourceId: "graph",
+          risk: "high",
           scope: "User.Read"
         }
       ],
@@ -845,6 +904,15 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
           appRolesPermissionCount: 1,
           entraPermissionRisk: "medium"
         })
+      ]
+    });
+    expect(restOAuth2PermissionGrants).toMatchObject({
+      collectionId: "entra.oauth2PermissionGrants",
+      columns: expect.arrayContaining(["id", "consentType", "risk"]),
+      rows: [
+        expect.objectContaining({ id: "grant-1", risk: "high" }),
+        expect.objectContaining({ id: "grant-2", risk: "low" }),
+        expect.objectContaining({ id: "grant-3", risk: "medium" })
       ]
     });
   } finally {
@@ -1614,6 +1682,7 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
           servicePrincipalId: "sp-1",
           principalId: "sp-1",
           roleDefinitionName: "Owner",
+          accessRisk: "high",
           accessScope: "/subscriptions/sub-1",
           accessScopeType: "Subscription",
           accessSubscriptionId: "sub-1",

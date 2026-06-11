@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { GenericTable } from "../../report/components/GenericTable";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
+import type { PermissionRiskLevel } from "../../core/risk/types";
 import { readEntraPermissions, type EntraPrincipalPermissionsResponse } from "./api";
 
 type EntraPermissionRow = {
@@ -12,6 +13,7 @@ type EntraPermissionRow = {
   permissionDisplayName: string | null;
   permissionValue: string;
   consentType: string | null;
+  risk: PermissionRiskLevel | null;
   principalDisplayName: string | null;
   principalId: string | null;
 };
@@ -30,6 +32,7 @@ type LoadState =
 
 const permissionTypeOptions: EntraPermissionRow["permissionType"][] = ["OAuth2 permission grant", "App role assignment"];
 const consentTypeOptions = ["AllPrincipals", "Principal"];
+const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 
 const entraPermissionFields: ReportFieldDescriptor<EntraPermissionRow>[] = [
   {
@@ -73,6 +76,13 @@ const entraPermissionFields: ReportFieldDescriptor<EntraPermissionRow>[] = [
     valueType: "text",
     getValue: (permission) => permission.consentType,
     filter: { kind: "multiSelect", options: consentTypeOptions }
+  },
+  {
+    id: "risk",
+    label: "Risk",
+    valueType: "riskLevel",
+    getValue: (permission) => permission.risk,
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
     id: "principalDisplayName",
@@ -164,6 +174,7 @@ function mapPermissionsToRows(permissions: EntraPrincipalPermissionsResponse): E
       permissionDisplayName: null,
       permissionValue: grant.scope,
       consentType: grant.consentType,
+      risk: grant.risk,
       principalDisplayName: null,
       principalId: grant.principalId
     })),
@@ -175,6 +186,7 @@ function mapPermissionsToRows(permissions: EntraPrincipalPermissionsResponse): E
       permissionDisplayName: assignment.appRoleDisplayName,
       permissionValue: assignment.appRoleValue ?? assignment.appRoleId,
       consentType: null,
+      risk: null,
       principalDisplayName: assignment.principalDisplayName,
       principalId: assignment.principalId
     }))
