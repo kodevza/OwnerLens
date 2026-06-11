@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { buildCollectionColumns, type ReportColumnRenderers } from "../buildCollectionColumns";
+import { getConfiguredFilterOptions } from "../applyCollectionControls";
 import type { ReportColumnHelp, ReportFieldDescriptor } from "../reportTypes";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
@@ -46,7 +47,6 @@ type GenericRemoteTableProps<TRow> = Omit<
   GenericTableProps<TRow>,
   "filterOptions" | "filters" | "onFiltersChange" | "onPageChange" | "page" | "rows" | "sortRules" | "totalCount"
 > & {
-  buildFilterOptions?: (rows: TRow[]) => ColumnFilterOptions;
   initialFilters?: ColumnFilters;
   loadPage: (input: { filters: ColumnFilters; page: number; signal: AbortSignal }) => Promise<GenericTablePage<TRow>>;
   loadingMessage: string;
@@ -79,7 +79,7 @@ export function GenericTable<TRow>(props: GenericTableWrapperProps<TRow>) {
 }
 
 function GenericRemoteTable<TRow>({
-  buildFilterOptions,
+  fields,
   initialFilters,
   loadPage,
   loadingMessage,
@@ -97,7 +97,11 @@ function GenericRemoteTable<TRow>({
       setLoadState({ status: "loading" });
 
       try {
-        const nextCollection = await loadPage({ filters, page, signal: controller.signal });
+        const nextCollection = await loadPage({
+          filters: remapColumnFiltersForRuntime(fields, filters),
+          page,
+          signal: controller.signal
+        });
         setCollection(nextCollection);
         setLoadState({ status: "ready" });
       } catch (error) {
@@ -116,12 +120,9 @@ function GenericRemoteTable<TRow>({
     loadCollectionPage();
 
     return () => controller.abort();
-  }, [filters, loadPage, page]);
+  }, [fields, filters, loadPage, page]);
 
-  const filterOptions = useMemo(
-    () => buildFilterOptions?.(collection?.rows ?? []) ?? {},
-    [buildFilterOptions, collection]
-  );
+  const filterOptions = useMemo(() => getConfiguredFilterOptions(fields), [fields]);
 
   if (!collection && loadState.status === "loading") {
     return <TableState>{loadingMessage}</TableState>;
@@ -141,6 +142,7 @@ function GenericRemoteTable<TRow>({
       <GenericTableView
         {...tableProps}
         emptyMessage={loadState.status === "loading" ? loadingMessage : tableProps.emptyMessage}
+        fields={fields}
         filterOptions={filterOptions}
         filters={filters}
         page={collection.page}
@@ -213,7 +215,7 @@ function GenericTableView<TRow>({
           onSortRulesChange(toggleSortRule(sortRules, columnId));
         };
   const controlledRows = totalCount === undefined ? tableControls.controlledRows : rows;
-  const filterOptions = controlledFilterOptions ?? tableControls.filterOptions;
+  const filterOptions = resolveColumnFilterOptions(fields, controlledFilterOptions ?? tableControls.filterOptions);
   const openFilterColumnId = localControls.openFilterColumnId;
   const setColumnFilterOpen = localControls.setColumnFilterOpen;
   const resolvedPage = page ?? 1;
@@ -261,6 +263,32 @@ function GenericTableView<TRow>({
         />
       ) : null}
     </TableContainer>
+  );
+}
+
+function remapColumnFiltersForRuntime<TRow>(
+  fields: ReportFieldDescriptor<TRow>[],
+  filters: ColumnFilters
+): ColumnFilters {
+  const filterColumnByFieldId = new Map(fields.map((field) => [field.id, field.filterColumnId ?? field.id]));
+  const next: ColumnFilters = {};
+
+  for (const [columnId, filter] of Object.entries(filters)) {
+    next[filterColumnByFieldId.get(columnId) ?? columnId] = filter;
+  }
+
+  return next;
+}
+
+function resolveColumnFilterOptions<TRow>(
+  fields: ReportFieldDescriptor<TRow>[],
+  filterOptions: ColumnFilterOptions
+): ColumnFilterOptions {
+  return Object.fromEntries(
+    fields.map((field) => [
+      field.id,
+      filterOptions[field.id] ?? (field.filterColumnId ? filterOptions[field.filterColumnId] : undefined) ?? []
+    ])
   );
 }
 

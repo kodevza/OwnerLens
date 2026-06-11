@@ -79,7 +79,7 @@ test("loads Zero Trust Assessment report metadata and tests", async () => {
 
   await waitForText(container, "Require MFA for administrators");
 
-  expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/data/zeroTrustAssessment/report?page=1");
+  expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/data/zeroTrustAssessment/report?page=1&count=20");
   expect(getButton("Sort by Test ID").textContent).toContain("Test ID");
   expect(getButton("Sort by Related objects").textContent).toContain("Related objects");
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
@@ -187,7 +187,7 @@ function jsonResponse(body: ZtaReport): Response {
       rows: body.Tests,
       columns: [],
       page: 1,
-      pageSize: 50,
+      pageSize: 20,
       count: body.Tests.length,
       ...body
     }),

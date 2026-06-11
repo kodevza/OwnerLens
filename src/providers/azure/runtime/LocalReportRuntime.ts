@@ -13,7 +13,11 @@ import type { ServicePrincipal } from "../../../core/azure/entra/servicePrincipa
 import type { ZtaReport, ZtaReportTest } from "../../../core/azure/ztaReport";
 import type { AzureIdentityEnrichmentStatus } from "./enrichment/azureIdentityEnrichment";
 import { EntraCollectionQueryService } from "./entra/EntraCollectionQueryService";
-import { LocalEntraReportRuntime, type LocalEntraReportCollectionId } from "./entra/LocalEntraReportRuntime";
+import {
+  LocalEntraReportRuntime,
+  type EntraPrincipalPermissions,
+  type LocalEntraReportCollectionId
+} from "./entra/LocalEntraReportRuntime";
 import type { EntraDuckDbImportStatus } from "./entra/snapshotStore";
 import {
   AzureResourcesCollectionQueryService,
@@ -208,6 +212,11 @@ export class LocalReportRuntime {
     return this.entraQueries.queryAppRoleAssignments(options);
   }
 
+  async readEntraPrincipalPermissions(principalId: string): Promise<EntraPrincipalPermissions> {
+    await this.initialize();
+    return this.entra.readEntraPrincipalPermissions(principalId);
+  }
+
   async queryAzureSubscriptions(
     options: LocalReportCollectionQueryOptions
   ): Promise<LocalReportPaginatedCollection<"azureResources.subscriptions">> {
@@ -248,6 +257,14 @@ export class LocalReportRuntime {
   ): Promise<LocalReportPaginatedCollection<"azureResources.roleAssignments">> {
     await this.initialize();
     return this.azureResourcesQueries.queryRoleAssignments(options);
+  }
+
+  async queryAzureRbac(
+    servicePrincipalId: string,
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureRbac">> {
+    await this.initialize();
+    return this.azureResourcesQueries.queryAzureRbac(servicePrincipalId, options);
   }
 
   async queryAzureActivityLogs(

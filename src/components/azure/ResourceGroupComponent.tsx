@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 
 import type { AzureResourceTags, ResourceGroupOwnershipRow } from "../../core/azure/resources";
+import { appConfig } from "../../core/config";
+import type { OwnerConfidence } from "../../core/ownership/types";
 import type { OwnerEvidence } from "../../report/types";
 import { azureOwnerColumnHelp } from "./azureReportConfig";
 import { readResourceGroups, updateDisabledOwnerEvidence } from "./api";
@@ -11,6 +13,13 @@ import { Card } from "../../report/components/ui/card";
 import { getOwnerEvidenceKey, isActivityOwnerRow } from "../../report/ownerManualPrecheck";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
+
+const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];
+const resourceGroupOwnerSourceOptions = [
+  ...appConfig.azure.ownership.ownerTags.map((tag) => `tag.${tag.name}`),
+  "activity.lastModifier",
+  "none"
+];
 
 const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = [
   {
@@ -39,14 +48,14 @@ const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = 
     label: "Confidence",
     valueType: "ownerConfidence",
     getValue: (group) => group.confidence,
-    filter: { kind: "multiSelect" }
+    filter: { kind: "multiSelect", options: ownerConfidenceOptions }
   },
   {
     id: "source",
     label: "Source",
     valueType: "text",
     getValue: (group) => group.source,
-    filter: { kind: "multiSelect" }
+    filter: { kind: "multiSelect", options: resourceGroupOwnerSourceOptions }
   },
   {
     id: "evidence",
@@ -60,7 +69,7 @@ const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = 
     label: "Location",
     valueType: "text",
     getValue: (group) => group.location,
-    filter: { kind: "multiSelect" }
+    filter: { kind: "text" }
   },
   {
     id: "subscriptionId",

@@ -12,6 +12,10 @@ export function renderReportValue<TRow>(
   const value = field.getValue(row);
 
   if (field.valueType === "riskLevel") {
+    if (value === null || value === undefined || value === "") {
+      return "";
+    }
+
     return <PermissionRiskBadge riskLevel={value as PermissionRiskLevel} />;
   }
 

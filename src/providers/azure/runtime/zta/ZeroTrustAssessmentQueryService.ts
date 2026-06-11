@@ -82,11 +82,22 @@ function applyRelatedObjectFilters(
     return tests;
   }
 
-  return tests.filter((test) => {
-    const searchableValue = formatRelatedObjectsSearchValue(test.RelatedObjects ?? []).toLocaleLowerCase();
-    return activeFilters.every((values) =>
-      values.some((value) => searchableValue.includes(value.toLocaleLowerCase()))
+  return tests.flatMap((test) => {
+    const relatedObjects = test.RelatedObjects ?? [];
+    const matchingRelatedObjects = relatedObjects.filter((relatedObject) =>
+      matchesRelatedObjectFilters(relatedObject, activeFilters)
     );
+
+    if (matchingRelatedObjects.length === 0) {
+      return [];
+    }
+
+    return [
+      {
+        ...test,
+        RelatedObjects: matchingRelatedObjects
+      }
+    ];
   });
 }
 
@@ -94,12 +105,18 @@ function formatRelatedObjectsSearchValue(relatedObjects: ZtaRelatedObject[]): st
   return relatedObjects
     .flatMap((relatedObject) => [
       relatedObject.servicePrincipalId,
+      ...(relatedObject.tags ?? []),
       relatedObject.applicationId,
       relatedObject.id,
       relatedObject.displayName
     ])
     .filter(isNonEmptyString)
     .join(" ");
+}
+
+function matchesRelatedObjectFilters(relatedObject: ZtaRelatedObject, filters: string[][]): boolean {
+  const searchableValue = formatRelatedObjectsSearchValue([relatedObject]).toLocaleLowerCase();
+  return filters.every((values) => values.some((value) => searchableValue.includes(value.toLocaleLowerCase())));
 }
 
 function isNonEmptyString(value: unknown): value is string {

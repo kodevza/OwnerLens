@@ -65,7 +65,7 @@ flowchart TD
 ## Install
 
 ```bash
-npm install
+npx ownerlens start
 ```
 
 ## Create Snapshot Files
@@ -91,16 +91,24 @@ Connect-MgGraph -TenantId "<tenant-id>" -Scopes "Application.Read.All","Group.Re
 Create the resource snapshot:
 
 ```powershell
-.\tools\prepare-resource-snapshot.ps1
+.\tools\collect-azure.ps1
 ```
 
 Create the Entra snapshot:
 
 ```powershell
-.\tools\prepare-entra-snapshot.ps1
+.\tools\collect-entra.ps1
 ```
 
 More script options are documented in [tools/README.md](tools/README.md).
+
+You can also run the collectors through npm, which is the same entrypoint that
+will be used after publishing the package:
+
+```bash
+npm run collect:azure -- -SubscriptionIds "sub-id-1,sub-id-2"
+npm run collect:entra -- -TenantId "<tenant-id>"
+```
 
 Snapshot files can contain tenant, subscription, resource, identity, group, and
 activity-log metadata. Review them before sharing. Files matching

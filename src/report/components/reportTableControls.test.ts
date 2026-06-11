@@ -101,7 +101,8 @@ test("applies descriptor-backed ownership and permission risk filters through ta
       valueType: "text",
       getValue: (row) => row.ownership,
       filter: {
-        kind: "multiSelect"
+        kind: "multiSelect",
+        options: ["External", "Tenant owned", "Unknown"]
       }
     },
     {
@@ -110,7 +111,8 @@ test("applies descriptor-backed ownership and permission risk filters through ta
       valueType: "riskLevel",
       getValue: (row) => row.risk,
       filter: {
-        kind: "multiSelect"
+        kind: "multiSelect",
+        options: ["high", "low", "none"]
       }
     }
   ];
@@ -125,4 +127,49 @@ test("applies descriptor-backed ownership and permission risk filters through ta
     "tenant-low"
   ]);
   expect(result.controlledRows.every((row) => ["External", "Tenant owned"].includes(row.ownership))).toBe(true);
+});
+
+test("uses descriptor filter values for options and filtering without changing display values", () => {
+  const fields: ReportFieldDescriptor<Row>[] = [
+    {
+      id: "riskSummary",
+      label: "Risk summary",
+      valueType: "text",
+      getValue: (row) => `Rendered ${row.risk}`,
+      getFilterValue: (row) => row.risk,
+      filter: {
+        kind: "multiSelect",
+        options: ["high", "low", "none"]
+      }
+    }
+  ];
+
+  const result = applyReportTableControls(rows, fields, {
+    riskSummary: { type: "values", values: ["high"] }
+  });
+
+  expect(result.filterOptions.riskSummary).toEqual(["high", "low", "none"]);
+  expect(result.controlledRows.map((row) => row.id)).toEqual(["tenant-high", "unknown-high"]);
+});
+
+test("uses configured multiselect options instead of narrowing options to filtered rows", () => {
+  const fields: ReportFieldDescriptor<Row>[] = [
+    {
+      id: "ownership",
+      label: "Ownership",
+      valueType: "text",
+      getValue: (row) => row.ownership,
+      filter: {
+        kind: "multiSelect",
+        options: ["External", "Tenant owned", "Unknown"]
+      }
+    }
+  ];
+
+  const result = applyReportTableControls(rows, fields, {
+    ownership: { type: "values", values: ["External"] }
+  });
+
+  expect(result.controlledRows.map((row) => row.id)).toEqual(["external-low"]);
+  expect(result.filterOptions.ownership).toEqual(["External", "Tenant owned", "Unknown"]);
 });

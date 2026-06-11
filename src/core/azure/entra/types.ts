@@ -1,3 +1,5 @@
+import type { PermissionRiskLevel } from "../../risk/types";
+
 export type ServicePrincipalType = "Application" | "ManagedIdentity" | "SocialIdp" | "Legacy";
 
 export type ServicePrincipalAppRole = {
@@ -37,6 +39,16 @@ export type EntraServicePrincipal = {
   servicePrincipalOwners?: ServicePrincipalOwner[];
   applicationOwners?: ServicePrincipalOwner[];
   metadata?: Record<string, unknown> | null;
+};
+
+export type EntraOAuth2PermissionGrant = {
+  id: string;
+  clientId: string;
+  consentType: "Principal" | "AllPrincipals" | string;
+  principalId: string | null;
+  resourceId: string;
+  risk: PermissionRiskLevel;
+  scope: string;
 };
 
 export type EntraAppRole = ServicePrincipalAppRole;

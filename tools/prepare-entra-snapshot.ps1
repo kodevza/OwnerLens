@@ -2,8 +2,17 @@ param(
   [string]$OutputPath = ".\data\entra-snapshot.json"
 )
 
-if (-not (Get-Command Get-MgContext -ErrorAction SilentlyContinue)) {
-  throw "Microsoft Graph PowerShell module missing. Install: Install-Module Microsoft.Graph -Scope CurrentUser"
+$requiredGraphModules = @(
+  "Microsoft.Graph.Authentication",
+  "Microsoft.Graph.Applications"
+)
+
+foreach ($moduleName in $requiredGraphModules) {
+  try {
+    Import-Module $moduleName -ErrorAction Stop
+  } catch {
+    throw "Microsoft Graph PowerShell module missing: $moduleName. Install: Install-Module Microsoft.Graph -Scope CurrentUser"
+  }
 }
 
 $context = Get-MgContext
@@ -164,6 +173,32 @@ function ConvertTo-ApplicationAppRoleSnapshot {
   }
 }
 
+$oauth2PermissionGrantIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+function Add-OAuth2PermissionGrantSnapshot {
+  param(
+    [Parameter(Mandatory = $true)]
+    $Grant
+  )
+
+  if ([string]::IsNullOrWhiteSpace([string]$Grant.Id)) {
+    return
+  }
+
+  if (-not $oauth2PermissionGrantIds.Add([string]$Grant.Id)) {
+    return
+  }
+
+  $snapshot.oauth2PermissionGrants += [pscustomobject]@{
+    id = $Grant.Id
+    clientId = $Grant.ClientId
+    consentType = $Grant.ConsentType
+    principalId = $Grant.PrincipalId
+    resourceId = $Grant.ResourceId
+    scope = $Grant.Scope
+  }
+}
+
 $servicePrincipals = Get-MgServicePrincipal `
   -All `
   -Property Id,AppId,DisplayName,ServicePrincipalType,PublisherName,AccountEnabled,AppOwnerOrganizationId,AppDisplayName,Homepage,LoginUrl,ReplyUrls,ServicePrincipalNames,Tags,AppRoles
@@ -251,16 +286,32 @@ foreach ($app in $applications) {
   }
 }
 
-$oauth2PermissionGrants = Get-MgOauth2PermissionGrant -All
+$globalOAuth2PermissionGrantCommand = Get-Command Get-MgOauth2PermissionGrant -ErrorAction SilentlyContinue
 
-foreach ($grant in $oauth2PermissionGrants) {
-  $snapshot.oauth2PermissionGrants += [pscustomobject]@{
-    id = $grant.Id
-    clientId = $grant.ClientId
-    consentType = $grant.ConsentType
-    principalId = $grant.PrincipalId
-    resourceId = $grant.ResourceId
-    scope = $grant.Scope
+if ($globalOAuth2PermissionGrantCommand) {
+  try {
+    $oauth2PermissionGrants = Get-MgOauth2PermissionGrant `
+      -All `
+      -Property Id,ClientId,ConsentType,PrincipalId,ResourceId,Scope `
+      -ErrorAction Stop
+
+    foreach ($grant in $oauth2PermissionGrants) {
+      Add-OAuth2PermissionGrantSnapshot -Grant $grant
+    }
+  } catch {
+    Write-Warning "Global OAuth2 permission grant query failed. Falling back to per-service-principal queries. $($_.Exception.Message)"
+  }
+}
+
+foreach ($sp in $servicePrincipals) {
+  $servicePrincipalOauth2PermissionGrants = Get-MgServicePrincipalOauth2PermissionGrant `
+    -ServicePrincipalId $sp.Id `
+    -All `
+    -Property Id,ClientId,ConsentType,PrincipalId,ResourceId,Scope `
+    -ErrorAction Stop
+
+  foreach ($grant in $servicePrincipalOauth2PermissionGrants) {
+    Add-OAuth2PermissionGrantSnapshot -Grant $grant
   }
 }
 
@@ -290,40 +341,51 @@ foreach ($sp in $servicePrincipals) {
   }
 }
 
-$groups = Get-MgGroup `
-  -All `
-  -Property Id,DisplayName,Description,Mail,MailEnabled,SecurityEnabled,GroupTypes,ProxyAddresses,Visibility
+$canReadGroups = $false
 
-foreach ($group in $groups) {
-  $members = Get-MgGroupMember `
-    -GroupId $group.Id `
-    -All
+try {
+  Import-Module Microsoft.Graph.Groups -ErrorAction Stop
+  $canReadGroups = $true
+} catch {
+  Write-Warning "Microsoft.Graph.Groups could not be loaded. Skipping group snapshot. $($_.Exception.Message)"
+}
 
-  $memberEmails = @(
-    $members | ForEach-Object {
-      $mail = $_.AdditionalProperties["mail"]
-      $userPrincipalName = $_.AdditionalProperties["userPrincipalName"]
+if ($canReadGroups) {
+  $groups = Get-MgGroup `
+    -All `
+    -Property Id,DisplayName,Description,Mail,MailEnabled,SecurityEnabled,GroupTypes,ProxyAddresses,Visibility
 
-      if ($mail) {
-        $mail
-      } elseif ($userPrincipalName) {
-        $userPrincipalName
-      }
-    } | Where-Object { $_ } | Select-Object -Unique
-  )
+  foreach ($group in $groups) {
+    $members = Get-MgGroupMember `
+      -GroupId $group.Id `
+      -All
 
-  $snapshot.groups += [pscustomobject]@{
-    id = $group.Id
-    displayName = $group.DisplayName
-    description = $group.Description
-    mail = $group.Mail
-    mailEnabled = $group.MailEnabled
-    securityEnabled = $group.SecurityEnabled
-    groupTypes = $group.GroupTypes
-    proxyAddresses = $group.ProxyAddresses
-    visibility = $group.Visibility
-    memberEmails = $memberEmails
-    memberEmailCount = $memberEmails.Count
+    $memberEmails = @(
+      $members | ForEach-Object {
+        $mail = $_.AdditionalProperties["mail"]
+        $userPrincipalName = $_.AdditionalProperties["userPrincipalName"]
+
+        if ($mail) {
+          $mail
+        } elseif ($userPrincipalName) {
+          $userPrincipalName
+        }
+      } | Where-Object { $_ } | Select-Object -Unique
+    )
+
+    $snapshot.groups += [pscustomobject]@{
+      id = $group.Id
+      displayName = $group.DisplayName
+      description = $group.Description
+      mail = $group.Mail
+      mailEnabled = $group.MailEnabled
+      securityEnabled = $group.SecurityEnabled
+      groupTypes = $group.GroupTypes
+      proxyAddresses = $group.ProxyAddresses
+      visibility = $group.Visibility
+      memberEmails = $memberEmails
+      memberEmailCount = $memberEmails.Count
+    }
   }
 }
 

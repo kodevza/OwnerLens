@@ -30,7 +30,8 @@ const fields: ReportFieldDescriptor<Row>[] = [
     valueType: "riskLevel",
     getValue: (row) => row.risk,
     filter: {
-      kind: "multiSelect"
+      kind: "multiSelect",
+      options: ["high", "low", "none"]
     }
   }
 ];

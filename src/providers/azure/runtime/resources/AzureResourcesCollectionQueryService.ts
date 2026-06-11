@@ -1,5 +1,8 @@
+import { mapRoleAssignmentToAzureRbac } from "../../../../core/azure/azureRbac";
+import type { AzureRbac } from "../../../../core/azure/azureRbac";
 import type { ResourceGroupOwnershipRow } from "../../../../core/azure/resources";
 
+import { evaluateAzureRoleAssignmentRisk } from "../enrichment/evaluateAzureRoleAssignmentRisk";
 import { buildAzureOwnershipReport } from "../../ownership/buildAzureOwnershipReport";
 import {
   buildPaginatedCollection,
@@ -19,7 +22,8 @@ import {
 
 export type LocalAzureResourcesExtendedCollectionId =
   | LocalAzureResourcesReportCollectionId
-  | "azureResources.resourceGroupOwnership";
+  | "azureResources.resourceGroupOwnership"
+  | "azureRbac";
 
 export type AzureResourcesCollectionQueryServiceOptions = {
   entra: LocalEntraReportRuntime;
@@ -98,6 +102,17 @@ export class AzureResourcesCollectionQueryService {
     );
   }
 
+  async queryAzureRbac(
+    servicePrincipalId: string,
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureRbac">> {
+    return buildPaginatedCollection(
+      "azureRbac",
+      (await this.readAzureRbacRows(servicePrincipalId)) as unknown as Record<string, unknown>[],
+      options
+    );
+  }
+
   async queryActivityLogs(
     options: LocalReportCollectionQueryOptions
   ): Promise<LocalReportPaginatedCollection<"azureResources.activityLogs">> {
@@ -118,5 +133,13 @@ export class AzureResourcesCollectionQueryService {
     const ownerRows = applyResourceGroupOwnerDisabledEvidence(ownerReport.owners, disabledKeys);
 
     return buildResourceGroupOwnershipRows(resourceSnapshot.resourceGroups, ownerRows);
+  }
+
+  private async readAzureRbacRows(servicePrincipalId: string): Promise<AzureRbac[]> {
+    const normalizedServicePrincipalId = servicePrincipalId.trim().toLowerCase();
+
+    return (await this.azureResources.readAzureRoleAssignments())
+      .filter((assignment) => assignment.principalId.toLowerCase() === normalizedServicePrincipalId)
+      .map((assignment) => mapRoleAssignmentToAzureRbac(assignment, evaluateAzureRoleAssignmentRisk(assignment).riskLevel));
   }
 }

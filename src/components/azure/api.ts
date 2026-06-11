@@ -1,7 +1,10 @@
 import type { ManagedIdentity } from "../../core/azure/entra/managedIdentity";
 import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
+import type { EntraOAuth2PermissionGrant } from "../../core/azure/entra/types";
+import type { AzureRbac } from "../../core/azure/azureRbac";
 import type { ResourceGroupOwnershipRow } from "../../core/azure/resources";
 import type { ZtaReport } from "../../core/azure/ztaReport";
+import type { EntraAppRoleAssignment } from "../../providers/azure/inputTransferObject/entra/EntraAppRoleAssignment";
 import type { ColumnFilters } from "../../report/components/reportTableControls";
 import { appendRuntimeCollectionFilters } from "../../report/runtimeCollectionQuery";
 
@@ -32,6 +35,21 @@ type ResourceGroupRuntimeResponse = {
   count: number;
 };
 
+type AzureRbacRuntimeResponse = {
+  collectionId: "azureRbac";
+  rows: AzureRbac[];
+  columns: string[];
+  page: number;
+  pageSize: number;
+  count: number;
+};
+
+export type EntraPrincipalPermissionsResponse = {
+  principalId: string;
+  oauth2PermissionGrants: EntraOAuth2PermissionGrant[];
+  appRoleAssignments: EntraAppRoleAssignment[];
+};
+
 type ZeroTrustAssessmentRuntimeResponse = ZtaReport & {
   collectionId: "zeroTrustAssessment.report";
   rows: ZtaReport["Tests"];
@@ -41,7 +59,7 @@ type ZeroTrustAssessmentRuntimeResponse = ZtaReport & {
   count: number;
 };
 
-const pageSize = 50;
+const remotePageSize = 20;
 
 export async function readServicePrincipals({
   filters,
@@ -54,7 +72,7 @@ export async function readServicePrincipals({
 }): Promise<ServicePrincipalRuntimeResponse> {
   const url = new URL("/api/data/entra/servicePrincipals", window.location.origin);
   url.searchParams.set("page", String(page));
-  url.searchParams.set("count", String(pageSize));
+  url.searchParams.set("count", String(remotePageSize));
   appendRuntimeCollectionFilters(url, filters);
 
   const response = await fetch(`${url.pathname}${url.search}`, { signal });
@@ -76,7 +94,7 @@ export async function readManagedIdentities({
 }): Promise<ManagedIdentityRuntimeResponse> {
   const url = new URL("/api/data/entra/managedIdentities", window.location.origin);
   url.searchParams.set("page", String(page));
-  url.searchParams.set("count", String(pageSize));
+  url.searchParams.set("count", String(remotePageSize));
   appendRuntimeCollectionFilters(url, filters);
 
   const response = await fetch(`${url.pathname}${url.search}`, { signal });
@@ -98,7 +116,7 @@ export async function readResourceGroups({
 }): Promise<ResourceGroupRuntimeResponse> {
   const url = new URL("/api/data/azureResources/resourceGroupOwnership", window.location.origin);
   url.searchParams.set("page", String(page));
-  url.searchParams.set("count", String(pageSize));
+  url.searchParams.set("count", String(remotePageSize));
   appendRuntimeCollectionFilters(url, filters);
 
   const response = await fetch(`${url.pathname}${url.search}`, { signal });
@@ -109,10 +127,53 @@ export async function readResourceGroups({
   return (await response.json()) as ResourceGroupRuntimeResponse;
 }
 
+export async function readAzureRbac({
+  filters,
+  page,
+  servicePrincipalId,
+  signal
+}: {
+  filters: ColumnFilters;
+  page: number;
+  servicePrincipalId: string;
+  signal: AbortSignal;
+}): Promise<AzureRbacRuntimeResponse> {
+  const url = new URL("/api/data/azureRbac", window.location.origin);
+  url.searchParams.set("servicePrincipalId", servicePrincipalId);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("count", String(remotePageSize));
+  appendRuntimeCollectionFilters(url, filters);
+
+  const response = await fetch(`${url.pathname}${url.search}`, { signal });
+  if (!response.ok) {
+    throw new Error(`Azure RBAC read failed: ${response.status}`);
+  }
+
+  return (await response.json()) as AzureRbacRuntimeResponse;
+}
+
+export async function readEntraPermissions({
+  principalId,
+  signal
+}: {
+  principalId: string;
+  signal: AbortSignal;
+}): Promise<EntraPrincipalPermissionsResponse> {
+  const url = new URL("/api/data/entra/permissions", window.location.origin);
+  url.searchParams.set("principalId", principalId);
+
+  const response = await fetch(`${url.pathname}${url.search}`, { signal });
+  if (!response.ok) {
+    throw new Error(`Entra permissions read failed: ${response.status}`);
+  }
+
+  return (await response.json()) as EntraPrincipalPermissionsResponse;
+}
+
 export async function readZeroTrustAssessmentReport({
   filters = {},
   page,
-  pageSize,
+  pageSize = remotePageSize,
   signal
 }: {
   filters?: ColumnFilters;

@@ -189,7 +189,7 @@ export function ReportTableHead<TRow>({
         const options = filterOptions[column.id] ?? [];
         const filter = filters[column.id];
         const shouldUseMultiselect =
-          column.filter === "multiselect" ||
+          (column.filter === "multiselect" && options.length > 0) ||
           (column.filter !== "text" && options.length > 0 && options.length <= maxMultiselectOptions);
 
         return (
@@ -343,6 +343,7 @@ function ColumnValueFilter<TRow>({
   onValueToggle: (columnId: string, value: string, checked: boolean) => void;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [menuPosition, setMenuPosition] = useState<{
     left: number;
     top: number;
@@ -399,6 +400,30 @@ function ColumnValueFilter<TRow>({
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    function handleDocumentMouseDown(event: MouseEvent) {
+      if (!(event.target instanceof Node)) {
+        return;
+      }
+
+      if (triggerRef.current?.contains(event.target) || menuRef.current?.contains(event.target)) {
+        return;
+      }
+
+      onOpenChange(column.id, false);
+    }
+
+    document.addEventListener("mousedown", handleDocumentMouseDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentMouseDown);
+    };
+  }, [column.id, isOpen, onOpenChange]);
+
   return (
     <div className="relative">
       <Button
@@ -418,6 +443,7 @@ function ColumnValueFilter<TRow>({
       {isOpen && menuPosition && typeof document !== "undefined"
         ? createPortal(
             <div
+              ref={menuRef}
               className="fixed z-[100] rounded-md border border-border bg-card p-2 text-xs text-foreground shadow-lg"
               style={{
                 left: menuPosition.left,

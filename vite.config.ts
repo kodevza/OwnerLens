@@ -14,6 +14,9 @@ function localReportRuntimeApi(): Plugin {
     name: "ownerlens-local-report-runtime-api",
     configureServer(server) {
       installLocalReportRuntimeRest(server, runtime);
+    },
+    configurePreviewServer(server) {
+      installLocalReportRuntimeRest(server, runtime);
     }
   };
 }

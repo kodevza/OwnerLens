@@ -1,8 +1,27 @@
 {
   "name": "ownerlens",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kodevza/OwnerLens"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "version": "0.1.0",
   "description": "Azure ownership reporting tool for resolving likely owners of subscriptions and resource groups from snapshot data.",
   "license": "Apache-2.0",
+  "bin": {
+    "ownerlens": "./bin/ownerlens.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "index.html",
+    "src",
+    "tools",
+    "vite.config.ts"
+  ],
   "keywords": [
     "azure",
     "entra",
@@ -12,13 +31,15 @@
   ],
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "start": "vite --host 127.0.0.1",
+    "start": "node ./bin/ownerlens.js start",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --host 127.0.0.1",
+    "preview": "node ./bin/ownerlens.js preview",
+    "collect:entra": "node ./bin/ownerlens.js collect:entra",
+    "collect:azure": "node ./bin/ownerlens.js collect:azure",
     "lint": "eslint \"src/**/*.{ts,tsx}\" vite.config.ts",
     "lint:unused": "ts-prune",
-    "test": "jest --runInBand",
+    "test": "node --expose-gc ./node_modules/jest/bin/jest.js --runInBand",
+    "test:all": "npm test && npm run test:components",
     "test:components": "jest --runInBand --config jest.components.config.cjs",
     "test:components:coverage": "npm run test:components -- --coverage",
     "deps:graph:folders:dot": "depcruise src --config .dependency-cruiser.cjs --output-type dot --collapse 4 --include-only '^src' --output-to output/dependency-folders.dot",

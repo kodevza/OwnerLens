@@ -26,8 +26,6 @@ type ActiveFieldFilter<TRow> = {
   filter: ColumnFilter;
 };
 
-const maxAutomaticFilterOptions = 5;
-
 const collator = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: "base"
@@ -46,7 +44,7 @@ export function applyCollectionControls<TRow>(
     sortRules?: SortRule[];
   } = {}
 ) {
-  const filterOptions = buildCollectionFilterOptions(rows, fields);
+  const filterOptions = getConfiguredFilterOptions(fields);
   const searchedRows = applyCollectionSearch(rows, fields, query);
   const activeFilters = buildActiveFieldFilters(fields, filters);
   const filteredRows = applyCollectionFieldFilters(searchedRows, activeFilters);
@@ -60,28 +58,9 @@ export function applyCollectionControls<TRow>(
   };
 }
 
-export function buildCollectionFilterOptions<TRow>(
-  rows: TRow[],
-  fields: ReportFieldDescriptor<TRow>[]
-): ColumnFilterOptions {
+export function getConfiguredFilterOptions<TRow>(fields: ReportFieldDescriptor<TRow>[]): ColumnFilterOptions {
   return Object.fromEntries(
-    fields.map((field) => {
-      const values = new Set<string>();
-
-      for (const row of rows) {
-        const value = formatControlValue(field.getValue(row));
-
-        if (value.length > 0) {
-          values.add(value);
-        }
-
-        if (field.filter?.kind !== "multiSelect" && values.size > maxAutomaticFilterOptions) {
-          break;
-        }
-      }
-
-      return [field.id, [...values].sort((left, right) => collator.compare(left, right))];
-    })
+    fields.map((field) => [field.id, field.filter?.options ? [...field.filter.options] : []])
   );
 }
 
@@ -114,7 +93,7 @@ function applyCollectionFieldFilters<TRow>(
 
   return rows.filter((row) =>
     activeFilters.every(({ field, filter }) => {
-      const fieldValue = formatControlValue(field.getValue(row));
+      const fieldValue = formatControlValue(getFieldFilterValue(field, row));
 
       if (filter.type === "values") {
         return filter.values.includes(fieldValue);
@@ -123,6 +102,10 @@ function applyCollectionFieldFilters<TRow>(
       return matchesSearchExpression(fieldValue, filter.value);
     })
   );
+}
+
+function getFieldFilterValue<TRow>(field: ReportFieldDescriptor<TRow>, row: TRow): unknown {
+  return field.getFilterValue ? field.getFilterValue(row) : field.getValue(row);
 }
 
 function applyCollectionSort<TRow>(

@@ -3,20 +3,40 @@ import { useState } from "react";
 import type { ZtaRelatedObject } from "../../core/azure/ztaReport";
 import type { ColumnFilters } from "../../report/components/reportTableControls";
 import { Tabs, TabsList, TabsTrigger } from "../../report/components/ui/tabs";
+import { AzureRbacComponent } from "./AzureRbacComponent";
+import { ClosableAzureTab } from "./ClosableAzureTab";
+import { EntraPermissionsComponent } from "./EntraPermissionsComponent";
 import { ManagedIdentityComponent } from "./ManagedIdentityComponent";
 import { ResourceGroupComponent } from "./ResourceGroupComponent";
 import { ServicePrincipalComponent } from "./ServicePrincipalComponent";
+import type { AzureRbacPrincipalSelection, EntraPermissionsPrincipalSelection } from "./ServicePrincipalFieldRenderers";
 import { ZtaComponent } from "./ZtaComponent";
 
-type AzureView = "servicePrincipals" | "managedIdentities" | "resourceGroups" | "zeroTrustAssessment";
+type AzureView =
+  | "servicePrincipals"
+  | "managedIdentities"
+  | "resourceGroups"
+  | "zeroTrustAssessment"
+  | "azureRbac"
+  | "entraPermissions";
 
 type PrincipalObjectFilter = {
   objectId: string;
   view: Extract<AzureView, "servicePrincipals" | "managedIdentities">;
 };
 
+type AzureRbacTab = AzureRbacPrincipalSelection & {
+  returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities">;
+};
+
+type EntraPermissionsTab = EntraPermissionsPrincipalSelection & {
+  returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities">;
+};
+
 export function AzureComponent() {
   const [activeView, setActiveView] = useState<AzureView>("servicePrincipals");
+  const [azureRbacTab, setAzureRbacTab] = useState<AzureRbacTab | null>(null);
+  const [entraPermissionsTab, setEntraPermissionsTab] = useState<EntraPermissionsTab | null>(null);
   const [principalObjectFilter, setPrincipalObjectFilter] = useState<PrincipalObjectFilter | null>(null);
   const [ztaRelatedObjectFilter, setZtaRelatedObjectFilter] = useState<string | null>(null);
 
@@ -36,35 +56,108 @@ export function AzureComponent() {
     setActiveView("zeroTrustAssessment");
   }
 
+  function openAzureRbac(
+    principal: AzureRbacPrincipalSelection,
+    returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities">
+  ) {
+    setAzureRbacTab({ ...principal, returnView });
+    setActiveView("azureRbac");
+  }
+
+  function openEntraPermissions(
+    principal: EntraPermissionsPrincipalSelection,
+    returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities">
+  ) {
+    setEntraPermissionsTab({ ...principal, returnView });
+    setActiveView("entraPermissions");
+  }
+
+  function closeAzureRbac() {
+    const nextView = azureRbacTab?.returnView ?? "servicePrincipals";
+    setAzureRbacTab(null);
+    if (activeView === "azureRbac") {
+      setActiveView(nextView);
+    }
+  }
+
+  function closeEntraPermissions() {
+    const nextView = entraPermissionsTab?.returnView ?? "servicePrincipals";
+    setEntraPermissionsTab(null);
+    if (activeView === "entraPermissions") {
+      setActiveView(nextView);
+    }
+  }
+
   return (
-    <section className="flex flex-col gap-4">
-      <Tabs value={activeView} onValueChange={(value) => setActiveView(value as AzureView)}>
-        <TabsList aria-label="Azure data">
-          <TabsTrigger value="resourceGroups">Resource groups</TabsTrigger>
-          <TabsTrigger value="servicePrincipals">Service principals</TabsTrigger>
-          <TabsTrigger value="managedIdentities">Managed identities</TabsTrigger>
-          <TabsTrigger value="zeroTrustAssessment">Zero Trust Assessment</TabsTrigger>
+    <section className="flex flex-col">
+      <Tabs className="relative z-10 -mb-px gap-0" value={activeView} onValueChange={(value) => setActiveView(value as AzureView)}>
+        <TabsList aria-label="Azure data" className="w-fit max-w-full items-end gap-1 rounded-none bg-transparent p-0 shadow-none">
+          <TabsTrigger className={azureTabTriggerClassName} value="resourceGroups">
+            Resource groups
+          </TabsTrigger>
+          <TabsTrigger className={azureTabTriggerClassName} value="servicePrincipals">
+            Service principals
+          </TabsTrigger>
+          <TabsTrigger className={azureTabTriggerClassName} value="managedIdentities">
+            Managed identities
+          </TabsTrigger>
+          <TabsTrigger className={azureTabTriggerClassName} value="zeroTrustAssessment">
+            Zero Trust Assessment
+          </TabsTrigger>
+          {azureRbacTab ? (
+            <ClosableAzureTab
+              active={activeView === "azureRbac"}
+              closeLabel={`Close ${azureRbacTab.displayName} Azure RBAC tab`}
+              label={azureRbacTab.displayName}
+              onClose={closeAzureRbac}
+              value="azureRbac"
+            />
+          ) : null}
+          {entraPermissionsTab ? (
+            <ClosableAzureTab
+              active={activeView === "entraPermissions"}
+              closeLabel={`Close ${entraPermissionsTab.displayName} Entra permissions tab`}
+              label={`${entraPermissionsTab.displayName} permissions`}
+              onClose={closeEntraPermissions}
+              value="entraPermissions"
+            />
+          ) : null}
         </TabsList>
       </Tabs>
-      {activeView === "resourceGroups" ? <ResourceGroupComponent /> : null}
-      {activeView === "servicePrincipals" ? (
-        <ServicePrincipalComponent
-          initialFilters={getPrincipalObjectFilters(principalObjectFilter, "servicePrincipals")}
-          onZtaRemediationsClick={openZtaRelatedObject}
-        />
-      ) : null}
-      {activeView === "managedIdentities" ? (
-        <ManagedIdentityComponent
-          initialFilters={getPrincipalObjectFilters(principalObjectFilter, "managedIdentities")}
-          onZtaRemediationsClick={openZtaRelatedObject}
-        />
-      ) : null}
-      {activeView === "zeroTrustAssessment" ? (
-        <ZtaComponent initialFilters={getZtaRelatedObjectFilters(ztaRelatedObjectFilter)} onRelatedObjectClick={openRelatedPrincipal} />
-      ) : null}
+      <div className="relative z-0">
+        {activeView === "resourceGroups" ? <ResourceGroupComponent /> : null}
+        {activeView === "servicePrincipals" ? (
+          <ServicePrincipalComponent
+            initialFilters={getPrincipalObjectFilters(principalObjectFilter, "servicePrincipals")}
+            onAzureRbacClick={(principal) => openAzureRbac(principal, "servicePrincipals")}
+            onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "servicePrincipals")}
+            onZtaRemediationsClick={openZtaRelatedObject}
+          />
+        ) : null}
+        {activeView === "managedIdentities" ? (
+          <ManagedIdentityComponent
+            initialFilters={getPrincipalObjectFilters(principalObjectFilter, "managedIdentities")}
+            onAzureRbacClick={(principal) => openAzureRbac(principal, "managedIdentities")}
+            onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "managedIdentities")}
+            onZtaRemediationsClick={openZtaRelatedObject}
+          />
+        ) : null}
+        {activeView === "zeroTrustAssessment" ? (
+          <ZtaComponent initialFilters={getZtaRelatedObjectFilters(ztaRelatedObjectFilter)} onRelatedObjectClick={openRelatedPrincipal} />
+        ) : null}
+        {activeView === "azureRbac" && azureRbacTab ? (
+          <AzureRbacComponent key={azureRbacTab.objectId} servicePrincipalId={azureRbacTab.objectId} />
+        ) : null}
+        {activeView === "entraPermissions" && entraPermissionsTab ? (
+          <EntraPermissionsComponent key={entraPermissionsTab.objectId} principalId={entraPermissionsTab.objectId} />
+        ) : null}
+      </div>
     </section>
   );
 }
+
+const azureTabTriggerClassName =
+  "rounded-b-none border border-transparent border-b-border bg-muted/70 shadow-none hover:bg-muted data-[state=active]:border-border data-[state=active]:border-b-card data-[state=active]:bg-card data-[state=active]:shadow-none";
 
 function getZtaRelatedObjectFilters(objectId: string | null): ColumnFilters | undefined {
   if (!objectId) {

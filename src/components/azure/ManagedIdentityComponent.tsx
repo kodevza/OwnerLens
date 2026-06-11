@@ -1,13 +1,22 @@
 import { useMemo } from "react";
 
 import type { ManagedIdentity } from "../../core/azure/entra/managedIdentity";
+import type { OwnerConfidence } from "../../core/ownership/types";
+import type { PermissionRiskLevel } from "../../core/risk/types";
 import { azureManagedIdentityColumnHelp } from "./azureReportConfig";
-import { buildServicePrincipalRuntimeFilterOptions } from "./servicePrincipalRuntimeFilters";
 import { readManagedIdentities } from "./api";
 import { GenericTable } from "../../report/components/GenericTable";
 import type { ColumnFilters } from "../../report/components/reportTableControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
-import { buildServicePrincipalFieldRenderers } from "./ServicePrincipalFieldRenderers";
+import {
+  buildServicePrincipalFieldRenderers,
+  type AzureRbacPrincipalSelection,
+  type EntraPermissionsPrincipalSelection
+} from "./ServicePrincipalFieldRenderers";
+
+const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
+const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];
+const accountEnabledOptions = ["true", "false"];
 
 const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
   {
@@ -22,28 +31,34 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
     label: "Risk",
     valueType: "riskLevel",
     getValue: (identity) => identity.permissionRisk,
-    filter: { kind: "multiSelect" }
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
     id: "ztaRemediationCountAll",
     label: "ZTA remediations",
     valueType: "number",
     getValue: (identity) => identity.ztaRemediationCountAll,
-    filter: { kind: "text" }
+    getFilterValue: (identity) => identity.ztaMaxRisk,
+    filterColumnId: "ztaMaxRisk",
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
     id: "azureRbac",
     label: "Azure RBAC",
     valueType: "text",
     getValue: (identity) => identity.azureRbac,
-    filter: { kind: "text" }
+    getFilterValue: (identity) => identity.rbacRoleLevel,
+    filterColumnId: "rbacRoleLevel",
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
     id: "oauthPemrissionsCount",
     label: "Entra permissions",
     valueType: "number",
     getValue: (identity) => identity.oauthPemrissionsCount,
-    filter: { kind: "text" }
+    getFilterValue: (identity) => identity.entraPermissionRisk,
+    filterColumnId: "entraPermissionRisk",
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
     id: "assignedResourceGroups",
@@ -64,14 +79,14 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
     label: "Owner confidence",
     valueType: "ownerConfidence",
     getValue: (identity) => identity.ownerConfidence ?? "none",
-    filter: { kind: "multiSelect" }
+    filter: { kind: "multiSelect", options: ownerConfidenceOptions }
   },
   {
     id: "accountEnabled",
     label: "Enabled",
     valueType: "boolean",
     getValue: (identity) => identity.accountEnabled,
-    filter: { kind: "multiSelect" }
+    filter: { kind: "multiSelect", options: accountEnabledOptions }
   },
   {
     id: "id",
@@ -91,19 +106,27 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
 
 export function ManagedIdentityComponent({
   initialFilters,
+  onAzureRbacClick,
+  onEntraPermissionsClick,
   onZtaRemediationsClick
 }: {
   initialFilters?: ColumnFilters;
+  onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
+  onEntraPermissionsClick?: (principal: EntraPermissionsPrincipalSelection) => void;
   onZtaRemediationsClick?: (objectId: string) => void;
 }) {
   const fieldRenderers = useMemo(
-    () => buildServicePrincipalFieldRenderers<ManagedIdentity>({ onZtaRemediationsClick }),
-    [onZtaRemediationsClick]
+    () =>
+      buildServicePrincipalFieldRenderers<ManagedIdentity>({
+        onAzureRbacClick,
+        onEntraPermissionsClick,
+        onZtaRemediationsClick
+      }),
+    [onAzureRbacClick, onEntraPermissionsClick, onZtaRemediationsClick]
   );
 
   return (
     <GenericTable
-      buildFilterOptions={buildServicePrincipalRuntimeFilterOptions}
       columnHelp={azureManagedIdentityColumnHelp}
       emptyMessage="No managed identities match the filter."
       fieldRenderers={fieldRenderers}
