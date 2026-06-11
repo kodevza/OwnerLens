@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
+import { mkdirSync, readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +9,9 @@ import { fileURLToPath } from "node:url";
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const require = createRequire(import.meta.url);
 const [, , command = "help", ...args] = process.argv;
+
+const dataDir = ensureDataDirectory();
+printDataDirectorySummary(dataDir);
 
 const commands = new Map([
   ["collect:entra", "collect-entra.ps1"],
@@ -123,6 +127,42 @@ function commandExists(name) {
   });
 
   return result.status === 0;
+}
+
+function ensureDataDirectory() {
+  const dataDir = join(packageRoot, "data");
+
+  try {
+    if (statSync(dataDir, { throwIfNoEntry: false })?.isDirectory()) {
+      return dataDir;
+    }
+
+    mkdirSync(dataDir, { recursive: true });
+    return dataDir;
+  } catch (error) {
+    console.error(`Could not create ./data directory: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+}
+
+function printDataDirectorySummary(dataDir) {
+  console.log(`Working data directory: ./data`);
+  console.log("Depth 1 data files:");
+
+  const entries = readdirSync(dataDir, { withFileTypes: true })
+    .map((entry) => `${entry.isDirectory() ? "d" : "f"} ./data/${entry.name}`)
+    .sort();
+
+  if (entries.length === 0) {
+    console.log("  (empty)");
+  } else {
+    for (const entry of entries) {
+      console.log(`  ${entry}`);
+    }
+  }
+
+  console.log("OwnerLens will read local snapshots and runtime state from ./data.");
+  console.log("");
 }
 
 function printHelp() {
