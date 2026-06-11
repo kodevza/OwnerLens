@@ -40,12 +40,19 @@ export class RuntimeHost {
   }
 
   async close(): Promise<void> {
-    this.connection?.disconnectSync();
+    const connection = this.connection;
+    const instance = this.instance;
+
     this.connection = null;
-    this.instance?.closeSync();
     this.instance = null;
     this.initializePromise = null;
     this.initialized = false;
+
+    try {
+      connection?.disconnectSync();
+    } finally {
+      instance?.closeSync();
+    }
   }
 
   private async initializeInternal(): Promise<void> {
