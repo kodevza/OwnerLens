@@ -1,5 +1,13 @@
 {
   "name": "ownerlens",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kodevza/OwnerLens"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "version": "0.1.0",
   "description": "Azure ownership reporting tool for resolving likely owners of subscriptions and resource groups from snapshot data.",
   "license": "Apache-2.0",
