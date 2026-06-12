@@ -6,7 +6,7 @@ module.exports = {
   testMatch: ["<rootDir>/src/**/*.test.tsx"],
   collectCoverageFrom: ["src/**/*.tsx", "!src/main.tsx", "!src/**/*.test.tsx"],
   coverageDirectory: "coverage/components",
-  coverageReporters: ["text", "lcov", "html", "json-summary"],
+  coverageReporters: ["text", "lcov", "html", "json", "json-summary"],
   coverageThreshold: {
     global: {
       branches: 50,
