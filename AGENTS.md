@@ -24,6 +24,7 @@ Follow the dependency boundaries already enforced by `.dependency-cruiser.cjs`:
 - `src/core/**` must not import from outside `src/core/**`.
 - `src/lib/**` must not import from outside `src/lib/**`.
 - `src/providers/**` must not import React UI code, `src/components/**`, `src/ui/**`, or `.tsx` files.
+- `src/components/**` must not import provider modules from `src/providers/**`; use `src/core/**` domain types or component/report-facing adapters instead.
 - `src/report/**` must not import Azure provider modules directly.
 - Put Azure-specific data access and enrichment in `src/providers/azure/**`, not in generic report components.
 - Keep React as presentation/orchestration. Put reusable analysis logic in TypeScript domain/runtime modules, not inside components.
@@ -84,6 +85,7 @@ npm run collect:entra -- -TenantId "<tenant-id>"
 ## Code style
 
 - TypeScript is strict. Avoid `any`; prefer typed DTOs, discriminated unions, and explicit return types on exported functions.
+- Name raw snapshot/collector input transfer object types with an `Input*` prefix when adding or touching them, and keep them separate from `src/core/**` domain types.
 - Follow the existing style: double quotes, semicolons, ESM imports, React function components, and small pure helpers.
 - Do not mix data mapping, runtime I/O, and UI rendering in one module.
 - Keep PR-sized changes small. Avoid drive-by refactors, formatting-only churn, and unrelated renames.

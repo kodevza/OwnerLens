@@ -1,10 +1,11 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
-import type { EntraAppRoleAssignment } from "../../inputTransferObject/entra/EntraAppRoleAssignment";
+import type { EntraAppRoleAssignment } from "../../../../core/azure/entra/types";
+import type { InputEntraAppRoleAssignment } from "../../inputTransferObject/entra/InputEntraAppRoleAssignment";
 
 export async function insertEntraAppRoleAssignmentRows(
   connection: DuckDBConnection,
-  appRoleAssignments: EntraAppRoleAssignment[] = []
+  appRoleAssignments: InputEntraAppRoleAssignment[] = []
 ): Promise<void> {
   for (const [ordinal, assignment] of appRoleAssignments.entries()) {
     await connection.run(

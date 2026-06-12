@@ -1,6 +1,6 @@
 import type { ManagedIdentity } from "../../core/azure/entra/managedIdentity";
 import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
-import type { EntraOAuth2PermissionGrant } from "../../core/azure/entra/types";
+import type { EntraAppRoleAssignment, EntraOAuth2PermissionGrant } from "../../core/azure/entra/types";
 import type { AzureRbac } from "../../core/azure/azureRbac";
 import type { ResourceGroupOwnershipRow } from "../../core/azure/resources";
 import type { ZtaReport } from "../../core/azure/ztaReport";
@@ -10,7 +10,6 @@ import type {
   DeleteRuntimeRemediationTasksRequest,
   RemediationPackage
 } from "../../core/runtime/remediation";
-import type { EntraAppRoleAssignment } from "../../providers/azure/inputTransferObject/entra/EntraAppRoleAssignment";
 import type { ColumnFilters } from "../../report/components/reportTableControls";
 import { appendRuntimeCollectionFilters } from "../../report/runtimeCollectionQuery";
 

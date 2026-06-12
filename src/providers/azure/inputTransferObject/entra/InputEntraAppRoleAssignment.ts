@@ -1,4 +1,4 @@
-export type EntraAppRoleAssignment = {
+export type InputEntraAppRoleAssignment = {
   id: string;
   appRoleId: string;
   appRoleDisplayName: string | null;
