@@ -27,7 +27,7 @@ export function formatDate(value: unknown): string {
   }
 
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
 }
 
 export function formatBytes(bytes: number): string {

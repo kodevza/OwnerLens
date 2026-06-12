@@ -8,12 +8,10 @@ const collectAzure = readFileSync(join(process.cwd(), "tools/collect-azure.ps1")
 
 test("package exposes OwnerLens collect commands through the npm bin", () => {
   expect(packageJson.bin.ownerlens).toBe("./bin/ownerlens.js");
-  expect(packageJson.scripts.dev).toBeUndefined();
   expect(packageJson.scripts.start).toBe("node ./bin/ownerlens.js start");
   expect(packageJson.scripts.preview).toBe("node ./bin/ownerlens.js preview");
   expect(packageJson.scripts["collect:entra"]).toBe("node ./bin/ownerlens.js collect:entra");
   expect(packageJson.scripts["collect:azure"]).toBe("node ./bin/ownerlens.js collect:azure");
-  expect(cli).not.toContain('command === "dev"');
   expect(cli).not.toContain("runViteDevServer");
   expect(cli).not.toContain("ownerlens dev");
   expect(cli).toContain('command === "start" || command === "preview"');

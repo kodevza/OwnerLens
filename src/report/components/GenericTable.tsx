@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { buildCollectionColumns, type ReportColumnRenderers } from "../buildCollectionColumns";
 import { getConfiguredFilterOptions } from "../applyCollectionControls";
 import type { ReportColumnHelp, ReportFieldDescriptor } from "../reportTypes";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Table, TableBody, TableCell, TableContainer, TableHeader, TableRow } from "./ui/table";
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "./ui/table";
 import {
   applyColumnFilterValueToggle,
   applyColumnValuesFilter,
@@ -17,7 +17,7 @@ import {
   useReportTableControls
 } from "./reportTableControls";
 
-type GenericTableProps<TRow> = {
+export type GenericTableProps<TRow> = {
   columnHelp?: Record<string, ReportColumnHelp>;
   emptyMessage: string;
   fields: ReportFieldDescriptor<TRow>[];
@@ -36,23 +36,29 @@ type GenericTableProps<TRow> = {
   totalCount?: number;
 };
 
-type GenericTablePage<TRow> = {
+export type GenericTableSelectionColumn<TRow> = {
+  renderCell: (row: TRow) => ReactNode;
+  renderHeader: (visibleRows: TRow[]) => ReactNode;
+};
+
+export type GenericTablePage<TRow> = {
   rows: TRow[];
   page: number;
   pageSize: number;
   count: number;
 };
 
-type GenericRemoteTableProps<TRow> = Omit<
+export type GenericRemoteTableProps<TRow> = Omit<
   GenericTableProps<TRow>,
   "filterOptions" | "filters" | "onFiltersChange" | "onPageChange" | "page" | "rows" | "sortRules" | "totalCount"
 > & {
   initialFilters?: ColumnFilters;
   loadPage: (input: { filters: ColumnFilters; page: number; signal: AbortSignal }) => Promise<GenericTablePage<TRow>>;
   loadingMessage: string;
+  onFiltersChange?: (filters: ColumnFilters) => void;
 };
 
-type GenericTableWrapperProps<TRow> = GenericTableProps<TRow> | GenericRemoteTableProps<TRow>;
+export type GenericTableWrapperProps<TRow> = GenericTableProps<TRow> | GenericRemoteTableProps<TRow>;
 
 type LoadState =
   | {
@@ -66,7 +72,7 @@ type LoadState =
       message: string;
     };
 
-function isRemoteTableProps<TRow>(props: GenericTableWrapperProps<TRow>): props is GenericRemoteTableProps<TRow> {
+export function isRemoteTableProps<TRow>(props: GenericTableWrapperProps<TRow>): props is GenericRemoteTableProps<TRow> {
   return "loadPage" in props;
 }
 
@@ -78,13 +84,15 @@ export function GenericTable<TRow>(props: GenericTableWrapperProps<TRow>) {
   return <GenericTableView {...props} rows={props.rows ?? []} />;
 }
 
-function GenericRemoteTable<TRow>({
+export function GenericRemoteTable<TRow>({
   fields,
   initialFilters,
   loadPage,
   loadingMessage,
+  onFiltersChange,
+  selectionColumn,
   ...tableProps
-}: GenericRemoteTableProps<TRow>) {
+}: GenericRemoteTableProps<TRow> & { selectionColumn?: GenericTableSelectionColumn<TRow> }) {
   const [collection, setCollection] = useState<GenericTablePage<TRow> | null>(null);
   const [filters, setFilters] = useState<ColumnFilters>(() => initialFilters ?? {});
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
@@ -148,11 +156,13 @@ function GenericRemoteTable<TRow>({
         page={collection.page}
         pageSize={collection.pageSize}
         rows={collection.rows}
+        selectionColumn={selectionColumn}
         sortRules={[]}
         totalCount={collection.count}
         onFiltersChange={(nextFilters) => {
           setPage(1);
           setFilters(nextFilters);
+          onFiltersChange?.(nextFilters);
         }}
         onPageChange={setPage}
         onSortRulesChange={() => undefined}
@@ -161,7 +171,7 @@ function GenericRemoteTable<TRow>({
   );
 }
 
-function GenericTableView<TRow>({
+export function GenericTableView<TRow>({
   columnHelp,
   emptyMessage,
   fields,
@@ -176,9 +186,10 @@ function GenericTableView<TRow>({
   page,
   pageSize,
   rows,
+  selectionColumn,
   sortRules: controlledSortRules,
   totalCount
-}: GenericTableProps<TRow> & { rows: TRow[] }) {
+}: GenericTableProps<TRow> & { rows: TRow[]; selectionColumn?: GenericTableSelectionColumn<TRow> }) {
   const columns = useMemo(
     () => buildCollectionColumns(fields, { columnHelp, renderers: fieldRenderers }),
     [columnHelp, fields, fieldRenderers]
@@ -227,6 +238,11 @@ function GenericTableView<TRow>({
       <Table className={minWidthClassName}>
         <TableHeader>
           <TableRow>
+            {selectionColumn ? (
+              <TableHead className="w-10 min-w-10 px-3">
+                {selectionColumn.renderHeader(controlledRows)}
+              </TableHead>
+            ) : null}
             <ReportTableHead
               columns={columns}
               filterOptions={filterOptions}
@@ -242,13 +258,20 @@ function GenericTableView<TRow>({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {controlledRows.map((row) => (
-            <TableRow key={getRowKey(row)}>
-              {columns.map((column) => (
-                <TableCell key={column.id}>{column.render(row)}</TableCell>
-              ))}
-            </TableRow>
-          ))}
+          {controlledRows.map((row) => {
+            const rowKey = getRowKey(row);
+
+            return (
+              <TableRow key={rowKey}>
+                {selectionColumn ? (
+                  <TableCell className="w-10 min-w-10 px-3">{selectionColumn.renderCell(row)}</TableCell>
+                ) : null}
+                {columns.map((column) => (
+                  <TableCell key={column.id}>{column.render(row)}</TableCell>
+                ))}
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
       {controlledRows.length === 0 ? (

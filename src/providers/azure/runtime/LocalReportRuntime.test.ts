@@ -1,5 +1,6 @@
 import { defineLocalReportRuntimeRestEndpoints } from "./localReportRuntimeRest";
 import type { LocalReportRuntime } from "./LocalReportRuntime";
+import { createRuntimeRestMiddleware } from "../../../core/runtime/rest";
 import type { AzureSnapshot } from "../../../core/azure/resources";
 import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
 
@@ -236,6 +237,78 @@ test("defines local report runtime REST endpoints", async () => {
     queryZeroTrustAssessmentReport: jest.fn((options) =>
       Promise.resolve(emptyCollection("zeroTrustAssessment.report", options))
     ),
+    createZeroTrustAssessmentRemediationPackage: jest.fn(() =>
+      Promise.resolve({
+        id: "package-1",
+        createdAt: "2026-06-12T10:00:00.000Z",
+        sourceKind: "zeroTrustAssessment",
+        sourceLabel: "Zero Trust Assessment",
+        sourceQuery: {
+          filters: {},
+          selectedRowKeys: ["zta-1"]
+        },
+        taskCount: 1,
+        tasks: [
+          {
+            id: "task-1",
+            packageId: "package-1",
+            createdAt: "2026-06-12T10:00:00.000Z",
+            status: "open",
+            targetKind: "Application",
+            targetId: "sp-1",
+            targetLabel: "Service principal app",
+            title: "Service principal exposure",
+            risk: "High",
+            sourceEvidence: {
+              sourceKind: "zeroTrustAssessment"
+            }
+          }
+        ]
+      })
+    ),
+    readRemediationPackage: jest.fn((packageId: string) =>
+      Promise.resolve({
+        id: packageId,
+        createdAt: "2026-06-12T10:00:00.000Z",
+        sourceKind: "zeroTrustAssessment",
+        sourceLabel: "Zero Trust Assessment",
+        sourceQuery: {
+          filters: {},
+          selectedRowKeys: ["zta-1"]
+        },
+        taskCount: 1,
+        tasks: [
+          {
+            id: "task-1",
+            packageId,
+            createdAt: "2026-06-12T10:00:00.000Z",
+            status: "open",
+            targetKind: "zeroTrustAssessmentTest",
+            targetId: "35016",
+            targetLabel: "Mandatory labeling is enabled in sensitivity label policies",
+            title: "Mandatory labeling is enabled in sensitivity label policies",
+            risk: "medium",
+            sourceEvidence: {
+              sourceKind: "zeroTrustAssessment"
+            }
+          }
+        ]
+      })
+    ),
+    deleteRemediationTasks: jest.fn((request: { packageId: string; taskIds: string[] }) =>
+      Promise.resolve({
+        id: request.packageId,
+        createdAt: "2026-06-12T10:00:00.000Z",
+        sourceKind: "zeroTrustAssessment",
+        sourceLabel: "Zero Trust Assessment",
+        sourceQuery: {
+          filters: {},
+          selectedRowKeys: ["zta-1"]
+        },
+        taskCount: 0,
+        tasks: []
+      })
+    ),
     readDisabledOwnerEvidenceKeys: jest.fn(() => Promise.resolve(new Set(disabledOwnerKeys))),
     setOwnerEvidenceDisabled: jest.fn((key: string, disabled: boolean) => {
       if (disabled) {
@@ -274,6 +347,12 @@ test("defines local report runtime REST endpoints", async () => {
   const azureRbacEndpoint = getEndpoint(endpoints, "/api/data/azureRbac");
   const activityLogsEndpoint = getEndpoint(endpoints, "/api/data/azureResources/activityLogs");
   const zeroTrustAssessmentReportEndpoint = getEndpoint(endpoints, "/api/data/zeroTrustAssessment/report");
+  const zeroTrustAssessmentRemediationPackagesEndpoint = getEndpoint(
+    endpoints,
+    "/api/data/zeroTrustAssessment/remediationPackages"
+  );
+  const remediationPackagesEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages");
+  const remediationTasksEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages/tasks");
   const enrichmentRecalculateEndpoint = getEndpoint(endpoints, "/api/data/runtime/enrichment/recalculate");
   const runtimeEndpoint = getEndpoint(endpoints, "/api/data/runtime");
 
@@ -295,6 +374,9 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/azureRbac",
     "/api/data/azureResources/activityLogs",
     "/api/data/zeroTrustAssessment/report",
+    "/api/data/zeroTrustAssessment/remediationPackages",
+    "/api/data/remediationPackages",
+    "/api/data/remediationPackages/tasks",
     "/api/data/runtime/enrichment/recalculate",
     "/api/data/runtime"
   ]);
@@ -470,6 +552,63 @@ test("defines local report runtime REST endpoints", async () => {
     count: 0
   });
   await expect(
+    zeroTrustAssessmentRemediationPackagesEndpoint.handle({
+      body: {
+        filters: {
+          RelatedObjects: {
+            type: "text",
+            value: "sp-1"
+          }
+        },
+        selectedRowKeys: ["zta-1"]
+      },
+      req: {},
+      url: new URL("http://localhost/api/data/zeroTrustAssessment/remediationPackages")
+    })
+  ).resolves.toMatchObject({
+    id: "package-1"
+  });
+  await expect(
+    remediationPackagesEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/remediationPackages?id=package-1")
+    })
+  ).resolves.toMatchObject({
+    id: "package-1",
+    sourceKind: "zeroTrustAssessment",
+    taskCount: 1,
+    tasks: [
+      expect.objectContaining({
+        status: "open",
+        targetId: "35016"
+      })
+    ]
+  });
+  await expect(
+    remediationTasksEndpoint.handle({
+      body: {
+        packageId: "package-1",
+        taskIds: ["task-1"]
+      },
+      req: {},
+      url: new URL("http://localhost/api/data/remediationPackages/tasks")
+    })
+  ).resolves.toMatchObject({
+    id: "package-1",
+    taskCount: 0,
+    tasks: []
+  });
+  await expect(
+    zeroTrustAssessmentRemediationPackagesEndpoint.handle({
+      body: {
+        filters: {},
+        selectedRowKeys: "zta-1"
+      },
+      req: {},
+      url: new URL("http://localhost/api/data/zeroTrustAssessment/remediationPackages")
+    })
+  ).rejects.toThrow("Invalid Zero Trust Assessment remediation package request.");
+  await expect(
     enrichmentRecalculateEndpoint.handle({
       req: {},
       url: new URL("http://localhost/api/data/runtime/enrichment/recalculate")
@@ -555,4 +694,130 @@ test("defines local report runtime REST endpoints", async () => {
     page: 1,
     pageSize: 10
   });
+  expect(runtime.createZeroTrustAssessmentRemediationPackage).toHaveBeenCalledWith({
+    filters: {
+      RelatedObjects: {
+        type: "text",
+        value: "sp-1"
+      }
+    },
+    selectedRowKeys: ["zta-1"]
+  });
+  expect(runtime.readRemediationPackage).toHaveBeenCalledWith("package-1");
+  expect(runtime.deleteRemediationTasks).toHaveBeenCalledWith({
+    packageId: "package-1",
+    taskIds: ["task-1"]
+  });
 });
+
+test("returns 201 Created with remediation package id when creating a package", async () => {
+  const runtime = {
+    createZeroTrustAssessmentRemediationPackage: jest.fn(() =>
+      Promise.resolve({
+        id: "package-1",
+        createdAt: "2026-06-12T10:00:00.000Z",
+        sourceKind: "zeroTrustAssessment",
+        sourceLabel: "Zero Trust Assessment",
+        sourceQuery: {
+          filters: {},
+          selectedRowKeys: ["zta-1"]
+        },
+        taskCount: 1,
+        tasks: []
+      })
+    )
+  };
+  const middleware = createRuntimeRestMiddleware({
+    basePath: "/api/data",
+    endpoints: defineLocalReportRuntimeRestEndpoints(runtime as unknown as LocalReportRuntime),
+    getErrorStatusCode: () => 500
+  });
+  const response = createTestResponse();
+  const next = jest.fn();
+
+  await middleware(
+    {
+      body: {
+        filters: {},
+        selectedRowKeys: ["zta-1"]
+      },
+      method: "POST",
+      url: "/api/data/zeroTrustAssessment/remediationPackages"
+    },
+    response,
+    next
+  );
+
+  expect(next).not.toHaveBeenCalled();
+  expect(response.statusCode).toBe(201);
+  expect(JSON.parse(response.body)).toEqual({ id: "package-1" });
+});
+
+test("returns 400 for malformed JSON request bodies", async () => {
+  const middleware = createRuntimeRestMiddleware({
+    basePath: "/api/data",
+    endpoints: [
+      {
+        method: "POST",
+        parseJsonBody: true,
+        path: "/api/data/test",
+        handle: ({ body }) => body
+      }
+    ],
+    getErrorStatusCode: (error) => (error instanceof Error && error.message === "Malformed JSON request body." ? 400 : 500)
+  });
+  const response = createTestResponse();
+  const next = jest.fn();
+
+  await middleware(
+    {
+      body: "{not-json",
+      method: "POST",
+      url: "/api/data/test"
+    },
+    response,
+    next
+  );
+
+  expect(next).not.toHaveBeenCalled();
+  expect(response.statusCode).toBe(400);
+  expect(JSON.parse(response.body)).toEqual({ error: "Malformed JSON request body." });
+});
+
+test("returns JSON 404 for unknown runtime API paths", async () => {
+  const middleware = createRuntimeRestMiddleware({
+    basePath: "/api/data",
+    endpoints: [],
+    getErrorStatusCode: (error) => (error instanceof Error && error.message === "Runtime API endpoint not found." ? 404 : 500)
+  });
+  const response = createTestResponse();
+  const next = jest.fn();
+
+  await middleware(
+    {
+      method: "GET",
+      url: "/api/data/remediationPackages"
+    },
+    response,
+    next
+  );
+
+  expect(next).not.toHaveBeenCalled();
+  expect(response.statusCode).toBe(404);
+  expect(response.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
+  expect(JSON.parse(response.body)).toEqual({ error: "Runtime API endpoint not found." });
+});
+
+function createTestResponse() {
+  return {
+    body: "",
+    headers: new Map<string, string>(),
+    statusCode: 200,
+    end(body: string) {
+      this.body = body;
+    },
+    setHeader(name: string, value: string) {
+      this.headers.set(name, value);
+    }
+  };
+}

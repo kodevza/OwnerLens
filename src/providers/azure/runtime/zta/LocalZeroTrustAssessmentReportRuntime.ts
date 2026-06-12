@@ -1,7 +1,11 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
-import type { ZtaRemediationSummary, ZtaReport } from "../../../../core/azure/ztaReport";
+import type {
+  ZtaRemediationPackageSummary,
+  ZtaRemediationSummary,
+  ZtaReport
+} from "../../../../core/azure/ztaReport";
 import { compareByNewestDateField, discoverJsonFile, type JsonDiscoveryDescription } from "./Discovery";
 import {
   createEmptyZeroTrustAssessmentImportStatus,
@@ -9,7 +13,10 @@ import {
   readZeroTrustAssessmentReportFromDuckDb,
   type ZeroTrustAssessmentDuckDbImportStatus
 } from "./snapshotStore";
-import { readZeroTrustAssessmentRemediationSummaries } from "./tables";
+import {
+  readZeroTrustAssessmentRemediationPackageSummariesByTestId,
+  readZeroTrustAssessmentRemediationSummaries
+} from "./tables";
 import type { ZeroTrustAssessmentReport } from "./types";
 import { toZtaReport } from "./ztaReportMapper";
 
@@ -59,6 +66,11 @@ export class LocalZeroTrustAssessmentReportRuntime {
   async readRemediationSummaries(): Promise<Map<string, ZtaRemediationSummary>> {
     this.assertImported();
     return readZeroTrustAssessmentRemediationSummaries(this.getConnection());
+  }
+
+  async readRemediationPackageSummariesByTestId(): Promise<Map<string, ZtaRemediationPackageSummary[]>> {
+    this.assertImported();
+    return readZeroTrustAssessmentRemediationPackageSummariesByTestId(this.getConnection());
   }
 
   private assertImported(): void {

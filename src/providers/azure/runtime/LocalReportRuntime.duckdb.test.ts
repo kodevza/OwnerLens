@@ -12,6 +12,7 @@ import {
   importZeroTrustAssessmentReportToDuckDb,
   readZeroTrustAssessmentReportFromDuckDb
 } from "./zta/snapshotStore";
+import { RemediationPackageStore } from "../../../core/runtime/RemediationPackageStore";
 import { insertEntraServicePrincipalRows } from "./entra/servicePrincipalsTable";
 import { insertEntraApplicationRows } from "./entra/applicationsTable";
 import { prepareRuntimeSqlSchema } from "./runtimeSqlSchema";
@@ -88,6 +89,80 @@ function getEndpoint(endpoints: ReturnType<typeof defineLocalReportRuntimeRestEn
 
   return endpoint;
 }
+
+test("persists and reads generic remediation packages independent of ZTA", async () => {
+  await withDuckDb(async ({ connection }) => {
+    await prepareRuntimeSqlSchema(connection);
+
+    const store = new RemediationPackageStore(() => connection);
+    const created = await store.createPackage({
+      sourceKind: "manual",
+      sourceLabel: "Manual package",
+      sourceQuery: {
+        selected: ["target-1"]
+      },
+      tasks: [
+        {
+          targetKind: "resource",
+          targetId: "target-1",
+          targetLabel: "Target One",
+          title: "Assign an accountable owner",
+          risk: "medium",
+          sourceEvidence: {
+            reason: "missing owner evidence"
+          }
+        },
+        {
+          targetKind: "resource",
+          targetId: "target-2",
+          targetLabel: "Target Two",
+          title: "Assign an accountable owner",
+          risk: "low",
+          sourceEvidence: {
+            reason: "stale owner evidence"
+          }
+        }
+      ]
+    });
+    const readBack = await store.readPackage(created.id);
+
+    expect(readBack).toMatchObject({
+      id: created.id,
+      createdAt: created.createdAt,
+      sourceKind: created.sourceKind,
+      sourceLabel: created.sourceLabel,
+      sourceQuery: created.sourceQuery
+    });
+    expect(readBack?.tasks.map((task) => task.id).sort()).toEqual(created.tasks.map((task) => task.id).sort());
+    expect(readBack).toMatchObject({
+      sourceKind: "manual",
+      taskCount: 2,
+      tasks: expect.arrayContaining([
+        expect.objectContaining({
+          status: "open",
+          targetKind: "resource",
+          targetId: "target-1",
+          sourceEvidence: {
+            reason: "missing owner evidence"
+          }
+        })
+      ])
+    });
+
+    const updatedPackage = await store.deleteTasks(created.id, [created.tasks[0].id]);
+
+    expect(updatedPackage).toMatchObject({
+      id: created.id,
+      taskCount: 1,
+      tasks: [
+        expect.objectContaining({
+          targetId: "target-2"
+        })
+      ]
+    });
+    expect(updatedPackage?.tasks.map((task) => task.targetId)).not.toContain("target-1");
+  });
+});
 
 test("imports Zero Trust Assessment report into DuckDB and reads it back through the runtime", async () => {
   const report: ZeroTrustAssessmentReport = {
@@ -393,6 +468,294 @@ test("fills Zero Trust Assessment related object application ids through the RES
       })
     ).resolves.toMatchObject({
       rows: [expect.objectContaining({ TestId: "sp-test" })],
+      count: 1
+    });
+  });
+});
+
+test("creates generic remediation packages from selected Zero Trust Assessment rows", async () => {
+  const report: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-1",
+    TestResultSummary: { IdentityFailed: 2 },
+    Tests: [
+      {
+        TestId: "zta-1",
+        TestTitle: "Privileged app exposure",
+        TestRisk: "High",
+        TestStatus: "Failed",
+        RelatedObjects: [
+          {
+            id: "sp-1",
+            displayName: "Privileged automation app",
+            servicePrincipalType: "Application"
+          },
+          {
+            object_id: "app-object-1",
+            displayName: "Privileged app registration"
+          },
+          {
+            displayName: "Unstable related object"
+          }
+        ]
+      },
+      {
+        TestId: "zta-2",
+        TestTitle: "Break glass exposure",
+        TestRisk: "Medium",
+        TestStatus: "Failed",
+        RelatedObjects: [
+          {
+            id: "sp-2",
+            displayName: "Break glass app",
+            servicePrincipalType: "Application"
+          }
+        ]
+      },
+      {
+        TestId: "35016",
+        TestTitle: "Mandatory labeling is enabled in sensitivity label policies",
+        TestRisk: "Medium",
+        TestStatus: "Failed",
+        RelatedObjects: []
+      }
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
+    await runtime.initialize();
+
+    const firstPackage = await runtime.createZeroTrustAssessmentRemediationPackage({
+      filters: {
+        RelatedObjects: {
+          type: "text",
+          value: "Privileged"
+        }
+      },
+      selectedRowKeys: ["zta-1"]
+    });
+    const secondPackage = await runtime.createZeroTrustAssessmentRemediationPackage({
+      filters: {
+        RelatedObjects: {
+          type: "text",
+          value: "Privileged"
+        }
+      },
+      selectedRowKeys: ["zta-1"]
+    });
+    const findingLevelPackage = await runtime.createZeroTrustAssessmentRemediationPackage({
+      filters: {},
+      selectedRowKeys: ["35016"]
+    });
+
+    expect(firstPackage.id).not.toBe(secondPackage.id);
+    expect(JSON.stringify(secondPackage.tasks.map((task) => task.sourceEvidence))).not.toContain("RemediationPackages");
+    const readFirstPackage = await runtime.readRemediationPackage(firstPackage.id);
+    expect(readFirstPackage).toMatchObject({
+      id: firstPackage.id,
+      sourceKind: firstPackage.sourceKind,
+      taskCount: firstPackage.taskCount
+    });
+    expect(readFirstPackage.tasks.map((task) => task.targetId).sort()).toEqual(
+      firstPackage.tasks.map((task) => task.targetId).sort()
+    );
+    expect(firstPackage).toMatchObject({
+      sourceKind: "zeroTrustAssessment",
+      sourceLabel: "Zero Trust Assessment",
+      sourceQuery: {
+        filters: {
+          RelatedObjects: {
+            type: "text",
+            value: "Privileged"
+          }
+        },
+        selectedRowKeys: ["zta-1"]
+      },
+      taskCount: 2,
+      tasks: [
+        expect.objectContaining({
+          status: "open",
+          targetKind: "Application",
+          targetId: "sp-1",
+          targetLabel: "Privileged automation app",
+          title: "Privileged app exposure",
+          risk: "high",
+          sourceEvidence: expect.objectContaining({
+            sourceKind: "zeroTrustAssessment",
+            test: expect.objectContaining({
+              TestId: "zta-1",
+              TestTitle: "Privileged app exposure"
+            }),
+            relatedObject: expect.objectContaining({
+              id: "sp-1"
+            })
+          })
+        }),
+        expect.objectContaining({
+          targetId: "app-object-1"
+        })
+      ]
+    });
+    expect(firstPackage.tasks.map((task) => task.targetId)).not.toContain("Unstable related object");
+    expect(findingLevelPackage).toMatchObject({
+      sourceKind: "zeroTrustAssessment",
+      taskCount: 1,
+      tasks: [
+        expect.objectContaining({
+          status: "open",
+          targetKind: "zeroTrustAssessmentTest",
+          targetId: "35016",
+          targetLabel: "Mandatory labeling is enabled in sensitivity label policies",
+          title: "Mandatory labeling is enabled in sensitivity label policies",
+          risk: "medium",
+          sourceEvidence: expect.objectContaining({
+            sourceKind: "zeroTrustAssessment",
+            testIndex: 2,
+            test: expect.objectContaining({
+              TestId: "35016"
+            })
+          })
+        })
+      ]
+    });
+  });
+});
+
+test("enriches Zero Trust Assessment rows with remediation package summaries by remaining task TestId", async () => {
+  const report: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-1",
+    TestResultSummary: { IdentityFailed: 1 },
+    Tests: [
+      {
+        TestId: "zta-1",
+        TestTitle: "Privileged app exposure",
+        TestRisk: "High",
+        TestStatus: "Failed",
+        RelatedObjects: [
+          {
+            id: "sp-1",
+            displayName: "Privileged automation app",
+            servicePrincipalType: "Application"
+          },
+          {
+            id: "sp-2",
+            displayName: "Second privileged automation app",
+            servicePrincipalType: "Application"
+          }
+        ]
+      }
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
+    await runtime.initialize();
+
+    const firstPackage = await runtime.createZeroTrustAssessmentRemediationPackage({
+      filters: {},
+      selectedRowKeys: ["zta-1"]
+    });
+    const secondPackage = await runtime.createZeroTrustAssessmentRemediationPackage({
+      filters: {},
+      selectedRowKeys: ["zta-1"]
+    });
+
+    const enrichedReport = await runtime.queryZeroTrustAssessmentReport({
+      page: 1,
+      pageSize: 10
+    });
+    expect(enrichedReport.Tests[0]?.RemediationPackages?.map((remediationPackage) => remediationPackage.id).sort()).toEqual(
+      [firstPackage.id, secondPackage.id].sort()
+    );
+    expect(
+      enrichedReport.Tests[0]?.RemediationPackages?.find((remediationPackage) => remediationPackage.id === firstPackage.id)
+    ).toMatchObject({
+      taskCount: 2
+    });
+
+    await runtime.deleteRemediationTasks({
+      packageId: firstPackage.id,
+      taskIds: firstPackage.tasks.map((task) => task.id)
+    });
+
+    const reportAfterDelete = await runtime.queryZeroTrustAssessmentReport({
+      page: 1,
+      pageSize: 10
+    });
+    expect(reportAfterDelete.Tests[0]?.RemediationPackages?.map((remediationPackage) => remediationPackage.id)).toEqual([
+      secondPackage.id
+    ]);
+  });
+});
+
+test("filters Zero Trust Assessment rows by remediation package creation date through the REST endpoint", async () => {
+  const report: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-1",
+    TestResultSummary: { IdentityFailed: 2 },
+    Tests: [
+      {
+        TestId: "zta-1",
+        TestTitle: "Privileged app exposure",
+        TestRisk: "High",
+        TestStatus: "Failed",
+        RelatedObjects: [
+          {
+            id: "sp-1",
+            displayName: "Privileged automation app",
+            servicePrincipalType: "Application"
+          }
+        ]
+      },
+      {
+        TestId: "zta-2",
+        TestTitle: "Break glass exposure",
+        TestRisk: "Medium",
+        TestStatus: "Failed",
+        RelatedObjects: [
+          {
+            id: "sp-2",
+            displayName: "Break glass app",
+            servicePrincipalType: "Application"
+          }
+        ]
+      }
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
+    await runtime.initialize();
+
+    const remediationPackage = await runtime.createZeroTrustAssessmentRemediationPackage({
+      filters: {},
+      selectedRowKeys: ["zta-1"]
+    });
+    const packageCreationDate = remediationPackage.createdAt.slice(0, 10);
+    const endpoints = defineLocalReportRuntimeRestEndpoints(runtime);
+    const ztaReportEndpoint = getEndpoint(endpoints, "/api/data/zeroTrustAssessment/report");
+
+    await expect(
+      ztaReportEndpoint.handle({
+        req: {},
+        url: new URL(
+          `http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RemediationPackages&filter[0][value][0]=${packageCreationDate}`
+        )
+      })
+    ).resolves.toMatchObject({
+      rows: [
+        expect.objectContaining({
+          TestId: "zta-1",
+          RemediationPackages: [
+            expect.objectContaining({
+              id: remediationPackage.id,
+              createdAt: remediationPackage.createdAt
+            })
+          ]
+        })
+      ],
       count: 1
     });
   });

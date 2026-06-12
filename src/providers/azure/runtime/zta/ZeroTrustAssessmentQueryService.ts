@@ -5,13 +5,16 @@ import type {
   ZtaReport,
   ZtaReportTest
 } from "../../../../core/azure/ztaReport";
+import type { CreateRemediationPackageInput } from "../../../../core/runtime/remediation";
 
 import {
+  applyRuntimeCollectionFilters,
   buildPaginatedCollection,
   type LocalReportCollectionFilter,
   type LocalReportCollectionQueryOptions
 } from "../localReportCollections";
 import type { LocalZeroTrustAssessmentReportRuntime } from "./LocalZeroTrustAssessmentReportRuntime";
+import { buildZtaRemediationPackageInput } from "./ztaRemediationPackageAdapter";
 
 export type LocalZeroTrustAssessmentReportCollectionId = "zeroTrustAssessment.report";
 
@@ -31,13 +34,11 @@ export class ZeroTrustAssessmentQueryService {
   }
 
   async queryReport(options: LocalReportCollectionQueryOptions) {
-    const report = await this.readReport();
-    const { relatedObjectFilters, remainingFilters } = splitRelatedObjectFilters(options.filters ?? []);
-    const tests = applyRelatedObjectFilters(report.Tests ?? [], relatedObjectFilters);
+    const { report, tests } = await this.readFilteredReportTests(options.filters ?? []);
     const collection = buildPaginatedCollection(
       "zeroTrustAssessment.report",
       tests as Record<string, unknown>[],
-      { ...options, filters: remainingFilters }
+      { ...options, filters: [] }
     );
 
     return {
@@ -58,6 +59,68 @@ export class ZeroTrustAssessmentQueryService {
       throw error;
     }
   }
+
+  async buildRemediationPackageInput({
+    filters,
+    selectedRowKeys
+  }: {
+    filters: LocalReportCollectionFilter[];
+    selectedRowKeys: string[];
+  }): Promise<CreateRemediationPackageInput> {
+    const { tests } = await this.readFilteredReportTests(filters);
+
+    return buildZtaRemediationPackageInput({
+      filters,
+      selectedRowKeys,
+      tests: tests.map(stripRuntimeRemediationPackages)
+    });
+  }
+
+  private async readFilteredReportTests(filters: LocalReportCollectionFilter[]): Promise<{
+    report: ZtaReport;
+    tests: ZtaReportTest[];
+  }> {
+    const report = await this.readReport();
+    const testsWithRemediationPackages = await this.enrichWithRemediationPackageSummaries(report.Tests ?? []);
+    const { relatedObjectFilters, remainingFilters } = splitRelatedObjectFilters(filters);
+    const tests = applyRelatedObjectFilters(testsWithRemediationPackages, relatedObjectFilters);
+    const columns = buildCollectionColumns(tests as Record<string, unknown>[]);
+
+    return {
+      report,
+      tests: applyRuntimeCollectionFilters(
+        tests as Record<string, unknown>[],
+        columns,
+        remainingFilters
+      ) as ZtaReportTest[]
+    };
+  }
+
+  private async enrichWithRemediationPackageSummaries(tests: ZtaReportTest[]): Promise<ZtaReportTest[]> {
+    const summariesByTestId = await this.zeroTrustAssessment.readRemediationPackageSummariesByTestId();
+
+    if (summariesByTestId.size === 0) {
+      return tests;
+    }
+
+    return tests.map((test) => {
+      const summaries = summariesByTestId.get(formatZtaTestId(test.TestId));
+
+      return summaries ? { ...test, RemediationPackages: summaries } : test;
+    });
+  }
+}
+
+function buildCollectionColumns(rows: Record<string, unknown>[]): string[] {
+  const columns = new Set<string>();
+
+  for (const row of rows) {
+    for (const column of Object.keys(row)) {
+      columns.add(column);
+    }
+  }
+
+  return [...columns];
 }
 
 function splitRelatedObjectFilters(filters: LocalReportCollectionFilter[]): {
@@ -121,4 +184,22 @@ function matchesRelatedObjectFilters(relatedObject: ZtaRelatedObject, filters: s
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function formatZtaTestId(value: ZtaReportTest["TestId"]): string {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  return String(value);
+}
+
+function stripRuntimeRemediationPackages(test: ZtaReportTest): ZtaReportTest {
+  if (!Object.prototype.hasOwnProperty.call(test, "RemediationPackages")) {
+    return test;
+  }
+
+  const sourceTest = { ...test };
+  delete sourceTest.RemediationPackages;
+  return sourceTest;
 }

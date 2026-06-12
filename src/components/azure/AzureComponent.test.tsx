@@ -188,6 +188,243 @@ test("opens Zero Trust Assessment filtered by related object from a principal ZT
   act(() => root.unmount());
 });
 
+test("opens a remediation package tab after creating a package from Zero Trust Assessment selection", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input, init) => {
+    const requestUrl = String(input);
+
+    if (requestUrl === "/api/data/zeroTrustAssessment/remediationPackages" && init?.method === "POST") {
+      return jsonResponse({
+        id: "package-1"
+      });
+    }
+
+    if (requestUrl === "/api/data/remediationPackages?id=package-1") {
+      return jsonResponse({
+        id: "package-1",
+        createdAt: "2026-06-12T10:00:00.000Z",
+        sourceKind: "zeroTrustAssessment",
+        sourceLabel: "Zero Trust Assessment",
+        sourceQuery: {
+          filters: {},
+          selectedRowKeys: ["zta-1"]
+        },
+        taskCount: 1,
+        tasks: [
+          {
+            id: "task-1",
+            packageId: "package-1",
+            createdAt: "2026-06-12T10:00:00.000Z",
+            status: "open",
+            targetKind: "Application",
+            targetId: "sp-object-id",
+            targetLabel: "Service principal app",
+            title: "Service principal exposure",
+            risk: "High",
+            sourceEvidence: {
+              sourceKind: "zeroTrustAssessment",
+              test: {
+                TestId: "zta-1",
+                TestStatus: "Failed"
+              },
+              relatedObject: {
+                id: "sp-object-id",
+                displayName: "Service principal app"
+              }
+            }
+          }
+        ]
+      });
+    }
+
+    if (requestUrl === "/api/data/remediationPackages/tasks" && init?.method === "DELETE") {
+      return jsonResponse({
+        id: "package-1",
+        createdAt: "2026-06-12T10:00:00.000Z",
+        sourceKind: "zeroTrustAssessment",
+        sourceLabel: "Zero Trust Assessment",
+        sourceQuery: {
+          filters: {},
+          selectedRowKeys: ["zta-1"]
+        },
+        taskCount: 0,
+        tasks: []
+      });
+    }
+
+    if (requestUrl.startsWith("/api/data/zeroTrustAssessment/report")) {
+      return zeroTrustAssessmentJsonResponse({
+        Meta: {
+          TenantId: "tenant-1",
+          TenantName: "Example Tenant"
+        },
+        Tests: [
+          {
+            TestId: "zta-1",
+            TestStatus: "Failed",
+            TestTitle: "Service principal exposure",
+            RelatedObjects: [{ id: "sp-object-id", servicePrincipalType: "Application" }]
+          }
+        ]
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 0,
+      page: 1,
+      pageSize: 20,
+      rows: []
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await clickButton("Zero Trust Assessment");
+  await waitForText(container, "Service principal exposure");
+  await toggleCheckbox("Select Zero Trust Assessment test zta-1", true);
+  await clickButton("Create remediation package from 1 selected Zero Trust Assessment tests");
+  await waitForText(container, "Remediation package");
+
+  expect(container.textContent).toContain("Zero Trust Assessment");
+  expect(container.textContent).toContain("2026-06-12T10:00:00.000Z");
+  expect(container.textContent).toContain("open");
+  expect(container.textContent).toContain("Service principal app");
+  expect(container.textContent).toContain("sp-object-id");
+  expect(container.textContent).toContain("Service principal exposure");
+  expect(container.textContent).toContain("high");
+  expect(container.textContent).toContain("Related object");
+  expect(container.textContent).toContain("ZTA test zta-1");
+  expect(container.textContent).toContain("Status: Failed");
+  expect(container.textContent).not.toContain("Related object:");
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/data/zeroTrustAssessment/remediationPackages",
+    expect.objectContaining({
+      body: JSON.stringify({
+        filters: {},
+        selectedRowKeys: ["zta-1"]
+      }),
+      method: "POST"
+    })
+  );
+  expect(fetchMock).toHaveBeenCalledWith("/api/data/remediationPackages?id=package-1");
+
+  await toggleCheckbox("Select remediation task Service principal exposure", true);
+  await clickButton("Delete 1 selected remediation tasks");
+  await waitForText(container, "No remediation tasks were created.");
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/data/remediationPackages/tasks",
+    expect.objectContaining({
+      body: JSON.stringify({
+        packageId: "package-1",
+        taskIds: ["task-1"]
+      }),
+      method: "DELETE"
+    })
+  );
+
+  await clickButton("Close remediation package tab");
+  await waitFor(() => {
+    expect(queryButton("Close remediation package tab")).toBeNull();
+    expect(container.textContent).not.toContain("ZTA test zta-1");
+  });
+
+  act(() => root.unmount());
+});
+
+test("opens a remediation package tab from a Zero Trust Assessment package badge", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl === "/api/data/remediationPackages?id=package-1") {
+      return jsonResponse({
+        id: "package-1",
+        createdAt: "2026-06-12T10:00:00.000Z",
+        sourceKind: "zeroTrustAssessment",
+        sourceLabel: "Zero Trust Assessment",
+        sourceQuery: {
+          filters: {},
+          selectedRowKeys: ["zta-1"]
+        },
+        taskCount: 1,
+        tasks: [
+          {
+            id: "task-1",
+            packageId: "package-1",
+            createdAt: "2026-06-12T10:00:00.000Z",
+            status: "open",
+            targetKind: "Application",
+            targetId: "sp-object-id",
+            targetLabel: "Service principal app",
+            title: "Service principal exposure",
+            risk: "High",
+            sourceEvidence: {
+              sourceKind: "zeroTrustAssessment",
+              test: {
+                TestId: "zta-1",
+                TestStatus: "Failed"
+              },
+              relatedObject: {
+                id: "sp-object-id",
+                displayName: "Service principal app"
+              }
+            }
+          }
+        ]
+      });
+    }
+
+    if (requestUrl.startsWith("/api/data/zeroTrustAssessment/report")) {
+      return zeroTrustAssessmentJsonResponse({
+        Meta: {
+          TenantId: "tenant-1",
+          TenantName: "Example Tenant"
+        },
+        Tests: [
+          {
+            TestId: "zta-1",
+            TestStatus: "Failed",
+            TestTitle: "Service principal exposure",
+            RelatedObjects: [{ id: "sp-object-id", servicePrincipalType: "Application" }],
+            RemediationPackages: [
+              {
+                id: "package-1",
+                createdAt: "2026-06-12T10:00:00.000Z",
+                taskCount: 1
+              }
+            ]
+          }
+        ]
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 0,
+      page: 1,
+      pageSize: 20,
+      rows: []
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await clickButton("Zero Trust Assessment");
+  await waitForText(container, "Service principal exposure");
+  await clickButton("Open remediation package package-1");
+  await waitForText(container, "Remediation package");
+
+  expect(container.textContent).toContain("Service principal app");
+  expect(container.textContent).toContain("ZTA test zta-1");
+  expect(fetchMock).toHaveBeenCalledWith("/api/data/remediationPackages?id=package-1");
+
+  act(() => root.unmount());
+});
+
 test("opens Azure RBAC tab for the selected service principal from its RBAC badge", async () => {
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);
@@ -573,6 +810,18 @@ async function clickButton(label: string) {
   });
 }
 
+async function toggleCheckbox(label: string, checked: boolean): Promise<void> {
+  const checkbox = getCheckbox(label);
+
+  if (checkbox.checked === checked) {
+    return;
+  }
+
+  await act(async () => {
+    checkbox.click();
+  });
+}
+
 async function waitForText(container: HTMLElement, text: string) {
   await waitFor(() => {
     expect(container.textContent).toContain(text);
@@ -605,6 +854,17 @@ function getButton(label: string): HTMLButtonElement {
   }
 
   return button;
+}
+
+function getCheckbox(label: string): HTMLInputElement {
+  const checkbox = [...document.querySelectorAll("input")].find(
+    (candidate) => candidate.getAttribute("aria-label") === label && candidate.getAttribute("type") === "checkbox"
+  );
+  if (!(checkbox instanceof HTMLInputElement)) {
+    throw new Error(`Expected checkbox ${label}.`);
+  }
+
+  return checkbox;
 }
 
 function queryButton(label: string): HTMLButtonElement | null {

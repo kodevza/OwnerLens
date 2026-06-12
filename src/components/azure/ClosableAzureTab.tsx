@@ -8,7 +8,7 @@ type ClosableAzureTabProps = {
   closeLabel: string;
   label: string;
   onClose: () => void;
-  value: "azureRbac" | "entraPermissions";
+  value: "azureRbac" | "entraPermissions" | "remediationPackage";
 };
 
 export function ClosableAzureTab({ active, closeLabel, label, onClose, value }: ClosableAzureTabProps) {

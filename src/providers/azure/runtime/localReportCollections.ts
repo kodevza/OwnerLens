@@ -53,7 +53,7 @@ function buildCollectionColumns(rows: Record<string, unknown>[]): string[] {
   return [...columns];
 }
 
-function applyRuntimeCollectionFilters(
+export function applyRuntimeCollectionFilters(
   rows: Record<string, unknown>[],
   columns: string[],
   filters: LocalReportCollectionFilter[]

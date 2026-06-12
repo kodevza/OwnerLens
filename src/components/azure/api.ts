@@ -4,6 +4,12 @@ import type { EntraOAuth2PermissionGrant } from "../../core/azure/entra/types";
 import type { AzureRbac } from "../../core/azure/azureRbac";
 import type { ResourceGroupOwnershipRow } from "../../core/azure/resources";
 import type { ZtaReport } from "../../core/azure/ztaReport";
+import type {
+  CreateRuntimeRemediationPackageRequest,
+  CreateRuntimeRemediationPackageResponse,
+  DeleteRuntimeRemediationTasksRequest,
+  RemediationPackage
+} from "../../core/runtime/remediation";
 import type { EntraAppRoleAssignment } from "../../providers/azure/inputTransferObject/entra/EntraAppRoleAssignment";
 import type { ColumnFilters } from "../../report/components/reportTableControls";
 import { appendRuntimeCollectionFilters } from "../../report/runtimeCollectionQuery";
@@ -198,6 +204,62 @@ export async function readZeroTrustAssessmentReport({
   return (await response.json()) as ZeroTrustAssessmentRuntimeResponse;
 }
 
+export async function createZeroTrustAssessmentRemediationPackage(
+  request: CreateRuntimeRemediationPackageRequest
+): Promise<CreateRuntimeRemediationPackageResponse> {
+  const response = await fetch("/api/data/zeroTrustAssessment/remediationPackages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(request)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Zero Trust Assessment remediation package creation failed: ${response.status}`);
+  }
+
+  return readJsonResponse<CreateRuntimeRemediationPackageResponse>(
+    response,
+    "/api/data/zeroTrustAssessment/remediationPackages",
+    "Zero Trust Assessment remediation package creation failed"
+  );
+}
+
+export async function readRemediationPackage(packageId: string): Promise<RemediationPackage> {
+  const url = new URL("/api/data/remediationPackages", window.location.origin);
+  url.searchParams.set("id", packageId);
+
+  const response = await fetch(`${url.pathname}${url.search}`);
+  if (!response.ok) {
+    throw new Error(`Remediation package read failed: ${response.status}`);
+  }
+
+  return readJsonResponse<RemediationPackage>(response, `${url.pathname}${url.search}`, "Remediation package read failed");
+}
+
+export async function deleteRemediationTasks(
+  request: DeleteRuntimeRemediationTasksRequest
+): Promise<RemediationPackage> {
+  const response = await fetch("/api/data/remediationPackages/tasks", {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(request)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Remediation task deletion failed: ${response.status}`);
+  }
+
+  return readJsonResponse<RemediationPackage>(
+    response,
+    "/api/data/remediationPackages/tasks",
+    "Remediation task deletion failed"
+  );
+}
+
 export async function updateDisabledOwnerEvidence({
   key,
   disabled
@@ -212,5 +274,24 @@ export async function updateDisabledOwnerEvidence({
   const response = await fetch(`${url.pathname}${url.search}`);
   if (!response.ok) {
     throw new Error(`Owner candidate update failed: ${response.status}`);
+  }
+}
+
+async function readJsonResponse<T>(response: Response, requestPath: string, failurePrefix: string): Promise<T> {
+  const contentType = response.headers?.get("Content-Type") ?? "";
+
+  if (contentType && !contentType.toLowerCase().includes("application/json")) {
+    throw new Error(`${failurePrefix}: expected JSON from ${requestPath} but received ${contentType}.`);
+  }
+
+  try {
+    return (await response.json()) as T;
+  } catch (error) {
+    throw new Error(
+      `${failurePrefix}: could not parse JSON from ${requestPath}: ${
+        error instanceof Error ? error.message : "Unknown parse error"
+      }`,
+      { cause: error }
+    );
   }
 }

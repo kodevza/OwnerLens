@@ -1,5 +1,7 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
+import { remediationSchemaSql } from "../../../core/runtime/remediationSqlSchema";
+
 const entraSnapshotSchemaSql = [
   `
     create table if not exists entra_snapshot_meta (
@@ -342,6 +344,7 @@ const runtimeSchemaSql = [
   ...azureResourcesSnapshotSchemaSql,
   ...azureResourcesSchemaSql,
   ...disabledOwnerEvidenceSchemaSql,
+  ...remediationSchemaSql,
   ...zeroTrustAssessmentSchemaSql,
   ...azureIdentityEnrichmentSchemaSql
 ];

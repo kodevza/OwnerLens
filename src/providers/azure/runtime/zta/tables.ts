@@ -1,6 +1,10 @@
 import type { DuckDBConnection, DuckDBValue } from "@duckdb/node-api";
 
-import type { ZtaRelatedObject, ZtaRemediationSummary } from "../../../../core/azure/ztaReport";
+import type {
+  ZtaRelatedObject,
+  ZtaRemediationPackageSummary,
+  ZtaRemediationSummary
+} from "../../../../core/azure/ztaReport";
 import type { ZeroTrustAssessmentTest } from "./types";
 
 export async function insertZeroTrustAssessmentTestRows(
@@ -181,6 +185,51 @@ export async function readZeroTrustAssessmentRemediationSummaries(
       }
     ])
   );
+}
+
+export async function readZeroTrustAssessmentRemediationPackageSummariesByTestId(
+  connection: DuckDBConnection
+): Promise<Map<string, ZtaRemediationPackageSummary[]>> {
+  const rows = await readRows<{
+    test_id: string;
+    package_id: string;
+    created_at: string;
+    task_count: number;
+  }>(
+    connection,
+    `
+      select
+        json_extract_string(task.source_evidence, '$.test.TestId') as test_id,
+        remediation_package.id as package_id,
+        remediation_package.created_at,
+        remediation_package.task_count
+      from remediation_tasks task
+      join remediation_packages remediation_package
+        on remediation_package.id = task.package_id
+      where remediation_package.source_kind = 'zeroTrustAssessment'
+        and json_extract_string(task.source_evidence, '$.sourceKind') = 'zeroTrustAssessment'
+        and json_extract_string(task.source_evidence, '$.test.TestId') is not null
+      group by
+        test_id,
+        remediation_package.id,
+        remediation_package.created_at,
+        remediation_package.task_count
+      order by remediation_package.created_at desc, remediation_package.id
+    `
+  );
+  const summariesByTestId = new Map<string, ZtaRemediationPackageSummary[]>();
+
+  for (const row of rows) {
+    const summaries = summariesByTestId.get(row.test_id) ?? [];
+    summaries.push({
+      id: row.package_id,
+      createdAt: row.created_at,
+      taskCount: Number(row.task_count)
+    });
+    summariesByTestId.set(row.test_id, summaries);
+  }
+
+  return summariesByTestId;
 }
 
 async function readRows<Row extends Record<string, unknown>>(

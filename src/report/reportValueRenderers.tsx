@@ -1,4 +1,4 @@
-import { formatValue } from "../lib/utils";
+import { formatDate, formatValue } from "../lib/utils";
 import type { OwnerConfidence } from "./types";
 import type { ReportDetailsValue, ReportFieldDescriptor } from "./reportTypes";
 import { ConfidenceBadge } from "./components/ConfidenceBadge";
@@ -29,6 +29,10 @@ export function renderReportValue<TRow>(
 
   if (field.valueType === "boolean") {
     return typeof value === "boolean" ? (value ? "Yes" : "No") : formatValue(value);
+  }
+
+  if (field.valueType === "date") {
+    return formatDate(value);
   }
 
   if (field.valueType === "list") {
