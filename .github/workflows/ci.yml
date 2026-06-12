@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test with merged coverage
+        run: npm run test:coverage
+
+      - name: Upload merged coverage HTML
+        id: coverage-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: merged-coverage-html
+          path: coverage/merged
+          if-no-files-found: error
+
+      - name: Add coverage summary
+        run: |
+          node <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const fs = require("node:fs");
+          const summary = JSON.parse(fs.readFileSync("coverage/merged/coverage-summary.json", "utf8")).total;
+          const metrics = ["statements", "branches", "functions", "lines"];
+
+          console.log("## Coverage");
+          console.log("");
+          console.log("| Metric | Covered | Total | Percent |");
+          console.log("| --- | ---: | ---: | ---: |");
+
+          for (const metric of metrics) {
+            const value = summary[metric];
+            console.log(`| ${metric} | ${value.covered} | ${value.total} | ${value.pct}% |`);
+          }
+
+          console.log("");
+          console.log(`[Download merged HTML report](${{ steps.coverage-artifact.outputs.artifact-url }})`);
+          NODE
