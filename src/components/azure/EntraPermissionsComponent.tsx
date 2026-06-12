@@ -128,7 +128,7 @@ export function EntraPermissionsComponent({ principalId }: { principalId: string
         setPermissions(null);
         setLoadState({
           status: "error",
-          message: error instanceof Error ? error.message : "Could not load Entra permissions."
+          message: error instanceof Error ? error.message : "Could not load Graph permissions."
         });
       }
     }
@@ -141,7 +141,7 @@ export function EntraPermissionsComponent({ principalId }: { principalId: string
   const rows = useMemo(() => (permissions ? mapPermissionsToRows(permissions) : []), [permissions]);
 
   if (!permissions && loadState.status === "loading") {
-    return <div className="rounded-md border bg-card p-4 text-sm text-muted-foreground">Loading Entra permissions...</div>;
+    return <div className="rounded-md border bg-card p-4 text-sm text-muted-foreground">Loading Graph permissions...</div>;
   }
 
   if (!permissions && loadState.status === "error") {
@@ -154,7 +154,7 @@ export function EntraPermissionsComponent({ principalId }: { principalId: string
         <div className="rounded-md border border-destructive/40 bg-card p-4 text-sm text-destructive">{loadState.message}</div>
       ) : null}
       <GenericTable
-        emptyMessage="No Entra permissions match the filter."
+        emptyMessage="No Graph permissions match the filter."
         fields={entraPermissionFields}
         getRowKey={(row) => `${row.permissionType}:${row.id}`}
         minWidthClassName="min-w-[1800px]"

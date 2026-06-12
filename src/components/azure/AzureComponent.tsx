@@ -132,7 +132,7 @@ export function AzureComponent() {
           {entraPermissionsTab ? (
             <ClosableAzureTab
               active={activeView === "entraPermissions"}
-              closeLabel={`Close ${entraPermissionsTab.displayName} Entra permissions tab`}
+              closeLabel={`Close ${entraPermissionsTab.displayName} Graph permissions tab`}
               label={`${entraPermissionsTab.displayName} permissions`}
               onClose={closeEntraPermissions}
               value="entraPermissions"

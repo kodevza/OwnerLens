@@ -128,9 +128,9 @@ function PermissionCountBadge({
 
   return (
     <button
-      aria-label={`Open Entra permissions ${label}`}
+      aria-label={`Open Graph permissions ${label}`}
       className="rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      title={`Open Entra permissions ${label}`}
+      title={`Open Graph permissions ${label}`}
       type="button"
       onClick={onClick}
     >

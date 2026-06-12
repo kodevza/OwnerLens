@@ -155,7 +155,7 @@ export const azureManagedIdentityColumnHelp = {
     logic: [
       "Returns high when any matching OAuth2 permission grant has consentType equal to AllPrincipals.",
       "Returns medium when matching delegated scopes or app role assignments exist without tenant-wide delegated consent.",
-      "Returns none when no matching Entra permissions exist."
+      "Returns none when no matching Graph permissions exist."
     ]
   },
   enabled: {

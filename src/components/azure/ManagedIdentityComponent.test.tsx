@@ -87,7 +87,7 @@ test("loads managed identities with runtime risk enrichment", async () => {
   expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/data/entra/managedIdentities?page=1&count=20");
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
   expect(getButton("Sort by ZTA remediations").textContent).toContain("ZTA remediations");
-  expect(getButton("Sort by Entra permissions").textContent).toContain("Entra permissions");
+  expect(getButton("Sort by Graph permissions").textContent).toContain("Graph permissions");
   expect(getButton("Sort by Tags").textContent).toContain("Tags");
   expect(container.textContent).toContain("1/2");
   expect(container.textContent).toContain("1/3");
@@ -110,7 +110,7 @@ test("loads managed identities with runtime risk enrichment", async () => {
   await clearValueFilter("Filter Azure RBAC");
   await waitForText(container, "uami-a");
 
-  await openValueFilter("Filter Entra permissions");
+  await openValueFilter("Filter Graph permissions");
   await toggleCheckbox("high", true);
   await waitFor(() => {
     expect(lastFetchUrl(fetchMock)).toContain("filter%5B0%5D%5Bcolumn%5D=entraPermissionRisk");
@@ -119,7 +119,7 @@ test("loads managed identities with runtime risk enrichment", async () => {
   await waitForText(container, "uami-a");
   expect(container.textContent).not.toContain("uami-high");
 
-  await clearValueFilter("Filter Entra permissions");
+  await clearValueFilter("Filter Graph permissions");
   await waitForText(container, "uami-high");
 
   await openValueFilter("Filter ZTA remediations");

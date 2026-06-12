@@ -169,7 +169,7 @@ export async function readEntraPermissions({
 
   const response = await fetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
-    throw new Error(`Entra permissions read failed: ${response.status}`);
+    throw new Error(`Graph permissions read failed: ${response.status}`);
   }
 
   return (await response.json()) as EntraPrincipalPermissionsResponse;

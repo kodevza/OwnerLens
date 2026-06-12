@@ -102,7 +102,7 @@ test("loads service principals through the full table UI and sends filters and p
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
   expect(getButton("Sort by ZTA remediations").textContent).toContain("ZTA remediations");
   expect(getButton("Sort by Azure RBAC").textContent).toContain("Azure RBAC");
-  expect(getButton("Sort by Entra permissions").textContent).toContain("Entra permissions");
+  expect(getButton("Sort by Graph permissions").textContent).toContain("Graph permissions");
   expect(getButton("Sort by Owner").textContent).toContain("Owner");
   expect(getButton("Sort by Owner confidence").textContent).toContain("Owner confidence");
   expect(getButton("Sort by Enabled").textContent).toContain("Enabled");
@@ -129,14 +129,14 @@ test("loads service principals through the full table UI and sends filters and p
   await clearValueFilter("Filter Azure RBAC");
   await waitForText(container, "Page 1 of 4");
 
-  await openValueFilter("Filter Entra permissions");
+  await openValueFilter("Filter Graph permissions");
   await toggleCheckbox("high", true);
   await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=entraPermissionRisk");
   expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=high");
   await waitForText(container, "Microsoft Graph");
   expect(container.textContent).not.toContain("Payroll API");
 
-  await clearValueFilter("Filter Entra permissions");
+  await clearValueFilter("Filter Graph permissions");
   await waitForText(container, "Page 1 of 4");
 
   await openValueFilter("Filter ZTA remediations");

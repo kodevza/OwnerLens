@@ -66,7 +66,7 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
   },
   {
     id: "oauthPemrissionsCount",
-    label: "Entra permissions",
+    label: "Graph permissions",
     valueType: "text",
     getValue: (sp) => sp.oauthPemrissionsCount,
     getFilterValue: (sp) => sp.entraPermissionRisk,

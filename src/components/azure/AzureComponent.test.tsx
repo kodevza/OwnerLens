@@ -532,7 +532,7 @@ test("opens Azure RBAC tab for the selected service principal from its RBAC badg
   act(() => root.unmount());
 });
 
-test("opens Entra permissions tab for the selected service principal from its permissions badge", async () => {
+test("opens Graph permissions tab for the selected service principal from its permissions badge", async () => {
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);
 
@@ -609,7 +609,7 @@ test("opens Entra permissions tab for the selected service principal from its pe
   const { container, root } = renderComponent(<AzureComponent />);
 
   await waitForText(container, "Service principal app");
-  await clickButton("Open Entra permissions 2/1");
+  await clickButton("Open Graph permissions 2/1");
   await waitForText(container, "User.Read Directory.Read.All");
   await waitForText(container, "Read directory data");
   await waitForText(container, "Risk");
@@ -625,9 +625,9 @@ test("opens Entra permissions tab for the selected service principal from its pe
   const url = new URL(permissionsRequest ?? "", window.location.origin);
   expect(url.searchParams.get("principalId")).toBe("sp-object-id");
 
-  await clickButton("Close Service principal app Entra permissions tab");
+  await clickButton("Close Service principal app Graph permissions tab");
   await waitFor(() => {
-    expect(queryButton("Close Service principal app Entra permissions tab")).toBeNull();
+    expect(queryButton("Close Service principal app Graph permissions tab")).toBeNull();
     expect(container.textContent).not.toContain("User.Read Directory.Read.All");
   });
 

@@ -53,7 +53,7 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
   },
   {
     id: "oauthPemrissionsCount",
-    label: "Entra permissions",
+    label: "Graph permissions",
     valueType: "number",
     getValue: (identity) => identity.oauthPemrissionsCount,
     getFilterValue: (identity) => identity.entraPermissionRisk,
