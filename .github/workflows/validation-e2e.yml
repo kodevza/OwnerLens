@@ -71,9 +71,30 @@ jobs:
           $token = (Get-AzAccessToken -ResourceTypeName MSGraph).Token
           if ($token -is [System.Security.SecureString]) {
             $accessToken = $token
+            $plainToken = [System.Net.NetworkCredential]::new("", $token).Password
           } else {
+            $plainToken = $token
             $accessToken = $token | ConvertTo-SecureString -AsPlainText -Force
           }
+
+          $requiredGraphPermissions = @("Application.Read.All", "Group.Read.All", "Directory.Read.All")
+          $payloadSegment = ($plainToken -split "\.")[1].Replace("-", "+").Replace("_", "/")
+          while ($payloadSegment.Length % 4 -ne 0) {
+            $payloadSegment += "="
+          }
+          $payload = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($payloadSegment)) | ConvertFrom-Json
+          $tokenPermissions = @()
+          if ($payload.roles) {
+            $tokenPermissions += @($payload.roles)
+          }
+          if ($payload.scp) {
+            $tokenPermissions += @($payload.scp -split " ")
+          }
+          $missingGraphPermissions = @($requiredGraphPermissions | Where-Object { $tokenPermissions -notcontains $_ })
+          if ($missingGraphPermissions.Count -gt 0) {
+            throw "Microsoft Graph access token is missing required permissions: $($missingGraphPermissions -join ", ")"
+          }
+
           Connect-MgGraph -AccessToken $accessToken -NoWelcome
           Get-MgContext | Format-List TenantId,Account,AuthType
 
