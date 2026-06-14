@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import type { EntraServicePrincipalType } from "../../core/azure/entra/types";
 import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
 import type { OwnerConfidence } from "../../core/ownership/types";
 import type { PermissionRiskLevel } from "../../core/risk/types";
+import type { RemediationPackage } from "../../core/runtime/remediation";
 import { azureServicePrincipalColumnHelp } from "./azureReportConfig";
-import { readServicePrincipals } from "./api";
+import { readRemediationPackage, readServicePrincipals } from "./api";
 import { GenericTable } from "../../report/components/GenericTable";
 import type { ColumnFilters } from "../../report/components/reportTableControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
@@ -14,6 +15,10 @@ import {
   type AzureRbacPrincipalSelection,
   type EntraPermissionsPrincipalSelection
 } from "./ServicePrincipalFieldRenderers";
+import {
+  getRemediationPackageSearchValues,
+  ZtaRemediationPackageBadges
+} from "./ZtaRemediationPackageBadges";
 
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];
@@ -56,6 +61,13 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
+    id: "RemediationPackages",
+    label: "Remediation packages",
+    valueType: "list",
+    getValue: getRemediationPackageSearchValues,
+    filter: { kind: "text" }
+  },
+  {
     id: "azureRbac",
     label: "Azure RBAC",
     valueType: "text",
@@ -84,16 +96,19 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
   {
     id: "potentialOwners",
     label: "Owner",
-    valueType: "list",
-    getValue: (sp) => sp.potentialOwners,
-    filter: { kind: "text" }
-  },
-  {
-    id: "ownerConfidence",
-    label: "Owner confidence",
-    valueType: "ownerConfidence",
-    getValue: (sp) => sp.ownerConfidence ?? "none",
-    filter: { kind: "multiSelect", options: ownerConfidenceOptions }
+    valueType: "text",
+    getValue: (sp) => sp.potentialOwners?.join(", ") ?? "",
+    getFilterValue: (sp) => ({
+      owner: sp.potentialOwners ?? [],
+      confidence: sp.ownerConfidence ?? "none"
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "owner", label: "Owner", filterColumnId: "potentialOwners" },
+        { id: "confidence", label: "Confidence", filterColumnId: "ownerConfidence", options: ownerConfidenceOptions }
+      ]
+    }
   },
   {
     id: "accountEnabled",
@@ -130,34 +145,68 @@ export function ServicePrincipalComponent({
   initialFilters,
   onAzureRbacClick,
   onEntraPermissionsClick,
+  onRemediationPackageClick,
   onZtaRemediationsClick
 }: {
   initialFilters?: ColumnFilters;
   onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
   onEntraPermissionsClick?: (principal: EntraPermissionsPrincipalSelection) => void;
+  onRemediationPackageClick?: (remediationPackage: RemediationPackage) => void;
   onZtaRemediationsClick?: (objectId: string) => void;
 }) {
+  const [openPackageState, setOpenPackageState] = useState<{
+    status: "idle" | "error";
+    message?: string;
+  }>({ status: "idle" });
+  const openRemediationPackage = useCallback(
+    async (packageId: string) => {
+      try {
+        const remediationPackage = await readRemediationPackage(packageId);
+
+        setOpenPackageState({ status: "idle" });
+        onRemediationPackageClick?.(remediationPackage);
+      } catch (error) {
+        setOpenPackageState({
+          status: "error",
+          message: error instanceof Error ? error.message : "Could not open remediation package."
+        });
+      }
+    },
+    [onRemediationPackageClick]
+  );
   const fieldRenderers = useMemo(
-    () =>
-      buildServicePrincipalFieldRenderers<ServicePrincipal>({
+    () => ({
+      ...buildServicePrincipalFieldRenderers<ServicePrincipal>({
         onAzureRbacClick,
         onEntraPermissionsClick,
         onZtaRemediationsClick
       }),
-    [onAzureRbacClick, onEntraPermissionsClick, onZtaRemediationsClick]
+      RemediationPackages: (servicePrincipal: ServicePrincipal) => (
+        <ZtaRemediationPackageBadges
+          packages={servicePrincipal.RemediationPackages ?? []}
+          onRemediationPackageClick={onRemediationPackageClick ? openRemediationPackage : undefined}
+        />
+      )
+    }),
+    [onAzureRbacClick, onEntraPermissionsClick, onRemediationPackageClick, onZtaRemediationsClick, openRemediationPackage]
   );
 
   return (
-    <GenericTable
-      columnHelp={azureServicePrincipalColumnHelp}
-      emptyMessage="No service principals match the filter."
-      fieldRenderers={fieldRenderers}
-      fields={servicePrincipalFields}
-      getRowKey={(row) => row.id}
-      initialFilters={initialFilters}
-      loadPage={readServicePrincipals}
-      loadingMessage="Loading service principals..."
-      minWidthClassName="min-w-[2400px]"
-    />
+    <section className="flex flex-col gap-4">
+      {openPackageState.status === "error" ? (
+        <div className="text-sm text-destructive">{openPackageState.message}</div>
+      ) : null}
+      <GenericTable
+        columnHelp={azureServicePrincipalColumnHelp}
+        emptyMessage="No service principals match the filter."
+        fieldRenderers={fieldRenderers}
+        fields={servicePrincipalFields}
+        getRowKey={(row) => row.id}
+        initialFilters={initialFilters}
+        loadPage={readServicePrincipals}
+        loadingMessage="Loading service principals..."
+        minWidthClassName="min-w-[2520px]"
+      />
+    </section>
   );
 }

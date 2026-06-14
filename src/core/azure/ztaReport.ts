@@ -9,6 +9,7 @@ export type ZtaRemediationSummary = {
   ztaRemediationCountAll: number;
   ztaRemediationFailedCount: number;
   ztaMaxRisk: PermissionRiskLevel;
+  RemediationPackages?: ZtaRemediationPackageSummary[] | null;
 };
 
 export type ZtaRemediationPackageSummary = {

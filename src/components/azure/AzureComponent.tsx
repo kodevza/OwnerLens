@@ -47,11 +47,16 @@ type EntraPermissionsTab = EntraPermissionsPrincipalSelection & {
   returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities">;
 };
 
+type RemediationPackageTab = {
+  remediationPackage: RemediationPackage;
+  returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities" | "zeroTrustAssessment">;
+};
+
 export function AzureComponent() {
   const [activeView, setActiveView] = useState<AzureView>("servicePrincipals");
   const [azureRbacTab, setAzureRbacTab] = useState<AzureRbacTab | null>(null);
   const [entraPermissionsTab, setEntraPermissionsTab] = useState<EntraPermissionsTab | null>(null);
-  const [remediationPackageTab, setRemediationPackageTab] = useState<RemediationPackage | null>(null);
+  const [remediationPackageTab, setRemediationPackageTab] = useState<RemediationPackageTab | null>(null);
   const [principalObjectFilter, setPrincipalObjectFilter] = useState<PrincipalObjectFilter | null>(null);
   const [ztaRelatedObjectFilter, setZtaRelatedObjectFilter] = useState<string | null>(null);
   const activeViewRef = useRef<AzureView>("servicePrincipals");
@@ -156,8 +161,11 @@ export function AzureComponent() {
     activateView("entraPermissions");
   }
 
-  function openRemediationPackage(remediationPackage: RemediationPackage) {
-    setRemediationPackageTab(remediationPackage);
+  function openRemediationPackage(
+    remediationPackage: RemediationPackage,
+    returnView: RemediationPackageTab["returnView"]
+  ) {
+    setRemediationPackageTab({ remediationPackage, returnView });
     activateView("remediationPackage");
   }
 
@@ -178,9 +186,10 @@ export function AzureComponent() {
   }
 
   function closeRemediationPackage() {
+    const nextView = remediationPackageTab?.returnView ?? "zeroTrustAssessment";
     setRemediationPackageTab(null);
     if (activeView === "remediationPackage") {
-      activateView("zeroTrustAssessment");
+      activateView(nextView);
     }
   }
 
@@ -236,6 +245,7 @@ export function AzureComponent() {
             initialFilters={getPrincipalObjectFilters(principalObjectFilter, "servicePrincipals")}
             onAzureRbacClick={(principal) => openAzureRbac(principal, "servicePrincipals")}
             onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "servicePrincipals")}
+            onRemediationPackageClick={(remediationPackage) => openRemediationPackage(remediationPackage, "servicePrincipals")}
             onZtaRemediationsClick={openZtaRelatedObject}
           />
         ) : null}
@@ -244,6 +254,7 @@ export function AzureComponent() {
             initialFilters={getPrincipalObjectFilters(principalObjectFilter, "managedIdentities")}
             onAzureRbacClick={(principal) => openAzureRbac(principal, "managedIdentities")}
             onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "managedIdentities")}
+            onRemediationPackageClick={(remediationPackage) => openRemediationPackage(remediationPackage, "managedIdentities")}
             onZtaRemediationsClick={openZtaRelatedObject}
           />
         ) : null}
@@ -251,8 +262,8 @@ export function AzureComponent() {
           <ZtaComponent
             initialFilters={getZtaRelatedObjectFilters(ztaRelatedObjectFilter)}
             onRelatedObjectClick={openRelatedPrincipal}
-            onRemediationPackageClick={openRemediationPackage}
-            onRemediationPackageCreated={openRemediationPackage}
+            onRemediationPackageClick={(remediationPackage) => openRemediationPackage(remediationPackage, "zeroTrustAssessment")}
+            onRemediationPackageCreated={(remediationPackage) => openRemediationPackage(remediationPackage, "zeroTrustAssessment")}
           />
         ) : null}
         {activeView === "azureRbac" && azureRbacTab ? (
@@ -262,7 +273,10 @@ export function AzureComponent() {
           <EntraPermissionsComponent key={entraPermissionsTab.objectId} principalId={entraPermissionsTab.objectId} />
         ) : null}
         {activeView === "remediationPackage" && remediationPackageTab ? (
-          <RemediationPackageComponent key={remediationPackageTab.id} remediationPackage={remediationPackageTab} />
+          <RemediationPackageComponent
+            key={remediationPackageTab.remediationPackage.id}
+            remediationPackage={remediationPackageTab.remediationPackage}
+          />
         ) : null}
       </div>
     </section>

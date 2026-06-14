@@ -1,14 +1,22 @@
 import type {
+  EntraPrincipalOwnerSummary,
   EntraPrincipalPermissionSummary,
   EntraPrincipalRbacSummary
 } from "../../core/azure/entra/servicePrincipal";
+import type { OwnerConfidence } from "../../core/ownership/types";
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import type { ZtaRemediationSummary } from "../../core/azure/ztaReport";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import { Badge, type BadgeProps } from "../../report/components/ui/badge";
 import { ZtaRemediationBadge } from "./ZtaRemediationBadge";
 
-type EntraPrincipalSummaryRow = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & ZtaRemediationSummary & {
+type EntraPrincipalSummaryRow = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & ZtaRemediationSummary & {
+  azureRbac: string;
+  displayName: string;
+  id: string;
+};
+
+type EntraPrincipalIdentitySummary = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & {
   azureRbac: string;
   displayName: string;
   id: string;
@@ -21,43 +29,92 @@ export type AzureRbacPrincipalSelection = {
 
 export type EntraPermissionsPrincipalSelection = AzureRbacPrincipalSelection;
 
-export function buildServicePrincipalFieldRenderers<TRow extends EntraPrincipalSummaryRow>({
-  onAzureRbacClick,
-  onEntraPermissionsClick,
-  onZtaRemediationsClick
-}: {
+type ServicePrincipalFieldRendererOptions = {
   onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
   onEntraPermissionsClick?: (principal: EntraPermissionsPrincipalSelection) => void;
   onZtaRemediationsClick?: (objectId: string) => void;
+};
+
+type ServicePrincipalFieldRendererMappedOptions<TRow> = ServicePrincipalFieldRendererOptions & {
+  getPrincipalSummary: (row: TRow) => EntraPrincipalIdentitySummary | null;
+};
+
+export function buildServicePrincipalFieldRenderers<TRow extends EntraPrincipalSummaryRow>(
+  options?: ServicePrincipalFieldRendererOptions
+): ReportColumnRenderers<TRow>;
+export function buildServicePrincipalFieldRenderers<TRow>(
+  options: ServicePrincipalFieldRendererMappedOptions<TRow>
+): ReportColumnRenderers<TRow>;
+export function buildServicePrincipalFieldRenderers<TRow>({
+  getPrincipalSummary,
+  onAzureRbacClick,
+  onEntraPermissionsClick,
+  onZtaRemediationsClick
+}: ServicePrincipalFieldRendererOptions & {
+  getPrincipalSummary?: (row: TRow) => EntraPrincipalIdentitySummary | null;
 } = {}): ReportColumnRenderers<TRow> {
+  const readPrincipalSummary =
+    getPrincipalSummary ?? ((row: TRow) => row as unknown as EntraPrincipalIdentitySummary);
+
   return {
-    azureRbac: (sp) => (
-      <RbacSummaryBadge
-        rbacRoleAssignmentCount={sp.rbacRoleAssignmentCount}
-        rbacRoleLevel={sp.rbacRoleLevel}
-        rbacSubscriptionCount={sp.rbacSubscriptionCount}
-        title={sp.azureRbac}
-        onClick={onAzureRbacClick ? () => onAzureRbacClick({ displayName: sp.displayName, objectId: sp.id }) : undefined}
-      />
-    ),
-    oauthPemrissionsCount: (sp) => (
-      <PermissionCountBadge
-        appRolePermissionsCount={sp.appRolesPermissionCount}
-        entraPermissionRisk={sp.entraPermissionRisk}
-        oauthPermissionsCount={sp.oauthPemrissionsCount}
-        onClick={
-          onEntraPermissionsClick ? () => onEntraPermissionsClick({ displayName: sp.displayName, objectId: sp.id }) : undefined
-        }
-      />
-    ),
-    ztaRemediationCountAll: (sp) => (
-      <ZtaRemediationBadge
-        ztaMaxRisk={sp.ztaMaxRisk}
-        ztaRemediationCountAll={sp.ztaRemediationCountAll}
-        ztaRemediationFailedCount={sp.ztaRemediationFailedCount}
-        onClick={onZtaRemediationsClick ? () => onZtaRemediationsClick(sp.id) : undefined}
-      />
-    )
+    azureRbac: (row) => {
+      const sp = readPrincipalSummary(row);
+
+      return sp ? (
+        <RbacSummaryBadge
+          rbacRoleAssignmentCount={sp.rbacRoleAssignmentCount}
+          rbacRoleLevel={sp.rbacRoleLevel}
+          rbacSubscriptionCount={sp.rbacSubscriptionCount}
+          title={sp.azureRbac}
+          onClick={onAzureRbacClick ? () => onAzureRbacClick({ displayName: sp.displayName, objectId: sp.id }) : undefined}
+        />
+      ) : (
+        <EmptyValue />
+      );
+    },
+    oauthPemrissionsCount: (row) => {
+      const sp = readPrincipalSummary(row);
+
+      return sp ? (
+        <PermissionCountBadge
+          appRolePermissionsCount={sp.appRolesPermissionCount}
+          entraPermissionRisk={sp.entraPermissionRisk}
+          oauthPermissionsCount={sp.oauthPemrissionsCount}
+          onClick={
+            onEntraPermissionsClick ? () => onEntraPermissionsClick({ displayName: sp.displayName, objectId: sp.id }) : undefined
+          }
+        />
+      ) : (
+        <EmptyValue />
+      );
+    },
+    potentialOwners: (row) => {
+      const sp = readPrincipalSummary(row);
+
+      return sp ? (
+        <OwnerBadge
+          confidence={sp.ownerConfidence ?? "none"}
+          owners={sp.potentialOwners ?? []}
+        />
+      ) : (
+        <EmptyValue />
+      );
+    },
+    ztaRemediationCountAll: (row) => {
+      const sp = isZtaRemediationSummary(row) ? row : null;
+      const principal = readPrincipalSummary(row);
+
+      return sp && principal ? (
+        <ZtaRemediationBadge
+          ztaMaxRisk={sp.ztaMaxRisk}
+          ztaRemediationCountAll={sp.ztaRemediationCountAll}
+          ztaRemediationFailedCount={sp.ztaRemediationFailedCount}
+          onClick={onZtaRemediationsClick ? () => onZtaRemediationsClick(principal.id) : undefined}
+        />
+      ) : (
+        <EmptyValue />
+      );
+    }
   };
 }
 
@@ -104,6 +161,26 @@ function RbacSummaryBadge({
   );
 }
 
+function OwnerBadge({ confidence, owners }: { confidence: OwnerConfidence; owners: string[] }) {
+  if (owners.length === 0) {
+    return (
+      <Badge className="max-w-72 justify-center truncate" title={`No owner (${confidence} confidence)`} variant={confidence}>
+        -
+      </Badge>
+    );
+  }
+
+  return (
+    <div className="flex max-w-72 flex-wrap gap-1">
+      {owners.map((owner) => (
+        <Badge key={owner} className="max-w-full justify-center truncate" title={`${owner} (${confidence} confidence)`} variant={confidence}>
+          {owner}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
 function PermissionCountBadge({
   appRolePermissionsCount,
   entraPermissionRisk,
@@ -137,4 +214,26 @@ function PermissionCountBadge({
       {badge}
     </button>
   );
+}
+
+function EmptyValue() {
+  return <span className="text-muted-foreground">-</span>;
+}
+
+function isZtaRemediationSummary(value: unknown): value is ZtaRemediationSummary {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const summary = value as Partial<ZtaRemediationSummary>;
+
+  return (
+    typeof summary.ztaRemediationCountAll === "number" &&
+    typeof summary.ztaRemediationFailedCount === "number" &&
+    isPermissionRiskLevel(summary.ztaMaxRisk)
+  );
+}
+
+function isPermissionRiskLevel(value: unknown): value is PermissionRiskLevel {
+  return value === "high" || value === "medium" || value === "low" || value === "none";
 }

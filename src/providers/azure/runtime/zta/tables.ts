@@ -232,6 +232,75 @@ export async function readZeroTrustAssessmentRemediationPackageSummariesByTestId
   return summariesByTestId;
 }
 
+export async function readZeroTrustAssessmentRemediationPackageSummariesByPrincipalId(
+  connection: DuckDBConnection
+): Promise<Map<string, ZtaRemediationPackageSummary[]>> {
+  const rows = await readRows<{
+    principal_id: string;
+    package_id: string;
+    created_at: string;
+    task_count: number;
+  }>(
+    connection,
+    `
+      with resolved_package_principals as (
+        select
+          lower(service_principal.id) as principal_id,
+          remediation_package.id as package_id,
+          remediation_package.created_at,
+          remediation_package.task_count
+        from remediation_tasks task
+        join remediation_packages remediation_package
+          on remediation_package.id = task.package_id
+        join entra_service_principals service_principal
+          on lower(service_principal.id) = lower(task.target_id)
+        where remediation_package.source_kind = 'zeroTrustAssessment'
+          and json_extract_string(task.source_evidence, '$.sourceKind') = 'zeroTrustAssessment'
+        union
+        select
+          lower(service_principal.id) as principal_id,
+          remediation_package.id as package_id,
+          remediation_package.created_at,
+          remediation_package.task_count
+        from remediation_tasks task
+        join remediation_packages remediation_package
+          on remediation_package.id = task.package_id
+        join entra_applications application
+          on lower(application.id) = lower(task.target_id)
+        join entra_service_principals service_principal
+          on lower(service_principal.app_id) = lower(application.app_id)
+        where remediation_package.source_kind = 'zeroTrustAssessment'
+          and json_extract_string(task.source_evidence, '$.sourceKind') = 'zeroTrustAssessment'
+      )
+      select
+        principal_id,
+        package_id,
+        created_at,
+        task_count
+      from resolved_package_principals
+      group by
+        principal_id,
+        package_id,
+        created_at,
+        task_count
+      order by created_at desc, package_id
+    `
+  );
+  const summariesByPrincipalId = new Map<string, ZtaRemediationPackageSummary[]>();
+
+  for (const row of rows) {
+    const summaries = summariesByPrincipalId.get(row.principal_id) ?? [];
+    summaries.push({
+      id: row.package_id,
+      createdAt: row.created_at,
+      taskCount: Number(row.task_count)
+    });
+    summariesByPrincipalId.set(row.principal_id, summaries);
+  }
+
+  return summariesByPrincipalId;
+}
+
 async function readRows<Row extends Record<string, unknown>>(
   connection: DuckDBConnection,
   sql: string,

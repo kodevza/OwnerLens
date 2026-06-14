@@ -7,14 +7,13 @@ import type { JsonValue, RemediationPackage, RemediationTask } from "../../core/
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import { formatDate, formatValue } from "../../lib/utils";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
-import { ConfidenceBadge } from "../../report/components/ConfidenceBadge";
-import { PermissionRiskBadge } from "../../report/components/PermissionRiskBadge";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
 import { Badge } from "../../report/components/ui/badge";
 import { Button } from "../../report/components/ui/button";
 import { Card } from "../../report/components/ui/card";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import { deleteRemediationTasks } from "./api";
+import { buildServicePrincipalFieldRenderers } from "./ServicePrincipalFieldRenderers";
 import {
   getRelatedObjectId,
   getRelatedObjectLabel,
@@ -48,24 +47,31 @@ const remediationTaskFields: ReportFieldDescriptor<RemediationTask>[] = [
     filter: ztaRelatedObjectFieldFilter
   },
   {
-    id: "ownerConfidence",
-    label: "Owner confidence",
-    valueType: "ownerConfidence",
-    getValue: (task) => getTaskAzureEnrichment(task)?.ownerConfidence ?? "none",
-    filter: { kind: "multiSelect", options: ownerConfidenceOptions }
-  },
-  {
     id: "potentialOwners",
-    label: "Owners",
-    valueType: "list",
-    getValue: (task) => getTaskAzureEnrichment(task)?.potentialOwners ?? [],
-    filter: { kind: "text" }
+    label: "Owner",
+    valueType: "text",
+    getValue: (task) => getTaskAzureEnrichment(task)?.potentialOwners.join(", ") ?? "",
+    getFilterValue: (task) => {
+      const enrichment = getTaskAzureEnrichment(task);
+
+      return {
+        owner: enrichment?.potentialOwners ?? [],
+        confidence: enrichment?.ownerConfidence ?? "none"
+      };
+    },
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "owner", label: "Owner" },
+        { id: "confidence", label: "Confidence", options: ownerConfidenceOptions }
+      ]
+    }
   },
   {
-    id: "entraPermissions",
-    label: "Entra permissions",
-    valueType: "riskLevel",
-    getValue: (task) => getTaskAzureEnrichment(task)?.entraPermissionRisk ?? "none",
+    id: "oauthPemrissionsCount",
+    label: "Entra API permissions",
+    valueType: "number",
+    getValue: (task) => getTaskAzureEnrichment(task)?.oauthPemrissionsCount ?? 0,
     getFilterValue: (task) => {
       const enrichment = getTaskAzureEnrichment(task);
       return enrichment
@@ -131,6 +137,9 @@ export function RemediationPackageComponent({ remediationPackage }: { remediatio
   }>({ status: "idle" });
   const fieldRenderers = useMemo<ReportColumnRenderers<RemediationTask>>(
     () => ({
+      ...buildServicePrincipalFieldRenderers<RemediationTask>({
+        getPrincipalSummary: getTaskAzureEnrichment
+      }),
       status: (task) => <Badge variant="outline">{task.status}</Badge>,
       target: (task) => (
         <div>
@@ -140,11 +149,6 @@ export function RemediationPackageComponent({ remediationPackage }: { remediatio
         </div>
       ),
       RelatedObjects: (task) => <RelatedObjectEvidence task={task} />,
-      ownerConfidence: (task) => (
-        <ConfidenceBadge confidence={getTaskAzureEnrichment(task)?.ownerConfidence ?? "none"} />
-      ),
-      entraPermissions: (task) => <EntraPermissionsEvidence task={task} />,
-      azureRbac: (task) => <AzureRbacEvidence task={task} />,
       sourceContext: (task) => <SourceEvidence task={task} />
     }),
     []
@@ -219,40 +223,6 @@ export function RemediationPackageComponent({ remediationPackage }: { remediatio
         )}
       />
     </section>
-  );
-}
-
-function EntraPermissionsEvidence({ task }: { task: RemediationTask }) {
-  const enrichment = getTaskAzureEnrichment(task);
-
-  if (!enrichment) {
-    return <span className="text-muted-foreground">-</span>;
-  }
-
-  return (
-    <div className="flex flex-col gap-1">
-      <PermissionRiskBadge riskLevel={enrichment.entraPermissionRisk} />
-      <span className="text-xs text-muted-foreground">
-        OAuth {enrichment.oauthPemrissionsCount} / app roles {enrichment.appRolesPermissionCount}
-      </span>
-    </div>
-  );
-}
-
-function AzureRbacEvidence({ task }: { task: RemediationTask }) {
-  const enrichment = getTaskAzureEnrichment(task);
-
-  if (!enrichment) {
-    return <span className="text-muted-foreground">-</span>;
-  }
-
-  return (
-    <div className="flex flex-col gap-1">
-      <PermissionRiskBadge riskLevel={enrichment.rbacRoleLevel} />
-      <span className="text-xs text-muted-foreground" title={enrichment.azureRbac}>
-        Roles {enrichment.rbacRoleAssignmentCount} / subscriptions {enrichment.rbacSubscriptionCount}
-      </span>
-    </div>
   );
 }
 

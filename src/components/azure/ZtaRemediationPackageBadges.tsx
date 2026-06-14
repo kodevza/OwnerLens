@@ -1,4 +1,4 @@
-import type { ZtaRemediationPackageSummary, ZtaReportTest } from "../../core/azure/ztaReport";
+import type { ZtaRemediationPackageSummary } from "../../core/azure/ztaReport";
 import { formatDate, formatValue } from "../../lib/utils";
 import { Badge } from "../../report/components/ui/badge";
 
@@ -46,8 +46,10 @@ export function ZtaRemediationPackageBadges({
   );
 }
 
-export function getRemediationPackageSearchValues(test: ZtaReportTest): string[] {
-  return (test.RemediationPackages ?? []).flatMap((remediationPackage) => [
+export function getRemediationPackageSearchValues(row: {
+  RemediationPackages?: ZtaRemediationPackageSummary[] | null;
+}): string[] {
+  return (row.RemediationPackages ?? []).flatMap((remediationPackage) => [
     remediationPackage.id,
     remediationPackage.createdAt,
     formatDate(remediationPackage.createdAt),

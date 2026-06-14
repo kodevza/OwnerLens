@@ -307,13 +307,12 @@ test("opens a remediation package tab after creating a package from Zero Trust A
   expect(container.textContent).toContain("sp-object-id");
   expect(container.textContent).toContain("Service principal exposure");
   expect(container.textContent).toContain("high");
-  expect(getButton("Sort by Owner confidence").textContent).toContain("Owner confidence");
-  expect(getButton("Sort by Owners").textContent).toContain("Owners");
-  expect(getButton("Sort by Entra permissions").textContent).toContain("Entra permissions");
+  expect(getButton("Sort by Owner").textContent).toContain("Owner");
+  expect(getButton("Sort by Entra API permissions").textContent).toContain("Entra API permissions");
   expect(getButton("Sort by Azure RBAC").textContent).toContain("Azure RBAC");
   expect(container.textContent).toContain("alice@example.test");
-  expect(container.textContent).toContain("OAuth 2 / app roles 1");
-  expect(container.textContent).toContain("Roles 1 / subscriptions 1");
+  expect(container.textContent).toContain("2/1");
+  expect(container.textContent).toContain("1/1");
   expect(container.textContent).toContain("Related object");
   expect(container.textContent).toContain("ZTA test zta-1");
   expect(container.textContent).toContain("Status: Failed");

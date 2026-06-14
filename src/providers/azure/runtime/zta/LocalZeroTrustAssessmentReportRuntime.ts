@@ -20,6 +20,7 @@ import {
   zeroTrustAssessmentReportFileName
 } from "./snapshotStore";
 import {
+  readZeroTrustAssessmentRemediationPackageSummariesByPrincipalId,
   readZeroTrustAssessmentRemediationPackageSummariesByTestId,
   readZeroTrustAssessmentRemediationSummaries
 } from "./tables";
@@ -89,6 +90,11 @@ export class LocalZeroTrustAssessmentReportRuntime {
   async readRemediationPackageSummariesByTestId(): Promise<Map<string, ZtaRemediationPackageSummary[]>> {
     this.assertImported();
     return readZeroTrustAssessmentRemediationPackageSummariesByTestId(this.getConnection());
+  }
+
+  async readRemediationPackageSummariesByPrincipalId(): Promise<Map<string, ZtaRemediationPackageSummary[]>> {
+    this.assertImported();
+    return readZeroTrustAssessmentRemediationPackageSummariesByPrincipalId(this.getConnection());
   }
 
   private assertImported(): void {

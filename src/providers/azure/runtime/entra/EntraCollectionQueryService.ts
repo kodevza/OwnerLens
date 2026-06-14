@@ -150,11 +150,15 @@ export class EntraCollectionQueryService {
   }
 
   private async enrichWithZtaRemediationSummaries<Row extends ServicePrincipal | ManagedIdentity>(rows: Row[]): Promise<Row[]> {
-    const summariesByPrincipalId = await this.zeroTrustAssessmentQueries.readRemediationSummaries();
+    const [summariesByPrincipalId, packagesByPrincipalId] = await Promise.all([
+      this.zeroTrustAssessmentQueries.readRemediationSummaries(),
+      this.zeroTrustAssessmentQueries.readRemediationPackageSummariesByPrincipalId()
+    ]);
 
     return rows.map((row) => ({
       ...row,
-      ...(summariesByPrincipalId.get(row.id.toLowerCase()) ?? {})
+      ...(summariesByPrincipalId.get(row.id.toLowerCase()) ?? {}),
+      RemediationPackages: packagesByPrincipalId.get(row.id.toLowerCase()) ?? []
     }));
   }
 }

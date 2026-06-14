@@ -1787,6 +1787,10 @@ test("enriches Entra runtime collections with latest ZTA remediation summaries",
     await writeFile(path.join(dataDir, "older-zta-report.json"), JSON.stringify(olderReport), "utf8");
     await writeFile(path.join(dataDir, "latest-zta-report.json"), JSON.stringify(latestReport), "utf8");
     await runtime.initialize();
+    const remediationPackage = await runtime.createZeroTrustAssessmentRemediationPackage({
+      filters: {},
+      selectedRowKeys: ["sp-failed", "sp-and-mi-passed", "mi-failed"]
+    });
 
     const queriedServicePrincipals = await runtime.queryEntraServicePrincipals({
       page: 1,
@@ -1805,7 +1809,13 @@ test("enriches Entra runtime collections with latest ZTA remediation summaries",
           id: "sp-1",
           ztaRemediationCountAll: 2,
           ztaRemediationFailedCount: 1,
-          ztaMaxRisk: "high"
+          ztaMaxRisk: "high",
+          RemediationPackages: [
+            expect.objectContaining({
+              id: remediationPackage.id,
+              taskCount: remediationPackage.taskCount
+            })
+          ]
         })
       ]
     });
@@ -1817,7 +1827,13 @@ test("enriches Entra runtime collections with latest ZTA remediation summaries",
           id: "principal-uami-1",
           ztaRemediationCountAll: 2,
           ztaRemediationFailedCount: 1,
-          ztaMaxRisk: "medium"
+          ztaMaxRisk: "medium",
+          RemediationPackages: [
+            expect.objectContaining({
+              id: remediationPackage.id,
+              taskCount: remediationPackage.taskCount
+            })
+          ]
         })
       ]
     });
@@ -1868,6 +1884,10 @@ test("enriches service principals with ZTA remediations related to application o
     await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
     await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
     await runtime.initialize();
+    const remediationPackage = await runtime.createZeroTrustAssessmentRemediationPackage({
+      filters: {},
+      selectedRowKeys: ["app-object-failed", "app-object-and-sp-deduped"]
+    });
 
     const queriedServicePrincipals = await runtime.queryEntraServicePrincipals({
       page: 1,
@@ -1881,13 +1901,20 @@ test("enriches service principals with ZTA remediations related to application o
           id: "sp-1",
           ztaRemediationCountAll: 2,
           ztaRemediationFailedCount: 1,
-          ztaMaxRisk: "high"
+          ztaMaxRisk: "high",
+          RemediationPackages: [
+            expect.objectContaining({
+              id: remediationPackage.id,
+              taskCount: remediationPackage.taskCount
+            })
+          ]
         }),
         expect.objectContaining({
           id: "sp-2",
           ztaRemediationCountAll: 0,
           ztaRemediationFailedCount: 0,
-          ztaMaxRisk: "none"
+          ztaMaxRisk: "none",
+          RemediationPackages: []
         })
       ]
     });

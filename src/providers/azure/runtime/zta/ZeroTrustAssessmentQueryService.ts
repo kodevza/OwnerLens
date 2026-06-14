@@ -1,6 +1,7 @@
 import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
 import type {
   ZtaRelatedObject,
+  ZtaRemediationPackageSummary,
   ZtaRemediationSummary,
   ZtaReport,
   ZtaReportTest
@@ -52,6 +53,18 @@ export class ZeroTrustAssessmentQueryService {
   async readRemediationSummaries(): Promise<Map<string, ZtaRemediationSummary>> {
     try {
       return await this.zeroTrustAssessment.readRemediationSummaries();
+    } catch (error) {
+      if (error instanceof RuntimeHttpError && error.statusCode === 404) {
+        return new Map();
+      }
+
+      throw error;
+    }
+  }
+
+  async readRemediationPackageSummariesByPrincipalId(): Promise<Map<string, ZtaRemediationPackageSummary[]>> {
+    try {
+      return await this.zeroTrustAssessment.readRemediationPackageSummariesByPrincipalId();
     } catch (error) {
       if (error instanceof RuntimeHttpError && error.statusCode === 404) {
         return new Map();

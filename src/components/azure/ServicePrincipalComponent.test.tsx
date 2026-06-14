@@ -27,6 +27,7 @@ const columns = [
   "ztaRemediationCountAll",
   "ztaRemediationFailedCount",
   "ztaMaxRisk",
+  "RemediationPackages",
   "azureRbac",
   "oauthPemrissionsCount",
   "appRolesPermissionCount",
@@ -81,6 +82,14 @@ test("loads service principals through the full table UI and sends filters and p
       return jsonResponse(collection([graphApi], { page: 1, count: 1 }));
     }
 
+    if (filters.RemediationPackages?.[0] === "package-1") {
+      return jsonResponse(collection([graphApi], { page: 1, count: 1 }));
+    }
+
+    if (filters.ownerConfidence?.[0]?.includes("high")) {
+      return jsonResponse(collection([graphApi], { page: 1, count: 1 }));
+    }
+
     return jsonResponse(
       collection(page === 1 ? [graphApi, payrollApi] : [disabledLegacyApp], {
         page,
@@ -101,10 +110,10 @@ test("loads service principals through the full table UI and sends filters and p
   expect(getButton("Sort by Type").textContent).toContain("Type");
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
   expect(getButton("Sort by ZTA remediations").textContent).toContain("ZTA remediations");
+  expect(getButton("Sort by Remediation packages").textContent).toContain("Remediation packages");
   expect(getButton("Sort by Azure RBAC").textContent).toContain("Azure RBAC");
   expect(getButton("Sort by Entra API permissions").textContent).toContain("Entra API permissions");
   expect(getButton("Sort by Owner").textContent).toContain("Owner");
-  expect(getButton("Sort by Owner confidence").textContent).toContain("Owner confidence");
   expect(getButton("Sort by Enabled").textContent).toContain("Enabled");
   expect(getButton("Sort by Object ID").textContent).toContain("Object ID");
   expect(getButton("Sort by Publisher").textContent).toContain("Publisher");
@@ -114,6 +123,7 @@ test("loads service principals through the full table UI and sends filters and p
   expect(container.textContent).toContain("2/4");
   expect(container.textContent).toContain("3/1");
   expect(container.textContent).toContain("1/1");
+  expect(container.textContent).toContain("2026-06-12T10:00:00.000Z");
   expect(container.textContent).toContain("platform@example.test");
   expect(container.textContent).toContain("Microsoft");
   expect(container.textContent).toContain("finance");
@@ -148,6 +158,25 @@ test("loads service principals through the full table UI and sends filters and p
   expect(container.textContent).not.toContain("Payroll API");
 
   await clearValueFilter("Filter ZTA remediations");
+  await waitForText(container, "Page 1 of 4");
+
+  await changeInput("Filter Remediation packages", "package-1");
+  await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=RemediationPackages");
+  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=package-1");
+  await waitForText(container, "Microsoft Graph");
+  expect(container.textContent).not.toContain("Payroll API");
+
+  await changeInput("Filter Remediation packages", "");
+  await waitForText(container, "Page 1 of 4");
+
+  await openValueFilter("Filter Owner");
+  await toggleCheckbox("high", true);
+  await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=ownerConfidence");
+  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=high");
+  await waitForText(container, "Microsoft Graph");
+  expect(container.textContent).not.toContain("Payroll API");
+
+  await clearValueFilter("Filter Owner");
   await waitForText(container, "Page 1 of 4");
 
   await changeInput("Filter Display name", "Payroll");
@@ -245,7 +274,14 @@ const graphApi = servicePrincipal({
   tags: ["windowsAzureActiveDirectoryIntegratedApp"],
   ztaMaxRisk: "high",
   ztaRemediationCountAll: 4,
-  ztaRemediationFailedCount: 2
+  ztaRemediationFailedCount: 2,
+  RemediationPackages: [
+    {
+      id: "package-1",
+      createdAt: "2026-06-12T10:00:00.000Z",
+      taskCount: 2
+    }
+  ]
 });
 
 const payrollApi = servicePrincipal({

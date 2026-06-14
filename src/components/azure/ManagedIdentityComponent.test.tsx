@@ -42,6 +42,13 @@ test("loads managed identities with runtime risk enrichment", async () => {
     ztaRemediationCountAll: 3,
     ztaRemediationFailedCount: 1,
     ztaMaxRisk: "medium",
+    RemediationPackages: [
+      {
+        id: "package-1",
+        createdAt: "2026-06-12T10:00:00.000Z",
+        taskCount: 2
+      }
+    ],
     oauthPemrissionsCount: 1,
     appRolesPermissionCount: 2,
     entraPermissionRisk: "high",
@@ -76,6 +83,10 @@ test("loads managed identities with runtime risk enrichment", async () => {
       return jsonResponse(collection([mediumIdentity], { count: 1 }));
     }
 
+    if (filters.ownerConfidence?.[0]?.includes("high")) {
+      return jsonResponse(collection([mediumIdentity], { count: 1 }));
+    }
+
     return jsonResponse(collection([mediumIdentity, highIdentity], { count: 2 }));
   });
   globalThis.fetch = fetchMock;
@@ -87,10 +98,12 @@ test("loads managed identities with runtime risk enrichment", async () => {
   expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/data/entra/managedIdentities?page=1&count=20");
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
   expect(getButton("Sort by ZTA remediations").textContent).toContain("ZTA remediations");
+  expect(getButton("Sort by Remediation packages").textContent).toContain("Remediation packages");
   expect(getButton("Sort by Entra API permissions").textContent).toContain("Entra API permissions");
   expect(getButton("Sort by Tags").textContent).toContain("Tags");
   expect(container.textContent).toContain("1/2");
   expect(container.textContent).toContain("1/3");
+  expect(container.textContent).toContain("2026-06-12T10:00:00.000Z");
   expect(document.querySelector("[title='Contributor on rg/rg-app (write-capable role)']")).toBeDefined();
   expect(container.textContent).toContain("rg-app");
   expect(container.textContent).toContain("alice@example.test");
@@ -131,6 +144,18 @@ test("loads managed identities with runtime risk enrichment", async () => {
   await waitForText(container, "uami-a");
   expect(container.textContent).not.toContain("uami-high");
 
+  await clearValueFilter("Filter ZTA remediations");
+  await waitForText(container, "uami-high");
+
+  await openValueFilter("Filter Owner");
+  await toggleCheckbox("high", true);
+  await waitFor(() => {
+    expect(lastFetchUrl(fetchMock)).toContain("filter%5B0%5D%5Bcolumn%5D=ownerConfidence");
+  });
+  expect(lastFetchUrl(fetchMock)).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=high");
+  await waitForText(container, "uami-a");
+  expect(container.textContent).not.toContain("uami-high");
+
   act(() => root.unmount());
 });
 
@@ -140,6 +165,7 @@ const columns = [
   "ztaRemediationCountAll",
   "ztaRemediationFailedCount",
   "ztaMaxRisk",
+  "RemediationPackages",
   "azureRbac",
   "oauthPemrissionsCount",
   "appRolesPermissionCount",

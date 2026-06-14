@@ -120,6 +120,14 @@ export const azureManagedIdentityColumnHelp = {
       "Column shows the highest adjusted risk across all matching assignments; no assignments returns none."
     ]
   },
+  RemediationPackages: {
+    source: "Computed by app from local runtime remediation packages.",
+    logic: [
+      "Finds Zero Trust Assessment remediation package tasks whose target matches this Entra service principal object ID.",
+      "Also resolves tasks targeting an application object ID back to the matching service principal by appId.",
+      "Shows each matching package by creation time; clicking opens the local remediation package tab."
+    ]
+  },
   azureRbac: {
     source: "Computed by app from Azure roleAssignments JSON.",
     logic: [
