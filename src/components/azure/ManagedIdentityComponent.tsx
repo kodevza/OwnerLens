@@ -21,7 +21,6 @@ import {
 
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];
-const accountEnabledOptions = ["true", "false"];
 
 const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
   {
@@ -29,52 +28,21 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
     label: "Display name",
     valueType: "text",
     getValue: (identity) => identity.displayName,
-    filter: { kind: "text" }
-  },
-  {
-    id: "permissionRisk",
-    label: "Risk",
-    valueType: "riskLevel",
-    getValue: (identity) => identity.permissionRisk,
-    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
-  },
-  {
-    id: "ztaRemediationCountAll",
-    label: "ZTA remediations",
-    valueType: "number",
-    getValue: (identity) => identity.ztaRemediationCountAll,
-    getFilterValue: (identity) => identity.ztaMaxRisk,
-    filterColumnId: "ztaMaxRisk",
-    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
-  },
-  {
-    id: "RemediationPackages",
-    label: "Remediation packages",
-    valueType: "list",
-    getValue: getRemediationPackageSearchValues,
-    filter: { kind: "text" }
-  },
-  {
-    id: "azureRbac",
-    label: "Azure RBAC",
-    valueType: "text",
-    getValue: (identity) => identity.azureRbac,
-    getFilterValue: (identity) => identity.rbacRoleLevel,
-    filterColumnId: "rbacRoleLevel",
-    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
-  },
-  {
-    id: "oauthPemrissionsCount",
-    label: "Entra API permissions",
-    valueType: "number",
-    getValue: (identity) => identity.oauthPemrissionsCount,
-    getFilterValue: (identity) => identity.entraPermissionRisk,
-    filterColumnId: "entraPermissionRisk",
-    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
+    getFilterValue: (identity) => ({
+      displayName: identity.displayName,
+      id: identity.id
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "displayName", label: "Display name", filterColumnId: "displayName" },
+        { id: "id", label: "Object ID", filterColumnId: "id" }
+      ]
+    }
   },
   {
     id: "assignedResourceGroups",
-    label: "Assigned resource groups",
+    label: "Resource group",
     valueType: "list",
     getValue: (identity) => identity.assignedResourceGroups,
     filter: { kind: "text" }
@@ -97,17 +65,44 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
     }
   },
   {
-    id: "accountEnabled",
-    label: "Enabled",
-    valueType: "boolean",
-    getValue: (identity) => identity.accountEnabled,
-    filter: { kind: "multiSelect", options: accountEnabledOptions }
+    id: "permissionRisk",
+    label: "Risk",
+    valueType: "riskLevel",
+    getValue: (identity) => identity.permissionRisk,
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
-    id: "id",
-    label: "Object ID",
+    id: "azureRbac",
+    label: "Azure RBAC",
     valueType: "text",
-    getValue: (identity) => identity.id,
+    getValue: (identity) => identity.azureRbac,
+    getFilterValue: (identity) => identity.rbacRoleLevel,
+    filterColumnId: "rbacRoleLevel",
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
+  },
+  {
+    id: "oauthPemrissionsCount",
+    label: "Entra API permissions",
+    valueType: "number",
+    getValue: (identity) => identity.oauthPemrissionsCount,
+    getFilterValue: (identity) => identity.entraPermissionRisk,
+    filterColumnId: "entraPermissionRisk",
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
+  },
+  {
+    id: "ztaRemediationCountAll",
+    label: "ZTA remediations",
+    valueType: "number",
+    getValue: (identity) => identity.ztaRemediationCountAll,
+    getFilterValue: (identity) => identity.ztaMaxRisk,
+    filterColumnId: "ztaMaxRisk",
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
+  },
+  {
+    id: "RemediationPackages",
+    label: "Remediation packages",
+    valueType: "list",
+    getValue: getRemediationPackageSearchValues,
     filter: { kind: "text" }
   },
   {
@@ -183,7 +178,7 @@ export function ManagedIdentityComponent({
         initialFilters={initialFilters}
         loadPage={readManagedIdentities}
         loadingMessage="Loading managed identities..."
-        minWidthClassName="min-w-[2280px]"
+        minWidthClassName="min-w-[2140px]"
       />
     </section>
   );

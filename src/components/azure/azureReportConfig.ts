@@ -68,7 +68,10 @@ export const azureManagedIdentityColumnHelp = {
   displayName: {
     source: "Direct from Entra JSON.",
     field: "displayName",
-    logic: ["Displayed as-is, with empty values shown as a dash."]
+    logic: [
+      "Display name is shown as-is, with empty values shown as a dash.",
+      "Object ID from the same Entra object is shown below the display name for traceability."
+    ]
   },
   resourceGroup: {
     source: "Computed by app from Azure resource snapshot JSON.",

@@ -60,6 +60,20 @@ const ztaTestFields: ReportFieldDescriptor<ZtaReportTest>[] = [
     filter: { kind: "text" }
   },
   {
+    id: "TestPillar",
+    label: "Pillar",
+    valueType: "text",
+    getValue: (test) => test.TestPillar,
+    filter: { kind: "text" }
+  },
+  {
+    id: "TestCategory",
+    label: "Category",
+    valueType: "text",
+    getValue: (test) => test.TestCategory,
+    filter: { kind: "text" }
+  },
+  {
     id: "TestStatus",
     label: "Status",
     valueType: "text",
@@ -81,20 +95,6 @@ const ztaTestFields: ReportFieldDescriptor<ZtaReportTest>[] = [
     filter: { kind: "multiSelect", options: ztaRiskOptions }
   },
   {
-    id: "TestPillar",
-    label: "Pillar",
-    valueType: "text",
-    getValue: (test) => test.TestPillar,
-    filter: { kind: "text" }
-  },
-  {
-    id: "TestCategory",
-    label: "Category",
-    valueType: "text",
-    getValue: (test) => test.TestCategory,
-    filter: { kind: "text" }
-  },
-  {
     id: "TestImpact",
     label: "Impact",
     valueType: "riskLevel",
@@ -109,15 +109,8 @@ const ztaTestFields: ReportFieldDescriptor<ZtaReportTest>[] = [
     filter: { kind: "text" }
   },
   {
-    id: "TestMinimumLicense",
-    label: "Minimum license",
-    valueType: "list",
-    getValue: (test) => test.TestMinimumLicense,
-    filter: { kind: "text" }
-  },
-  {
     id: "TestTags",
-    label: "Tags",
+    label: "Test Tags",
     valueType: "list",
     getValue: (test) => test.TestTags,
     filter: { kind: "text" }

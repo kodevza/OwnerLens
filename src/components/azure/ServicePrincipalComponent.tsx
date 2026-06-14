@@ -27,7 +27,6 @@ const servicePrincipalTypeOptions: Array<Exclude<EntraServicePrincipalType, "Man
   "SocialIdp",
   "Legacy"
 ];
-const accountEnabledOptions = ["true", "false"];
 
 const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
   {
@@ -35,14 +34,34 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     label: "Display name",
     valueType: "text",
     getValue: (sp) => sp.displayName,
-    filter: { kind: "text" }
+    getFilterValue: (sp) => ({
+      displayName: sp.displayName,
+      id: sp.id
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "displayName", label: "Display name", filterColumnId: "displayName" },
+        { id: "id", label: "Object ID", filterColumnId: "id" }
+      ]
+    }
   },
   {
-    id: "servicePrincipalType",
-    label: "Type",
+    id: "potentialOwners",
+    label: "Owner",
     valueType: "text",
-    getValue: (sp) => sp.servicePrincipalType,
-    filter: { kind: "multiSelect", options: servicePrincipalTypeOptions }
+    getValue: (sp) => sp.potentialOwners?.join(", ") ?? "",
+    getFilterValue: (sp) => ({
+      owner: sp.potentialOwners ?? [],
+      confidence: sp.ownerConfidence ?? "none"
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "owner", label: "Owner", filterColumnId: "potentialOwners" },
+        { id: "confidence", label: "Confidence", filterColumnId: "ownerConfidence", options: ownerConfidenceOptions }
+      ]
+    }
   },
   {
     id: "permissionRisk",
@@ -50,22 +69,6 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     valueType: "riskLevel",
     getValue: (sp) => sp.permissionRisk,
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
-  },
-  {
-    id: "ztaRemediationCountAll",
-    label: "ZTA remediations",
-    valueType: "number",
-    getValue: (sp) => sp.ztaRemediationCountAll,
-    getFilterValue: (sp) => sp.ztaMaxRisk,
-    filterColumnId: "ztaMaxRisk",
-    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
-  },
-  {
-    id: "RemediationPackages",
-    label: "Remediation packages",
-    valueType: "list",
-    getValue: getRemediationPackageSearchValues,
-    filter: { kind: "text" }
   },
   {
     id: "azureRbac",
@@ -94,34 +97,19 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
-    id: "potentialOwners",
-    label: "Owner",
-    valueType: "text",
-    getValue: (sp) => sp.potentialOwners?.join(", ") ?? "",
-    getFilterValue: (sp) => ({
-      owner: sp.potentialOwners ?? [],
-      confidence: sp.ownerConfidence ?? "none"
-    }),
-    filter: {
-      kind: "objectFields",
-      fields: [
-        { id: "owner", label: "Owner", filterColumnId: "potentialOwners" },
-        { id: "confidence", label: "Confidence", filterColumnId: "ownerConfidence", options: ownerConfidenceOptions }
-      ]
-    }
+    id: "ztaRemediationCountAll",
+    label: "ZTA remediations",
+    valueType: "number",
+    getValue: (sp) => sp.ztaRemediationCountAll,
+    getFilterValue: (sp) => sp.ztaMaxRisk,
+    filterColumnId: "ztaMaxRisk",
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
-    id: "accountEnabled",
-    label: "Enabled",
-    valueType: "boolean",
-    getValue: (sp) => sp.accountEnabled,
-    filter: { kind: "multiSelect", options: accountEnabledOptions }
-  },
-  {
-    id: "id",
-    label: "Object ID",
-    valueType: "text",
-    getValue: (sp) => sp.id,
+    id: "RemediationPackages",
+    label: "Remediation packages",
+    valueType: "list",
+    getValue: getRemediationPackageSearchValues,
     filter: { kind: "text" }
   },
   {
@@ -205,7 +193,7 @@ export function ServicePrincipalComponent({
         initialFilters={initialFilters}
         loadPage={readServicePrincipals}
         loadingMessage="Loading service principals..."
-        minWidthClassName="min-w-[2520px]"
+        minWidthClassName="min-w-[2380px]"
       />
     </section>
   );

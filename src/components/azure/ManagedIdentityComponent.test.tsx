@@ -58,6 +58,7 @@ test("loads managed identities with runtime risk enrichment", async () => {
     tags: ["ownerlens", "managed-identity"]
   });
   const highIdentity = managedIdentity({
+    accountEnabled: false,
     appId: "client-2",
     azureRbac: "Owner on subscription (privileged role)",
     displayName: "uami-high",
@@ -87,6 +88,14 @@ test("loads managed identities with runtime risk enrichment", async () => {
       return jsonResponse(collection([mediumIdentity], { count: 1 }));
     }
 
+    if (filters.displayName?.[0] === "uami-a") {
+      return jsonResponse(collection([mediumIdentity], { count: 1 }));
+    }
+
+    if (filters.id?.[0] === "principal-uami-2") {
+      return jsonResponse(collection([highIdentity], { count: 1 }));
+    }
+
     return jsonResponse(collection([mediumIdentity, highIdentity], { count: 2 }));
   });
   globalThis.fetch = fetchMock;
@@ -96,6 +105,7 @@ test("loads managed identities with runtime risk enrichment", async () => {
   await waitForText(container, "uami-a");
 
   expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/data/entra/managedIdentities?page=1&count=20");
+  expect(getButton("Sort by Display name").textContent).toContain("Display name");
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
   expect(getButton("Sort by ZTA remediations").textContent).toContain("ZTA remediations");
   expect(getButton("Sort by Remediation packages").textContent).toContain("Remediation packages");
@@ -156,6 +166,30 @@ test("loads managed identities with runtime risk enrichment", async () => {
   await waitForText(container, "uami-a");
   expect(container.textContent).not.toContain("uami-high");
 
+  await clearValueFilter("Filter Owner");
+  await waitForText(container, "uami-high");
+
+  await openValueFilter("Filter Display name");
+  await changeInput("Display name Display name value", "uami-a");
+  await waitFor(() => {
+    expect(lastFetchUrl(fetchMock)).toContain("filter%5B0%5D%5Bcolumn%5D=displayName");
+  });
+  expect(lastFetchUrl(fetchMock)).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=uami-a");
+  await waitForText(container, "uami-a");
+  expect(container.textContent).not.toContain("uami-high");
+
+  await changeInput("Display name Display name value", "");
+  await waitForText(container, "uami-high");
+
+  await changeInput("Display name Object ID value", "principal-uami-2");
+  await waitFor(() => {
+    expect(lastFetchUrl(fetchMock)).toContain("filter%5B0%5D%5Bcolumn%5D=id");
+  });
+  expect(lastFetchUrl(fetchMock)).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=principal-uami-2");
+  await waitForText(container, "uami-high");
+  expect(getDisplayNameElement("uami-high").className).toContain("text-muted-foreground");
+  expect(container.textContent).not.toContain("uami-a");
+
   act(() => root.unmount());
 });
 
@@ -173,7 +207,6 @@ const columns = [
   "assignedResourceGroups",
   "potentialOwners",
   "ownerConfidence",
-  "accountEnabled",
   "id",
   "appId",
   "tags"
@@ -248,6 +281,15 @@ async function clickButton(label: string) {
   });
 }
 
+async function changeInput(label: string, value: string) {
+  const input = getInput(label);
+
+  await act(async () => {
+    setNativeInputValue(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 async function openValueFilter(label: string) {
   await clickButton(label);
   await waitForText(document.body, "Clear");
@@ -280,6 +322,49 @@ function getButton(label: string): HTMLButtonElement {
   }
 
   return button;
+}
+
+function getCell(text: string): HTMLTableCellElement {
+  const cell = [...document.querySelectorAll<HTMLTableCellElement>("td")].find((element) =>
+    element.textContent?.includes(text)
+  );
+  if (!cell) {
+    throw new Error(`Could not find table cell: ${text}`);
+  }
+
+  return cell;
+}
+
+function getDisplayNameElement(text: string): HTMLDivElement {
+  const element = [...getCell(text).querySelectorAll<HTMLDivElement>("div")].find((candidate) => candidate.textContent === text);
+  if (!element) {
+    throw new Error(`Could not find display name element: ${text}`);
+  }
+
+  return element;
+}
+
+function getInput(label: string): HTMLInputElement {
+  const input = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+  if (!input) {
+    throw new Error(`Could not find input: ${label}`);
+  }
+
+  return input;
+}
+
+function setNativeInputValue(input: HTMLInputElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(input, "value")?.set;
+  const prototype = Object.getPrototypeOf(input) as HTMLInputElement;
+  const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+
+  if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
+    prototypeValueSetter.call(input, value);
+  } else if (valueSetter) {
+    valueSetter.call(input, value);
+  } else {
+    input.value = value;
+  }
 }
 
 function findButton(label: string): HTMLButtonElement | undefined {

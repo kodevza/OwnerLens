@@ -13,6 +13,7 @@ import { Card } from "../../report/components/ui/card";
 import { getOwnerEvidenceKey, isActivityOwnerRow } from "../../report/ownerManualPrecheck";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
+import { OwnerBadge } from "./ServicePrincipalFieldRenderers";
 
 const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];
 const resourceGroupOwnerSourceOptions = [
@@ -27,28 +28,36 @@ const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = 
     label: "Resource group",
     valueType: "text",
     getValue: (group) => group.resourceGroup,
-    filter: { kind: "text" }
-  },
-  {
-    id: "subscriptionName",
-    label: "Subscription",
-    valueType: "text",
-    getValue: (group) => group.subscriptionName,
-    filter: { kind: "text" }
+    getFilterValue: (group) => ({
+      resourceGroup: group.resourceGroup,
+      subscriptionName: group.subscriptionName,
+      subscriptionId: group.subscriptionId
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "resourceGroup", label: "Resource group", filterColumnId: "resourceGroup" },
+        { id: "subscriptionName", label: "Subscription", filterColumnId: "subscriptionName" },
+        { id: "subscriptionId", label: "Subscription ID", filterColumnId: "subscriptionId" }
+      ]
+    }
   },
   {
     id: "owner",
     label: "Owner",
     valueType: "text",
     getValue: (group) => group.owner,
-    filter: { kind: "text" }
-  },
-  {
-    id: "confidence",
-    label: "Confidence",
-    valueType: "ownerConfidence",
-    getValue: (group) => group.confidence,
-    filter: { kind: "multiSelect", options: ownerConfidenceOptions }
+    getFilterValue: (group) => ({
+      owner: group.owner,
+      confidence: group.confidence
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "owner", label: "Owner", filterColumnId: "owner" },
+        { id: "confidence", label: "Confidence", filterColumnId: "confidence", options: ownerConfidenceOptions }
+      ]
+    }
   },
   {
     id: "source",
@@ -69,13 +78,6 @@ const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = 
     label: "Location",
     valueType: "text",
     getValue: (group) => group.location,
-    filter: { kind: "text" }
-  },
-  {
-    id: "subscriptionId",
-    label: "Subscription ID",
-    valueType: "text",
-    getValue: (group) => group.subscriptionId,
     filter: { kind: "text" }
   },
   {
@@ -108,6 +110,13 @@ export function ResourceGroupComponent() {
   );
   const resourceGroupFieldRenderers = useMemo<ReportColumnRenderers<ResourceGroupOwnershipRow>>(
     () => ({
+      resourceGroup: (group) => (
+        <div>
+          <div>{group.resourceGroup}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">{group.subscriptionName}</div>
+        </div>
+      ),
+      owner: (group) => <OwnerBadge confidence={group.confidence} owners={group.owner ? [group.owner] : []} />,
       evidence: (group) => (
         <EvidenceList
           canDisable={isActivityOwnerRow(group)}

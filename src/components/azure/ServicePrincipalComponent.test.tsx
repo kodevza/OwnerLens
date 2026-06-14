@@ -34,7 +34,6 @@ const columns = [
   "entraPermissionRisk",
   "potentialOwners",
   "ownerConfidence",
-  "accountEnabled",
   "id",
   "appId",
   "appDisplayName",
@@ -62,12 +61,12 @@ test("loads service principals through the full table UI and sends filters and p
       return jsonResponse(collection([payrollApi], { page, count: 1 }));
     }
 
-    if (filters.servicePrincipalType?.includes("Application")) {
-      return jsonResponse(collection([graphApi, payrollApi], { page: 1, count: 2 }));
+    if (filters.id?.[0] === "graph-sp-id") {
+      return jsonResponse(collection([graphApi], { page: 1, count: 1 }));
     }
 
-    if (filters.accountEnabled?.includes("false")) {
-      return jsonResponse(collection([disabledLegacyApp], { page: 1, count: 1 }));
+    if (filters.servicePrincipalType?.includes("Application")) {
+      return jsonResponse(collection([graphApi, payrollApi], { page: 1, count: 2 }));
     }
 
     if (filters.rbacRoleLevel?.some((value) => value.includes("high"))) {
@@ -114,8 +113,6 @@ test("loads service principals through the full table UI and sends filters and p
   expect(getButton("Sort by Azure RBAC").textContent).toContain("Azure RBAC");
   expect(getButton("Sort by Entra API permissions").textContent).toContain("Entra API permissions");
   expect(getButton("Sort by Owner").textContent).toContain("Owner");
-  expect(getButton("Sort by Enabled").textContent).toContain("Enabled");
-  expect(getButton("Sort by Object ID").textContent).toContain("Object ID");
   expect(getButton("Sort by Publisher").textContent).toContain("Publisher");
   expect(getButton("Sort by Tags").textContent).toContain("Tags");
   expect(container.textContent).toContain("graph-sp-id");
@@ -179,14 +176,24 @@ test("loads service principals through the full table UI and sends filters and p
   await clearValueFilter("Filter Owner");
   await waitForText(container, "Page 1 of 4");
 
-  await changeInput("Filter Display name", "Payroll");
+  await openValueFilter("Filter Display name");
+  await changeInput("Display name Display name value", "Payroll");
   await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=displayName");
   expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=Payroll");
   await waitForText(container, "Payroll API");
   expect(container.textContent).not.toContain("Microsoft Graph");
 
-  await changeInput("Filter Display name", "");
+  await changeInput("Display name Display name value", "");
   await waitForText(container, "Microsoft Graph");
+
+  await changeInput("Display name Object ID value", "graph-sp-id");
+  await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=id");
+  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=graph-sp-id");
+  await waitForText(container, "Microsoft Graph");
+  expect(container.textContent).not.toContain("Payroll API");
+
+  await changeInput("Display name Object ID value", "");
+  await waitForText(container, "Page 1 of 4");
 
   await openValueFilter("Filter Type");
   await toggleCheckbox("Application", true);
@@ -198,18 +205,10 @@ test("loads service principals through the full table UI and sends filters and p
   await clearValueFilter("Filter Type");
   await waitForText(container, "Page 1 of 4");
 
-  await openValueFilter("Filter Enabled");
-  await toggleCheckbox("false", true);
-  await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=accountEnabled");
-  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=false");
-  await waitForText(container, "Legacy disabled app");
-
-  await clearValueFilter("Filter Enabled");
-  await waitForText(container, "Page 1 of 4");
-
   await clickButton("Next");
   await waitForRequestContaining("page=2&count=20");
   await waitForText(container, "Legacy disabled app");
+  expect(getDisplayNameElement("Legacy disabled app").className).toContain("text-muted-foreground");
   expect(container.textContent).toContain("Page 2 of 4");
 
   act(() => root.unmount());
@@ -470,6 +469,15 @@ function getCell(text: string): HTMLTableCellElement {
   }
 
   return cell;
+}
+
+function getDisplayNameElement(text: string): HTMLDivElement {
+  const element = [...getCell(text).querySelectorAll<HTMLDivElement>("div")].find((candidate) => candidate.textContent === text);
+  if (!element) {
+    throw new Error(`Could not find display name element: ${text}`);
+  }
+
+  return element;
 }
 
 function findButton(label: string): HTMLButtonElement | undefined {

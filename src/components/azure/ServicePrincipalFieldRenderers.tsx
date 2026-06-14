@@ -11,12 +11,14 @@ import { Badge, type BadgeProps } from "../../report/components/ui/badge";
 import { ZtaRemediationBadge } from "./ZtaRemediationBadge";
 
 type EntraPrincipalSummaryRow = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & ZtaRemediationSummary & {
+  accountEnabled?: boolean;
   azureRbac: string;
   displayName: string;
   id: string;
 };
 
 type EntraPrincipalIdentitySummary = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & {
+  accountEnabled?: boolean;
   azureRbac: string;
   displayName: string;
   id: string;
@@ -57,6 +59,15 @@ export function buildServicePrincipalFieldRenderers<TRow>({
     getPrincipalSummary ?? ((row: TRow) => row as unknown as EntraPrincipalIdentitySummary);
 
   return {
+    displayName: (row) => {
+      const sp = readPrincipalSummary(row);
+
+      return sp ? (
+        <PrincipalDisplayName disabled={sp.accountEnabled === false} displayName={sp.displayName} objectId={sp.id} />
+      ) : (
+        <EmptyValue />
+      );
+    },
     azureRbac: (row) => {
       const sp = readPrincipalSummary(row);
 
@@ -120,12 +131,33 @@ export function buildServicePrincipalFieldRenderers<TRow>({
 
 export const servicePrincipalFieldRenderers = buildServicePrincipalFieldRenderers();
 
+function PrincipalDisplayName({
+  disabled,
+  displayName,
+  objectId
+}: {
+  disabled: boolean;
+  displayName: string;
+  objectId: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className={disabled ? "font-medium text-muted-foreground" : "font-medium"}>{displayName || "-"}</div>
+      <div className="mt-0.5 font-mono text-xs text-muted-foreground">{objectId}</div>
+    </div>
+  );
+}
+
 const permissionRiskBadgeVariants: Record<PermissionRiskLevel, BadgeProps["variant"]> = {
   high: "riskHigh",
   medium: "riskMedium",
   low: "riskLow",
   none: "riskNone"
 };
+
+const summaryBadgeTypographyClassName = "font-sans text-xs font-semibold";
+const summaryBadgeButtonClassName = `rounded-full ${summaryBadgeTypographyClassName} transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`;
+const numericSummaryBadgeClassName = `${summaryBadgeTypographyClassName} tabular-nums`;
 
 function RbacSummaryBadge({
   onClick,
@@ -136,7 +168,7 @@ function RbacSummaryBadge({
 }: EntraPrincipalRbacSummary & { title: string; onClick?: () => void }) {
   const badge = (
     <Badge
-      className="min-w-12 justify-center tabular-nums"
+      className={`min-w-12 justify-center ${numericSummaryBadgeClassName}`}
       title={title}
       variant={permissionRiskBadgeVariants[rbacRoleLevel]}
     >
@@ -151,7 +183,7 @@ function RbacSummaryBadge({
   return (
     <button
       aria-label={`Open Azure RBAC assignments ${rbacRoleAssignmentCount}/${rbacSubscriptionCount}`}
-      className="rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={summaryBadgeButtonClassName}
       title={title}
       type="button"
       onClick={onClick}
@@ -161,10 +193,10 @@ function RbacSummaryBadge({
   );
 }
 
-function OwnerBadge({ confidence, owners }: { confidence: OwnerConfidence; owners: string[] }) {
+export function OwnerBadge({ confidence, owners }: { confidence: OwnerConfidence; owners: string[] }) {
   if (owners.length === 0) {
     return (
-      <Badge className="max-w-72 justify-center truncate" title={`No owner (${confidence} confidence)`} variant={confidence}>
+      <Badge className={`max-w-72 justify-center truncate ${summaryBadgeTypographyClassName}`} title={`No owner (${confidence} confidence)`} variant={confidence}>
         -
       </Badge>
     );
@@ -173,7 +205,7 @@ function OwnerBadge({ confidence, owners }: { confidence: OwnerConfidence; owner
   return (
     <div className="flex max-w-72 flex-wrap gap-1">
       {owners.map((owner) => (
-        <Badge key={owner} className="max-w-full justify-center truncate" title={`${owner} (${confidence} confidence)`} variant={confidence}>
+        <Badge key={owner} className={`max-w-full justify-center truncate ${summaryBadgeTypographyClassName}`} title={`${owner} (${confidence} confidence)`} variant={confidence}>
           {owner}
         </Badge>
       ))}
@@ -194,7 +226,7 @@ function PermissionCountBadge({
 }) {
   const label = `${oauthPermissionsCount}/${appRolePermissionsCount}`;
   const badge = (
-    <Badge className="min-w-8 justify-center tabular-nums" variant={permissionRiskBadgeVariants[entraPermissionRisk]}>
+    <Badge className={`min-w-8 justify-center ${numericSummaryBadgeClassName}`} variant={permissionRiskBadgeVariants[entraPermissionRisk]}>
       {label}
     </Badge>
   );
@@ -206,7 +238,7 @@ function PermissionCountBadge({
   return (
     <button
       aria-label={`Open Entra API permissions ${label}`}
-      className="rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={summaryBadgeButtonClassName}
       title={`Open Entra API permissions ${label}`}
       type="button"
       onClick={onClick}
