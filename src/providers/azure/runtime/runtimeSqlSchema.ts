@@ -1,6 +1,7 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 import { remediationSchemaSql } from "../../../core/runtime/remediationSqlSchema";
+import { snapshotImportRegistrySql } from "../../../core/runtime/snapshotImportRegistry";
 
 const entraSnapshotSchemaSql = [
   `
@@ -336,6 +337,7 @@ const azureIdentityEnrichmentSchemaSql = [
 ];
 
 const runtimeSchemaSql = [
+  ...snapshotImportRegistrySql,
   ...entraSnapshotSchemaSql,
   ...entraServicePrincipalSchemaSql,
   ...entraApplicationSchemaSql,

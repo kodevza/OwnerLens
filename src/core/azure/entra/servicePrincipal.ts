@@ -23,6 +23,17 @@ export type EntraPrincipalRbacSummary = {
   rbacSubscriptionCount: number;
 };
 
+export type EntraPrincipalOwnerSummary = {
+  potentialOwners: string[];
+  ownerConfidence: OwnerConfidence;
+};
+
+export type EntraPrincipalAzureRemediationSummary = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & EntraPrincipalOwnerSummary & {
+  azureRbac: string;
+  displayName: string;
+  id: string;
+};
+
 export type ServicePrincipal = EntraServicePrincipal & AzureIdentityRuntimeEnrichment & {
   servicePrincipalType: Exclude<EntraServicePrincipalType, "ManagedIdentity">;
   potentialOwners?: string[];

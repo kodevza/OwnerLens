@@ -10,7 +10,6 @@ import { formatDate, formatValue } from "../../lib/utils";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
 import type { ColumnFilters } from "../../report/components/reportTableControls";
-import { Badge } from "../../report/components/ui/badge";
 import { Button } from "../../report/components/ui/button";
 import { Card } from "../../report/components/ui/card";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
@@ -23,6 +22,12 @@ import {
   getRemediationPackageSearchValues,
   ZtaRemediationPackageBadges
 } from "./ZtaRemediationPackageBadges";
+import {
+  getRelatedObjectsWithIds,
+  getRelatedObjectSearchValues,
+  RelatedObjectBadges,
+  ztaRelatedObjectFieldFilter
+} from "./ztaRelatedObjects";
 
 type ZtaComponentProps = {
   initialFilters?: ColumnFilters;
@@ -66,7 +71,7 @@ const ztaTestFields: ReportFieldDescriptor<ZtaReportTest>[] = [
     label: "Related objects",
     valueType: "list",
     getValue: getRelatedObjectSearchValues,
-    filter: { kind: "text" }
+    filter: ztaRelatedObjectFieldFilter
   },
   {
     id: "TestRisk",
@@ -291,100 +296,4 @@ function SummaryCard({ label, value }: { label: string; value: unknown }) {
       <strong className="[overflow-wrap:anywhere] text-xl leading-tight">{formatValue(value)}</strong>
     </Card>
   );
-}
-
-function RelatedObjectBadges({
-  objects,
-  onRelatedObjectClick
-}: {
-  objects: ZtaRelatedObject[];
-  onRelatedObjectClick?: (relatedObject: ZtaRelatedObject) => void;
-}) {
-  if (objects.length === 0) {
-    return formatValue(null);
-  }
-
-  return (
-    <div className="flex max-w-96 flex-wrap gap-1">
-      {objects.map((object) => {
-        const id = getRelatedObjectId(object);
-        const title = getRelatedObjectTooltipTitle(object);
-
-        if (!onRelatedObjectClick) {
-          return (
-            <Badge key={id} className="max-w-full font-mono font-medium" title={title} variant="outline">
-              <span className="truncate">{id}</span>
-            </Badge>
-          );
-        }
-
-        return (
-          <button
-            key={id}
-            aria-label={`Open related object ${id}`}
-            className="inline-flex max-w-full items-center rounded-full border px-2.5 py-0.5 font-mono text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            title={title}
-            type="button"
-            onClick={() => onRelatedObjectClick(object)}
-          >
-            <span className="truncate">{id}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function getRelatedObjectSearchValues(test: ZtaReportTest): string[] {
-  return getRelatedObjectsWithIds(test).flatMap(getRelatedObjectSearchValuesForObject);
-}
-
-function getRelatedObjectSearchValuesForObject(object: ZtaRelatedObject): string[] {
-  return [
-    object.id,
-    object.object_id,
-    object.servicePrincipalId,
-    object.applicationId,
-    object.displayName,
-    object.servicePrincipalType,
-    object.userPrincipalName,
-    ...(object.tags ?? [])
-  ].filter(isNonEmptyString);
-}
-
-function getRelatedObjectsWithIds(test: ZtaReportTest): ZtaRelatedObject[] {
-  return (test.RelatedObjects ?? []).filter((object): object is ZtaRelatedObject & ({ id: string } | { object_id: string }) =>
-    isNonEmptyString(getRelatedObjectId(object))
-  );
-}
-
-function getRelatedObjectId(object: ZtaRelatedObject): string {
-  return object.id ?? object.object_id ?? "";
-}
-
-function getRelatedObjectTooltipTitle(object: ZtaRelatedObject): string {
-  return [
-    ["id", object.id],
-    ["object_id", object.object_id],
-    ["servicePrincipalId", object.servicePrincipalId],
-    ["tags", object.tags],
-    ["applicationId", object.applicationId],
-    ["displayName", object.displayName],
-    ["servicePrincipalType", object.servicePrincipalType],
-    ["userPrincipalName", object.userPrincipalName]
-  ]
-    .map(([label, value]) => `${label}: ${formatTooltipValue(value)}`)
-    .join("\n");
-}
-
-function formatTooltipValue(value: string | string[] | null | undefined): string {
-  if (Array.isArray(value)) {
-    return value.length > 0 ? value.join(", ") : "-";
-  }
-
-  return isNonEmptyString(value) ? value : "-";
-}
-
-function isNonEmptyString(value: string | null | undefined): value is string {
-  return typeof value === "string" && value.trim().length > 0;
 }

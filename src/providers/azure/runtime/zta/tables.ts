@@ -285,7 +285,7 @@ function enrichRelatedObjectsWithServicePrincipalIds(
   test: ZeroTrustAssessmentTest,
   servicePrincipalRelatedObjectIds: Map<string, ServicePrincipalRelatedObjectIds>
 ): ZeroTrustAssessmentTest {
-  if (!servicePrincipalRelatedObjectIds.size || !test.RelatedObjects?.length) {
+  if (!test.RelatedObjects?.length) {
     return test;
   }
 
@@ -294,11 +294,12 @@ function enrichRelatedObjectsWithServicePrincipalIds(
       return relatedObject;
     }
 
+    const sanitizedRelatedObject = stripZeroTrustAssessmentRelatedObjectTags(relatedObject);
     const ids = resolveRelatedObjectIds(relatedObject, servicePrincipalRelatedObjectIds);
     return ids === undefined
-      ? relatedObject
+      ? sanitizedRelatedObject
       : {
-          ...relatedObject,
+          ...sanitizedRelatedObject,
           servicePrincipalId: ids.servicePrincipalId,
           tags: ids.tags,
           applicationId: ids.applicationId
@@ -309,6 +310,16 @@ function enrichRelatedObjectsWithServicePrincipalIds(
     ...test,
     RelatedObjects: relatedObjects
   };
+}
+
+function stripZeroTrustAssessmentRelatedObjectTags(relatedObject: ZtaRelatedObject): ZtaRelatedObject {
+  if (!Object.prototype.hasOwnProperty.call(relatedObject, "tags")) {
+    return relatedObject;
+  }
+
+  const sanitizedRelatedObject = { ...relatedObject };
+  delete sanitizedRelatedObject.tags;
+  return sanitizedRelatedObject;
 }
 
 function resolveRelatedObjectIds(

@@ -15,29 +15,11 @@ import type { ZeroTrustAssessmentReport } from "./types";
 
 export const zeroTrustAssessmentReportFileName = "ZeroTrustAssessmentReport.json";
 
-export type ZeroTrustAssessmentDuckDbImportStatus = {
-  imported: boolean;
-  fileName: string;
-  reportId: string | null;
-  testCount: number;
-  importedAt: string | null;
-};
-
-export function createEmptyZeroTrustAssessmentImportStatus(): ZeroTrustAssessmentDuckDbImportStatus {
-  return {
-    imported: false,
-    fileName: zeroTrustAssessmentReportFileName,
-    reportId: null,
-    testCount: 0,
-    importedAt: null
-  };
-}
-
 export async function importZeroTrustAssessmentReportToDuckDb(
   connection: DuckDBConnection,
   report: ZeroTrustAssessmentReport,
   fileName = zeroTrustAssessmentReportFileName
-): Promise<ZeroTrustAssessmentDuckDbImportStatus> {
+): Promise<string> {
   await connection.run("begin transaction");
   try {
     const reportId = randomUUID();
@@ -49,13 +31,7 @@ export async function importZeroTrustAssessmentReportToDuckDb(
     await insertZeroTrustAssessmentRelatedObjectRows(connection, reportId, report.Tests ?? []);
 
     await connection.run("commit");
-    return {
-      imported: true,
-      fileName,
-      reportId,
-      testCount: report.Tests?.length ?? 0,
-      importedAt
-    };
+    return reportId;
   } catch (error) {
     await connection.run("rollback");
     throw error;

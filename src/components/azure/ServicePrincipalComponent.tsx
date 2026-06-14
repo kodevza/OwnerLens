@@ -60,13 +60,21 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     label: "Azure RBAC",
     valueType: "text",
     getValue: (sp) => sp.azureRbac,
-    getFilterValue: (sp) => sp.rbacRoleLevel,
-    filterColumnId: "rbacRoleLevel",
-    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
+    getFilterValue: (sp) => ({
+      roleLevel: sp.rbacRoleLevel,
+      summary: sp.azureRbac
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "roleLevel", label: "Role level", filterColumnId: "rbacRoleLevel", options: permissionRiskLevelOptions },
+        { id: "summary", label: "Summary", filterColumnId: "azureRbac" }
+      ]
+    }
   },
   {
     id: "oauthPemrissionsCount",
-    label: "Graph permissions",
+    label: "Entra API permissions",
     valueType: "text",
     getValue: (sp) => sp.oauthPemrissionsCount,
     getFilterValue: (sp) => sp.entraPermissionRisk,

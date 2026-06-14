@@ -1,6 +1,9 @@
 import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
 import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
-import type { ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
+import type {
+  EntraPrincipalAzureRemediationSummary,
+  ServicePrincipal
+} from "../../../../core/azure/entra/servicePrincipal";
 import type {
   AzureRoleAssignment,
   AzureUserAssignedManagedIdentity,
@@ -48,6 +51,42 @@ export class EntraCollectionQueryService {
     options: LocalReportCollectionQueryOptions
   ): Promise<LocalReportPaginatedCollection<"entra.managedIdentities">> {
     return buildPaginatedCollection("entra.managedIdentities", await this.readManagedIdentityRows(), options);
+  }
+
+  async readServicePrincipalRemediationSummaries(
+    principalIds: string[]
+  ): Promise<Map<string, EntraPrincipalAzureRemediationSummary>> {
+    const principalIdSet = new Set(principalIds.map((principalId) => principalId.trim().toLowerCase()).filter(Boolean));
+    const summaries = new Map<string, EntraPrincipalAzureRemediationSummary>();
+
+    if (principalIdSet.size === 0) {
+      return summaries;
+    }
+
+    for (const row of await this.readServicePrincipalRows()) {
+      const servicePrincipal = row as unknown as ServicePrincipal;
+      const normalizedPrincipalId = servicePrincipal.id.toLowerCase();
+
+      if (!principalIdSet.has(normalizedPrincipalId)) {
+        continue;
+      }
+
+      summaries.set(normalizedPrincipalId, {
+        id: servicePrincipal.id,
+        displayName: servicePrincipal.displayName,
+        azureRbac: servicePrincipal.azureRbac,
+        oauthPemrissionsCount: servicePrincipal.oauthPemrissionsCount,
+        appRolesPermissionCount: servicePrincipal.appRolesPermissionCount,
+        entraPermissionRisk: servicePrincipal.entraPermissionRisk,
+        rbacRoleAssignmentCount: servicePrincipal.rbacRoleAssignmentCount,
+        rbacRoleLevel: servicePrincipal.rbacRoleLevel,
+        rbacSubscriptionCount: servicePrincipal.rbacSubscriptionCount,
+        potentialOwners: servicePrincipal.potentialOwners ?? [],
+        ownerConfidence: servicePrincipal.ownerConfidence ?? "none"
+      });
+    }
+
+    return summaries;
   }
 
   async queryOAuth2PermissionGrants(

@@ -8,6 +8,7 @@ import { Card } from "./ui/card";
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "./ui/table";
 import {
   applyColumnFilterValueToggle,
+  applyColumnObjectFieldFilter,
   applyColumnValuesFilter,
   applyReportTableControls,
   ReportTableHead,
@@ -213,6 +214,12 @@ export function GenericTableView<TRow>({
       : (columnId: string, values: string[]) => {
           onFiltersChange(applyColumnValuesFilter(filters, columnId, values));
         };
+  const setColumnObjectFieldFilter =
+    onFiltersChange === undefined
+      ? localControls.setColumnObjectFieldFilter
+      : (columnId: string, conditions: Array<{ fieldId: string; value: string }>) => {
+          onFiltersChange(applyColumnObjectFieldFilter(filters, columnId, conditions));
+        };
   const toggleColumnValueFilter =
     onFiltersChange === undefined
       ? localControls.toggleColumnValueFilter
@@ -251,6 +258,7 @@ export function GenericTableView<TRow>({
               sortRules={sortRules}
               onFilterChange={setColumnFilter}
               onFilterOpenChange={setColumnFilterOpen}
+              onObjectFieldFilterChange={setColumnObjectFieldFilter}
               onValueFilterToggle={toggleColumnValueFilter}
               onValuesFilterChange={setColumnValuesFilter}
               onSortToggle={toggleColumnSort}
@@ -294,10 +302,41 @@ function remapColumnFiltersForRuntime<TRow>(
   filters: ColumnFilters
 ): ColumnFilters {
   const filterColumnByFieldId = new Map(fields.map((field) => [field.id, field.filterColumnId ?? field.id]));
+  const fieldById = new Map(fields.map((field) => [field.id, field]));
   const next: ColumnFilters = {};
 
   for (const [columnId, filter] of Object.entries(filters)) {
-    next[filterColumnByFieldId.get(columnId) ?? columnId] = filter;
+    const field = fieldById.get(columnId);
+    const runtimeColumnId = filterColumnByFieldId.get(columnId) ?? columnId;
+
+    if (filter.type === "objectFields" && field?.filter?.kind === "objectFields") {
+      const filterFieldById = new Map(field.filter.fields.map((filterField) => [filterField.id, filterField]));
+      const runtimeObjectConditions: Array<{ fieldId: string; value: string }> = [];
+
+      filter.conditions.forEach((condition) => {
+        const filterField = filterFieldById.get(condition.fieldId);
+
+        if (filterField?.filterColumnId) {
+          next[filterField.filterColumnId] = { type: "text", value: condition.value };
+          return;
+        }
+
+        runtimeObjectConditions.push({
+          fieldId: `${runtimeColumnId}.${condition.fieldId}`,
+          value: condition.value
+        });
+      });
+
+      if (runtimeObjectConditions.length > 0) {
+        next[runtimeColumnId] = {
+          type: "objectFields",
+          conditions: runtimeObjectConditions
+        };
+      }
+      continue;
+    }
+
+    next[runtimeColumnId] = filter;
   }
 
   return next;

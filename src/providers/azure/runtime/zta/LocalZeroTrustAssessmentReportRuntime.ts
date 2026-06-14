@@ -1,6 +1,13 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
+import {
+  createEmptySnapshotImportStatus,
+  prepareSnapshotImportDecision,
+  recordSnapshotImport,
+  snapshotImportStatusFromRecord,
+  type SnapshotImportStatus
+} from "../../../../core/runtime/snapshotImportRegistry";
 import type {
   ZtaRemediationPackageSummary,
   ZtaRemediationSummary,
@@ -8,10 +15,9 @@ import type {
 } from "../../../../core/azure/ztaReport";
 import { compareByNewestDateField, discoverJsonFile, type JsonDiscoveryDescription } from "./Discovery";
 import {
-  createEmptyZeroTrustAssessmentImportStatus,
   importZeroTrustAssessmentReportToDuckDb,
   readZeroTrustAssessmentReportFromDuckDb,
-  type ZeroTrustAssessmentDuckDbImportStatus
+  zeroTrustAssessmentReportFileName
 } from "./snapshotStore";
 import {
   readZeroTrustAssessmentRemediationPackageSummariesByTestId,
@@ -34,14 +40,15 @@ export type LocalZeroTrustAssessmentReportRuntimeOptions = {
 export class LocalZeroTrustAssessmentReportRuntime {
   private readonly dataDir: string;
   private readonly getConnection: () => DuckDBConnection;
-  private status = createEmptyZeroTrustAssessmentImportStatus();
+  private status = createEmptySnapshotImportStatus(zeroTrustAssessmentReportFileName);
+  private readonly importSource = "zeroTrustAssessment";
 
   constructor(options: LocalZeroTrustAssessmentReportRuntimeOptions) {
     this.dataDir = options.dataDir;
     this.getConnection = options.getConnection;
   }
 
-  getStatus(): ZeroTrustAssessmentDuckDbImportStatus {
+  getStatus(): SnapshotImportStatus {
     return this.status;
   }
 
@@ -51,11 +58,22 @@ export class LocalZeroTrustAssessmentReportRuntime {
       return;
     }
 
-    this.status = await importZeroTrustAssessmentReportToDuckDb(
-      this.getConnection(),
-      candidate.data,
-      candidate.relativePath
-    );
+    const connection = this.getConnection();
+    const decision = await prepareSnapshotImportDecision(connection, {
+      source: this.importSource,
+      filePath: candidate.absolutePath,
+      fileName: candidate.relativePath
+    });
+
+    if (!decision.shouldImport) {
+      const registry = await recordSnapshotImport(connection, this.importSource, decision.metadata, true);
+      this.status = snapshotImportStatusFromRecord(registry);
+      return;
+    }
+
+    await importZeroTrustAssessmentReportToDuckDb(connection, candidate.data, candidate.relativePath);
+    const registry = await recordSnapshotImport(connection, this.importSource, decision.metadata, false);
+    this.status = snapshotImportStatusFromRecord(registry);
   }
 
   async readReport(): Promise<ZtaReport> {

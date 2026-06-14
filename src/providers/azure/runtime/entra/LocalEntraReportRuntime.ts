@@ -4,6 +4,13 @@ import path from "node:path";
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 import { pathExists, RuntimeHttpError, type LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
+import {
+  createEmptySnapshotImportStatus,
+  prepareSnapshotImportDecision,
+  recordSnapshotImport,
+  snapshotImportStatusFromRecord,
+  type SnapshotImportStatus
+} from "../../../../core/runtime/snapshotImportRegistry";
 import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
 import type { EntraPrincipalPermissionSummary, ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
 import type { EntraAppRoleAssignment, EntraOAuth2PermissionGrant } from "../../../../core/azure/entra/types";
@@ -16,11 +23,9 @@ import { readEntraOAuth2PermissionGrantRows } from "./oauth2PermissionGrantsTabl
 import { readLatestAzureIdentityEnrichment } from "../enrichment/azureIdentityEnrichment";
 import { readEntraServicePrincipalRows } from "./servicePrincipalsTable";
 import {
-  createEmptyEntraImportStatus,
   entraSnapshotFileName,
   importEntraSnapshotToDuckDb,
-  readEntraSnapshotFromDuckDb,
-  type EntraDuckDbImportStatus
+  readEntraSnapshotFromDuckDb
 } from "./snapshotStore";
 import { mapEntraServicePrincipalsToCore } from "./entraServicePrincipalMapper";
 import { toManagedIdentities, toServicePrincipals } from "./principalProjection";
@@ -45,14 +50,15 @@ export type LocalEntraReportRuntimeOptions = {
 export class LocalEntraReportRuntime {
   private readonly dataDir: string;
   private readonly getConnection: () => DuckDBConnection;
-  private status = createEmptyEntraImportStatus();
+  private status = createEmptySnapshotImportStatus(entraSnapshotFileName);
+  private readonly importSource = "entra";
 
   constructor(options: LocalEntraReportRuntimeOptions) {
     this.dataDir = options.dataDir;
     this.getConnection = options.getConnection;
   }
 
-  getStatus(): EntraDuckDbImportStatus {
+  getStatus(): SnapshotImportStatus {
     return this.status;
   }
 
@@ -66,8 +72,23 @@ export class LocalEntraReportRuntime {
       return;
     }
 
+    const connection = this.getConnection();
+    const decision = await prepareSnapshotImportDecision(connection, {
+      source: this.importSource,
+      filePath: entraSnapshotPath,
+      fileName: entraSnapshotFileName
+    });
+
+    if (!decision.shouldImport) {
+      const registry = await recordSnapshotImport(connection, this.importSource, decision.metadata, true);
+      this.status = snapshotImportStatusFromRecord(registry);
+      return;
+    }
+
     const snapshot = JSON.parse(await readFile(entraSnapshotPath, "utf8")) as EntraSnapshot & LocalSnapshotData;
-    this.status = await importEntraSnapshotToDuckDb(this.getConnection(), snapshot);
+    await importEntraSnapshotToDuckDb(connection, snapshot);
+    const registry = await recordSnapshotImport(connection, this.importSource, decision.metadata, false);
+    this.status = snapshotImportStatusFromRecord(registry);
   }
 
   async readSnapshot(): Promise<EntraSnapshot & LocalSnapshotData> {

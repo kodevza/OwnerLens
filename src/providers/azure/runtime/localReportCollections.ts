@@ -1,4 +1,5 @@
 import { RuntimeHttpError } from "../../../core/runtime/localSnapshotFiles";
+import { matchesSearchExpression } from "../../../lib/searchFilterUtils";
 
 export type LocalReportCollectionQueryOptions = {
   page?: number;
@@ -70,17 +71,50 @@ export function applyRuntimeCollectionFilters(
   }
 
   for (const filter of activeFilters) {
-    if (!columns.includes(filter.column)) {
+    const rootColumn = getRuntimeFilterRootColumn(filter.column);
+    if (!columns.includes(rootColumn)) {
       throw new RuntimeHttpError(`Unknown collection column: ${filter.column}`, 400);
     }
   }
 
   return rows.filter((row) =>
     activeFilters.every((filter) => {
-      const fieldValue = formatRuntimeFilterValue(row[filter.column]).toLocaleLowerCase();
-      return filter.values.some((value) => fieldValue.includes(value.toLocaleLowerCase()));
+      const rootColumn = getRuntimeFilterRootColumn(filter.column);
+      const values = getRuntimeFilterValues(row[rootColumn], getRuntimeFilterPathSegments(filter.column));
+      return filter.values.some((filterValue) =>
+        values.some((value) => matchesSearchExpression(formatRuntimeFilterValue(value), filterValue))
+      );
     })
   );
+}
+
+function getRuntimeFilterRootColumn(column: string): string {
+  return column.split(".", 1)[0] ?? column;
+}
+
+function getRuntimeFilterPathSegments(column: string): string[] {
+  return column.split(".").slice(1).filter(Boolean);
+}
+
+function getRuntimeFilterValues(value: unknown, pathSegments: string[]): unknown[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => getRuntimeFilterValues(item, pathSegments));
+  }
+
+  if (pathSegments.length === 0) {
+    return [value];
+  }
+
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  const [segment, ...remainingSegments] = pathSegments;
+  return getRuntimeFilterValues(value[segment], remainingSegments);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function formatRuntimeFilterValue(value: unknown): string {

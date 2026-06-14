@@ -48,10 +48,12 @@ test("loads Zero Trust Assessment report metadata and tests", async () => {
           TestRisk: "High",
           RelatedObjects: [
             {
-              id: "related-object-1"
+              id: "related-object-1",
+              displayName: "Privileged automation app"
             },
             {
-              object_id: "related-object-2"
+              object_id: "related-object-2",
+              displayName: "Break glass account"
             }
           ],
           RemediationPackages: [
@@ -97,8 +99,10 @@ test("loads Zero Trust Assessment report metadata and tests", async () => {
   expect(container.textContent).toContain("Example Tenant");
   expect(container.textContent).toContain("21791");
   expect(container.textContent).toContain("Completed");
-  expect(container.textContent).toContain("related-object-1");
-  expect(container.textContent).toContain("related-object-2");
+  expect(container.textContent).toContain("Privileged automation app");
+  expect(container.textContent).toContain("Break glass account");
+  expect(container.textContent).not.toContain("related-object-1");
+  expect(container.textContent).not.toContain("related-object-2");
   expect(container.textContent).toContain("High security impact");
   expect(container.textContent).toContain("Free");
   expect(container.textContent).toContain("mfa");
@@ -232,7 +236,10 @@ test("creates a remediation package from selected Zero Trust Assessment rows wit
   await waitForText(container, "Require MFA for administrators");
 
   act(() => {
-    changeInputValue(getInput("Filter Related objects"), "Privileged automation");
+    getButton("Filter Related objects").click();
+  });
+  act(() => {
+    changeInputValue(getInput("Related objects Display name value"), "Privileged automation");
   });
 
   await waitFor(() => {
@@ -260,8 +267,8 @@ test("creates a remediation package from selected Zero Trust Assessment rows wit
       body: JSON.stringify({
         filters: {
           RelatedObjects: {
-            type: "text",
-            value: "Privileged automation"
+            type: "objectFields",
+            conditions: [{ fieldId: "displayName", value: "Privileged automation" }]
           }
         },
         selectedRowKeys: ["21791"]
@@ -339,7 +346,7 @@ test("opens an existing remediation package from a Zero Trust Assessment package
   act(() => root.unmount());
 });
 
-test("filters related objects by non-rendered related object fields", async () => {
+test("filters related objects by display name", async () => {
   const tests: ZtaReport["Tests"] = [
     {
       TestId: "21791",
@@ -383,10 +390,14 @@ test("filters related objects by non-rendered related object fields", async () =
   const { container, root } = renderComponent(<ZtaComponent />);
 
   await waitForText(container, "Require MFA for administrators");
-  expect(container.textContent).not.toContain("Privileged automation app");
+  expect(container.textContent).toContain("Privileged automation app");
+  expect(container.textContent).not.toContain("related-object-1");
 
   act(() => {
-    changeInputValue(getInput("Filter Related objects"), "Privileged automation");
+    getButton("Filter Related objects").click();
+  });
+  act(() => {
+    changeInputValue(getInput("Related objects Display name value"), "Privileged automation");
   });
 
   await waitFor(() => {
@@ -394,13 +405,94 @@ test("filters related objects by non-rendered related object fields", async () =
       .map(([input]) => String(input))
       .find((requestUrl) => {
         const url = new URL(requestUrl, window.location.origin);
-        return url.searchParams.get("filter[0][column]") === "RelatedObjects";
+        return url.searchParams.get("filter[0][column]") === "RelatedObjects.displayName";
+      });
+    expect(filteredRequest).toBeDefined();
+    expect(container.textContent).toContain("Require MFA for administrators");
+    expect(container.textContent).not.toContain("Require compliant devices");
+    expect(container.textContent).toContain("Privileged automation app");
+    expect(container.textContent).not.toContain("related-object-1");
+  });
+
+  act(() => root.unmount());
+});
+
+test("filters related objects by tags", async () => {
+  const tests: ZtaReport["Tests"] = [
+    {
+      TestId: "21791",
+      RelatedObjects: [
+        {
+          id: "related-object-1",
+          tags: ["WindowsAzureActiveDirectoryIntegratedApp", "HideApp"]
+        },
+        {
+          id: "related-object-2",
+          tags: ["OtherTag"]
+        }
+      ],
+      TestStatus: "Completed",
+      TestTitle: "Require MFA for administrators"
+    },
+    {
+      TestId: "21823",
+      RelatedObjects: [
+        {
+          id: "related-object-3",
+          tags: ["OtherTag"]
+        }
+      ],
+      TestStatus: "Completed",
+      TestTitle: "Require compliant devices"
+    }
+  ];
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const url = new URL(String(input), window.location.origin);
+    const filterColumn = url.searchParams.get("filter[0][column]");
+    const filterValue = url.searchParams.get("filter[0][value][0]");
+    const filteredTests =
+      filterColumn === "RelatedObjects.tags" && filterValue
+        ? tests.flatMap((test) => {
+            const relatedObjects = (test.RelatedObjects ?? []).filter((relatedObject) =>
+              (relatedObject.tags ?? []).includes(filterValue)
+            );
+
+            return relatedObjects.length > 0 ? [{ ...test, RelatedObjects: relatedObjects }] : [];
+          })
+        : tests;
+
+    return jsonResponse({
+      Meta: {
+        TenantName: "Example Tenant"
+      },
+      Tests: filteredTests
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<ZtaComponent />);
+
+  await waitForText(container, "Require MFA for administrators");
+
+  act(() => {
+    getButton("Filter Related objects").click();
+  });
+  act(() => {
+    changeInputValue(getInput("Related objects Tags value"), "HideApp");
+  });
+
+  await waitFor(() => {
+    const filteredRequest = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .find((requestUrl) => {
+        const url = new URL(requestUrl, window.location.origin);
+        return url.searchParams.get("filter[0][column]") === "RelatedObjects.tags";
       });
     expect(filteredRequest).toBeDefined();
     expect(container.textContent).toContain("Require MFA for administrators");
     expect(container.textContent).not.toContain("Require compliant devices");
     expect(container.textContent).toContain("related-object-1");
-    expect(container.textContent).not.toContain("Privileged automation app");
+    expect(container.textContent).not.toContain("related-object-2");
   });
 
   act(() => root.unmount());

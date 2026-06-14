@@ -56,4 +56,8 @@ export type RuntimeRemediationPackageFilter =
   | {
       type: "values";
       values: string[];
+    }
+  | {
+      type: "objectFields";
+      conditions: Array<{ fieldId: string; value: string }>;
     };

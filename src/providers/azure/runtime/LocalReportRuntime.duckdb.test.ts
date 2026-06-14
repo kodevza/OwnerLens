@@ -48,6 +48,9 @@ afterAll(async () => {
 
 type DuckDbTestInstance = Awaited<ReturnType<typeof DuckDBInstance.create>>;
 type DuckDbTestConnection = Awaited<ReturnType<DuckDbTestInstance["connect"]>>;
+type ZeroTrustAssessmentReportEndpointResponse = Awaited<
+  ReturnType<LocalReportRuntime["queryZeroTrustAssessmentReport"]>
+>;
 
 async function withRuntimeTestDir<T>(
   fn: (ctx: { dataDir: string; runtime: LocalReportRuntime; databasePath: string }) => Promise<T>,
@@ -165,6 +168,28 @@ test("persists and reads generic remediation packages independent of ZTA", async
 });
 
 test("imports Zero Trust Assessment report into DuckDB and reads it back through the runtime", async () => {
+  const taggedServicePrincipal = servicePrincipal("tagged-sp-1", "tagged-client-app-1", "Tagged automation app", {
+    servicePrincipalType: "Application",
+    tags: ["WindowsAzureActiveDirectoryIntegratedApp", "HideApp"]
+  });
+  const entraSnapshot: EntraSnapshot = {
+    meta: {
+      provider: "entra",
+      snapshotVersion: "1",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      tenantId: "tenant-1",
+      account: "owner@example.test",
+      scopes: [],
+      servicePrincipalCount: 1,
+      applicationCount: 1,
+      oauth2PermissionGrantCount: 0,
+      appRoleAssignmentCount: 0
+    },
+    servicePrincipals: [taggedServicePrincipal],
+    applications: [application("tagged-app-object-1", "tagged-client-app-1", "Tagged app registration")],
+    oauth2PermissionGrants: [],
+    appRoleAssignments: []
+  };
   const report: ZeroTrustAssessmentReport = {
     Account: "owner@example.test",
     CurrentVersion: "2.4.100",
@@ -213,6 +238,12 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
             applicationId: "app-client-2",
             displayName: "Other owner app",
             servicePrincipalType: "ManagedIdentity"
+          },
+          {
+            object_id: "tagged-sp-1",
+            displayName: "Tagged automation app",
+            servicePrincipalType: "Application",
+            tags: ["DO_NOT_USE_ZTA_TAG"]
           }
         ]
       },
@@ -242,12 +273,12 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
       "utf8"
     );
     await writeFile(path.join(exportDir, "tenant-zta-report.json"), JSON.stringify(report), "utf8");
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
     await runtime.initialize();
 
     expect(runtime.getStatus().zeroTrustAssessment).toMatchObject({
       imported: true,
-      fileName: "exports/nested/tenant-zta-report.json",
-      testCount: 2
+      fileName: "exports/nested/tenant-zta-report.json"
     });
 
     const imported = await runtime.readZeroTrustAssessmentReport();
@@ -262,6 +293,7 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
       }
     });
     expect(imported.Tests).toHaveLength(2);
+    expect(JSON.stringify(imported.Tests)).not.toContain("DO_NOT_USE_ZTA_TAG");
     expect(imported.Tests[0]).toMatchObject({
       TestId: "21791",
       TestImpact: "medium",
@@ -271,7 +303,13 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
     expect(imported.Tests[0].RelatedObjects).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ object_id: "object-1" }),
-        expect.objectContaining({ object_id: "object-2" })
+        expect.objectContaining({ object_id: "object-2" }),
+        expect.objectContaining({
+          object_id: "tagged-sp-1",
+          servicePrincipalId: "tagged-sp-1",
+          applicationId: "tagged-app-object-1",
+          tags: ["WindowsAzureActiveDirectoryIntegratedApp", "HideApp"]
+        })
       ])
     );
     expect(imported.Tests[1]).toMatchObject({
@@ -281,12 +319,11 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
 
     const endpoints = defineLocalReportRuntimeRestEndpoints(runtime);
     const ztaReportEndpoint = getEndpoint(endpoints, "/api/data/zeroTrustAssessment/report");
-    await expect(
-      ztaReportEndpoint.handle({
-        req: {},
-        url: new URL("http://localhost/api/data/zeroTrustAssessment/report")
-      })
-    ).resolves.toMatchObject({
+    const reportResponse = (await ztaReportEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/zeroTrustAssessment/report")
+    })) as ZeroTrustAssessmentReportEndpointResponse;
+    expect(reportResponse).toMatchObject({
       collectionId: "zeroTrustAssessment.report",
       rows: [
         expect.objectContaining({
@@ -300,6 +337,19 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
       pageSize: 50,
       count: 2
     });
+    expect(JSON.stringify(reportResponse)).not.toContain("DO_NOT_USE_ZTA_TAG");
+    expect(reportResponse.rows.find((row) => row.TestId === "21791")).toEqual(
+      expect.objectContaining({
+        RelatedObjects: expect.arrayContaining([
+          expect.objectContaining({
+            object_id: "tagged-sp-1",
+            servicePrincipalId: "tagged-sp-1",
+            applicationId: "tagged-app-object-1",
+            tags: ["WindowsAzureActiveDirectoryIntegratedApp", "HideApp"]
+          })
+        ])
+      })
+    );
     await expect(
       ztaReportEndpoint.handle({
         req: {},
@@ -349,7 +399,7 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
       ztaReportEndpoint.handle({
         req: {},
         url: new URL(
-          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=object-1"
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=object-2"
         )
       })
     ).resolves.toMatchObject({
@@ -360,13 +410,88 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
       ztaReportEndpoint.handle({
         req: {},
         url: new URL(
-          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=Application"
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=ManagedIdentity"
         )
       })
     ).resolves.toMatchObject({
       rows: [],
       count: 0
     });
+    await expect(
+      ztaReportEndpoint.handle({
+        req: {},
+        url: new URL(
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects.object_id&filter[0][value][0]=object-1"
+        )
+      })
+    ).resolves.toMatchObject({
+      rows: [expect.objectContaining({ TestId: "21791" })],
+      count: 1
+    });
+    await expect(
+      ztaReportEndpoint.handle({
+        req: {},
+        url: new URL(
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects.id&filter[0][value][0]=principal-id-1&filter[1][column]=RelatedObjects.servicePrincipalType&filter[1][value][0]=Application"
+        )
+      })
+    ).resolves.toMatchObject({
+      rows: [expect.objectContaining({ TestId: "21791" })],
+      count: 1
+    });
+    await expect(
+      ztaReportEndpoint.handle({
+        req: {},
+        url: new URL(
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects.id&filter[0][value][0]=["
+        )
+      })
+    ).resolves.toMatchObject({
+      rows: [],
+      count: 0
+    });
+    await expect(
+      ztaReportEndpoint.handle({
+        req: {},
+        url: new URL(
+          "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=Unknown.id&filter[0][value][0]=object-1"
+        )
+      })
+    ).rejects.toMatchObject({
+      statusCode: 400
+    });
+    const tagFilteredResponse = (await ztaReportEndpoint.handle({
+      req: {},
+      url: new URL(
+        "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects&filter[0][value][0]=HideApp"
+      )
+    })) as ZeroTrustAssessmentReportEndpointResponse;
+    expect(tagFilteredResponse.count).toBe(1);
+    expect(tagFilteredResponse.rows[0].TestId).toBe("21791");
+    expect(JSON.stringify(tagFilteredResponse.rows)).not.toContain("DO_NOT_USE_ZTA_TAG");
+    expect(tagFilteredResponse.rows[0].RelatedObjects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          object_id: "tagged-sp-1",
+          tags: ["WindowsAzureActiveDirectoryIntegratedApp", "HideApp"]
+        })
+      ])
+    );
+    const tagFieldFilteredResponse = (await ztaReportEndpoint.handle({
+      req: {},
+      url: new URL(
+        "http://localhost/api/data/zeroTrustAssessment/report?filter[0][column]=RelatedObjects.tags&filter[0][value][0]=HideApp"
+      )
+    })) as ZeroTrustAssessmentReportEndpointResponse;
+    expect(tagFieldFilteredResponse.count).toBe(1);
+    expect(tagFieldFilteredResponse.rows[0].TestId).toBe("21791");
+    expect(tagFieldFilteredResponse.rows[0].RelatedObjects).toEqual([
+      expect.objectContaining({
+        object_id: "tagged-sp-1",
+        tags: ["WindowsAzureActiveDirectoryIntegratedApp", "HideApp"]
+      })
+    ]);
+    expect(JSON.stringify(tagFieldFilteredResponse.rows)).not.toContain("DO_NOT_USE_ZTA_TAG");
   });
 });
 
@@ -622,6 +747,99 @@ test("creates generic remediation packages from selected Zero Trust Assessment r
   });
 });
 
+test("enriches remediation package tasks with Azure principal summaries", async () => {
+  const report: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-1",
+    TestResultSummary: { IdentityFailed: 1 },
+    Tests: [
+      {
+        TestId: "zta-1",
+        TestTitle: "Privileged app exposure",
+        TestRisk: "High",
+        TestStatus: "Failed",
+        RelatedObjects: [
+          {
+            id: "sp-1",
+            displayName: "Privileged automation app",
+            servicePrincipalType: "Application"
+          }
+        ]
+      }
+    ]
+  };
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    oauth2PermissionGrants: [
+      {
+        id: "grant-1",
+        clientId: "sp-1",
+        consentType: "AllPrincipals",
+        principalId: null,
+        resourceId: "graph",
+        scope: "User.Read Mail.Read"
+      }
+    ],
+    appRoleAssignments: [
+      {
+        id: "assignment-1",
+        appRoleId: "role-1",
+        appRoleDisplayName: "Read",
+        appRoleValue: "Read.All",
+        principalId: "sp-1",
+        principalDisplayName: "Privileged automation app",
+        resourceId: "graph",
+        resourceDisplayName: "Microsoft Graph"
+      }
+    ]
+  };
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot(),
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-app",
+        location: "westeurope",
+        tags: { ownerGroup: "alice@example.test" }
+      }
+    ],
+    roleAssignments: [roleAssignment("sp-1", "Owner", "/subscriptions/sub-1/resourceGroups/rg-app", "ResourceGroup")]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await runtime.initialize();
+
+    const remediationPackage = await runtime.createZeroTrustAssessmentRemediationPackage({
+      filters: {},
+      selectedRowKeys: ["zta-1"]
+    });
+    const readPackage = await runtime.readRemediationPackage(remediationPackage.id);
+
+    expect(readPackage.tasks[0]).toMatchObject({
+      targetId: "sp-1",
+      sourceEvidence: expect.objectContaining({
+        azureEnrichment: {
+          id: "sp-1",
+          displayName: "Example app",
+          oauthPemrissionsCount: 2,
+          appRolesPermissionCount: 1,
+          entraPermissionRisk: "high",
+          rbacRoleAssignmentCount: 1,
+          rbacRoleLevel: "high",
+          rbacSubscriptionCount: 1,
+          potentialOwners: ["alice@example.test"],
+          ownerConfidence: "high",
+          azureRbac: expect.stringContaining("Owner on rg/rg-app")
+        }
+      })
+    });
+  });
+});
+
 test("enriches Zero Trust Assessment rows with remediation package summaries by remaining task TestId", async () => {
   const report: ZeroTrustAssessmentReport = {
     ExecutedAt: "2026-06-03T10:00:00.000Z",
@@ -824,7 +1042,7 @@ test("imports Zero Trust Assessment related object ids for service principal joi
       servicePrincipal("mi-1", "mi-app-1", "Managed identity", "ManagedIdentity")
     ]);
 
-    const status = await importZeroTrustAssessmentReportToDuckDb(connection, report, "zta-report.json");
+    const reportId = await importZeroTrustAssessmentReportToDuckDb(connection, report, "zta-report.json");
 
     const relatedRows = await connection.runAndReadAll(
       `
@@ -851,7 +1069,7 @@ test("imports Zero Trust Assessment related object ids for service principal joi
     );
 
     return {
-      reportId: status.reportId,
+      reportId,
       relatedRows: relatedRows.getRowObjectsJson(),
       joinedRows: joinedRows.getRowObjectsJson()
     };
@@ -1161,10 +1379,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
 
     expect(runtime.getStatus().entra).toMatchObject({
       imported: true,
-      servicePrincipalCount: 2,
-      applicationCount: 1,
-      oauth2PermissionGrantCount: 3,
-      appRoleAssignmentCount: 2
+      fileName: "entra-snapshot.json"
     });
 
     const imported = (await runtime.readSnapshot("entra-snapshot.json")) as EntraSnapshot & {
@@ -1355,13 +1570,155 @@ test("imports legacy Entra snapshots without applications as an empty applicatio
 
     expect(runtime.getStatus().entra).toMatchObject({
       imported: true,
-      servicePrincipalCount: 0,
-      applicationCount: 0
+      fileName: "entra-snapshot.json"
     });
 
     const imported = await runtime.readSnapshot("entra-snapshot.json");
 
     expect((imported as EntraSnapshot).applications).toEqual([]);
+  });
+});
+
+test("records snapshot registry metadata and skips unchanged snapshots on runtime restart", async () => {
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(minimalEntraSnapshot()), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(minimalAzureSnapshot()), "utf8");
+    await runtime.initialize();
+
+    const firstStatus = runtime.getStatus();
+    expect(firstStatus.entra).toMatchObject({
+      imported: true,
+      fileName: "entra-snapshot.json",
+      name: "entra-snapshot.json",
+      skipped: false
+    });
+    expect(firstStatus.entra.lastModifiedDate).toEqual(expect.any(String));
+    expect(firstStatus.entra.contentHash).toEqual(expect.any(String));
+    expect(firstStatus.azureResources).toMatchObject({
+      imported: true,
+      fileName: "snapshot.json",
+      name: "snapshot.json",
+      skipped: false
+    });
+    expect(firstStatus.azureResources.contentHash).toEqual(expect.any(String));
+
+    await runtime.close();
+
+    const restartedRuntime = new LocalReportRuntime({ dataDir, databasePath });
+    try {
+      await restartedRuntime.initialize();
+
+      expect(restartedRuntime.getStatus().entra).toMatchObject({
+        imported: true,
+        skipped: true,
+        contentHash: firstStatus.entra.contentHash
+      });
+      expect(restartedRuntime.getStatus().azureResources).toMatchObject({
+        imported: true,
+        skipped: true,
+        contentHash: firstStatus.azureResources.contentHash
+      });
+    } finally {
+      await restartedRuntime.close();
+    }
+
+    const registryRows = await withDuckDb(async ({ connection }) => {
+      const rows = await connection.runAndReadAll(
+        `
+          select source, skipped, count(*) as row_count
+          from runtime_snapshot_imports
+          group by source, skipped
+          order by source, skipped
+        `
+      );
+      return rows.getRowObjectsJson();
+    }, databasePath);
+
+    expect(registryRows).toEqual([
+      { source: "azureResources", skipped: false, row_count: "1" },
+      { source: "azureResources", skipped: true, row_count: "1" },
+      { source: "entra", skipped: false, row_count: "1" },
+      { source: "entra", skipped: true, row_count: "1" }
+    ]);
+  });
+});
+
+test("imports changed snapshot content on runtime restart", async () => {
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(minimalAzureSnapshot()), "utf8");
+    await runtime.initialize();
+    expect(runtime.getStatus().azureResources).toMatchObject({
+      skipped: false
+    });
+    await runtime.close();
+
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(minimalAzureSnapshot(["app-a", "app-b"])), "utf8");
+
+    const restartedRuntime = new LocalReportRuntime({ dataDir, databasePath });
+    try {
+      await restartedRuntime.initialize();
+
+      expect(restartedRuntime.getStatus().azureResources).toMatchObject({
+        imported: true,
+        skipped: false
+      });
+      await expect(restartedRuntime.readSnapshot("snapshot.json")).resolves.toMatchObject({
+        resources: [expect.objectContaining({ resourceName: "app-a" }), expect.objectContaining({ resourceName: "app-b" })]
+      });
+    } finally {
+      await restartedRuntime.close();
+    }
+  });
+});
+
+test("skips unchanged Zero Trust Assessment report without appending duplicate reports", async () => {
+  const report: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-1",
+    TestResultSummary: { IdentityFailed: 1 },
+    Tests: [{ TestId: "zta-1", TestStatus: "Failed" }]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
+    await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
+    await runtime.initialize();
+
+    expect(runtime.getStatus().zeroTrustAssessment).toMatchObject({
+      imported: true,
+      fileName: "zta-report.json",
+      name: "zta-report.json",
+      skipped: false
+    });
+    await runtime.close();
+
+    const restartedRuntime = new LocalReportRuntime({ dataDir, databasePath });
+    try {
+      await restartedRuntime.initialize();
+
+      expect(restartedRuntime.getStatus().zeroTrustAssessment).toMatchObject({
+        imported: true,
+        skipped: true
+      });
+    } finally {
+      await restartedRuntime.close();
+    }
+
+    const counts = await withDuckDb(async ({ connection }) => {
+      const reportRows = await connection.runAndReadAll("select count(*) as count from zta_report");
+      const skippedRows = await connection.runAndReadAll(
+        "select count(*) as count from runtime_snapshot_imports where source = 'zeroTrustAssessment' and skipped = true"
+      );
+
+      return {
+        reportCount: Number((reportRows.getRowObjectsJson()[0] as { count: string }).count),
+        skippedCount: Number((skippedRows.getRowObjectsJson()[0] as { count: string }).count)
+      };
+    }, databasePath);
+
+    expect(counts).toEqual({
+      reportCount: 1,
+      skippedCount: 1
+    });
   });
 });
 
@@ -1670,12 +2027,7 @@ test("imports Azure resources snapshot into DuckDB and reads it back through the
 
     expect(runtime.getStatus().azureResources).toMatchObject({
       imported: true,
-      subscriptionCount: 1,
-      resourceGroupCount: 1,
-      resourceCount: 1,
-      userAssignedManagedIdentityCount: 1,
-      roleAssignmentCount: 1,
-      activityLogCount: 1
+      fileName: "snapshot.json"
     });
 
     const imported = (await runtime.readSnapshot("snapshot.json")) as AzureSnapshot & {
@@ -2137,8 +2489,13 @@ function servicePrincipal(
   id: string,
   appId: string,
   displayName: string,
-  servicePrincipalType: "Application" | "ManagedIdentity"
+  options: "Application" | "ManagedIdentity" | {
+    servicePrincipalType: "Application" | "ManagedIdentity";
+    tags?: string[];
+  }
 ): EntraSnapshot["servicePrincipals"][number] {
+  const servicePrincipalType = typeof options === "string" ? options : options.servicePrincipalType;
+
   return {
     id,
     appId,
@@ -2152,10 +2509,88 @@ function servicePrincipal(
     loginUrl: null,
     replyUrls: [],
     servicePrincipalNames: [],
-    tags: [],
+    tags: typeof options === "string" ? [] : options.tags ?? [],
     appRoles: [],
     owners: [],
     metadata: null
+  };
+}
+
+function minimalEntraSnapshot(): EntraSnapshot {
+  return {
+    meta: {
+      provider: "entra",
+      snapshotVersion: "1",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      tenantId: "tenant-1",
+      account: "owner@example.test",
+      scopes: [],
+      servicePrincipalCount: 1,
+      applicationCount: 0,
+      oauth2PermissionGrantCount: 0,
+      appRoleAssignmentCount: 0
+    },
+    servicePrincipals: [servicePrincipal("sp-1", "app-1", "Example app", "Application")],
+    applications: [],
+    oauth2PermissionGrants: [],
+    appRoleAssignments: []
+  };
+}
+
+function minimalAzureSnapshot(resourceNames = ["app-a"]): AzureSnapshot {
+  return {
+    meta: {
+      provider: "azure",
+      snapshotVersion: "1",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      activityDays: 30,
+      activityStartTime: "2026-05-06T00:00:00.000Z",
+      maxActivityRecords: 1000,
+      requestedSubscriptions: ["sub-1"],
+      subscriptionCount: 1,
+      resourceGroupCount: 1,
+      resourceCount: resourceNames.length,
+      userAssignedManagedIdentityCount: 0,
+      roleAssignmentCount: 0,
+      activityLogCount: 0
+    },
+    subscriptions: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        tenantId: "tenant-1",
+        state: "Enabled",
+        tags: null
+      }
+    ],
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-app",
+        location: "westeurope",
+        tags: null
+      }
+    ],
+    resources: resourceNames.map((resourceName) => ({
+      subscriptionId: "sub-1",
+      subscriptionName: "Subscription One",
+      resourceId: `/subscriptions/sub-1/resourceGroups/rg-app/providers/Microsoft.Web/sites/${resourceName}`,
+      resourceName,
+      resourceGroup: "rg-app",
+      resourceType: "Microsoft.Web/sites",
+      kind: "app",
+      location: "westeurope",
+      tags: null,
+      identityType: null,
+      identityPrincipalId: null,
+      identityTenantId: null,
+      userAssignedIdentityResourceIds: [],
+      userAssignedIdentities: null
+    })),
+    userAssignedManagedIdentities: [],
+    roleAssignments: [],
+    activityLogs: []
   };
 }
 

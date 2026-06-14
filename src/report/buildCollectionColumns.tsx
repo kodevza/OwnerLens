@@ -21,6 +21,7 @@ export function buildCollectionColumns<TRow>(
     label: field.label,
     help: field.help ?? columnHelp[field.id],
     filter: getColumnFilterKind(field),
+    objectFilterFields: field.filter?.kind === "objectFields" ? field.filter.fields : undefined,
     render: renderers[field.id] ?? ((row) => renderReportValue(field, row))
   }));
 }
@@ -32,6 +33,10 @@ function getColumnFilterKind<TRow>(field: ReportFieldDescriptor<TRow>): ReportTa
 
   if (field.filter?.kind === "text") {
     return "text";
+  }
+
+  if (field.filter?.kind === "objectFields") {
+    return "objectFields";
   }
 
   return "auto";

@@ -16,6 +16,10 @@ export type ColumnFilter =
   | {
       type: "values";
       values: string[];
+    }
+  | {
+      type: "objectFields";
+      conditions: Array<{ fieldId: string; value: string }>;
     };
 
 export type ColumnFilters = Record<string, ColumnFilter>;
@@ -60,7 +64,10 @@ export function applyCollectionControls<TRow>(
 
 export function getConfiguredFilterOptions<TRow>(fields: ReportFieldDescriptor<TRow>[]): ColumnFilterOptions {
   return Object.fromEntries(
-    fields.map((field) => [field.id, field.filter?.options ? [...field.filter.options] : []])
+    fields.map((field) => [
+      field.id,
+      field.filter?.kind === "multiSelect" && field.filter.options ? [...field.filter.options] : []
+    ])
   );
 }
 
@@ -93,12 +100,16 @@ function applyCollectionFieldFilters<TRow>(
 
   return rows.filter((row) =>
     activeFilters.every(({ field, filter }) => {
-      const fieldValue = formatControlValue(getFieldFilterValue(field, row));
-
       if (filter.type === "values") {
+        const fieldValue = formatControlValue(getFieldFilterValue(field, row));
         return filter.values.includes(fieldValue);
       }
 
+      if (filter.type === "objectFields") {
+        return matchesObjectFieldFilter(getFieldFilterValue(field, row), filter.conditions);
+      }
+
+      const fieldValue = formatControlValue(getFieldFilterValue(field, row));
       return matchesSearchExpression(fieldValue, filter.value);
     })
   );
@@ -160,7 +171,59 @@ function isActiveFilter(filter: ColumnFilter | undefined): boolean {
     return filter.values.length > 0;
   }
 
+  if (filter.type === "objectFields") {
+    return filter.conditions.some((condition) => hasSearchExpression(condition.value));
+  }
+
   return hasSearchExpression(filter.value);
+}
+
+function matchesObjectFieldFilter(
+  value: unknown,
+  conditions: Array<{ fieldId: string; value: string }>
+): boolean {
+  const activeConditions = conditions.filter((condition) => hasSearchExpression(condition.value));
+
+  if (activeConditions.length === 0) {
+    return true;
+  }
+
+  return activeConditions.every((condition) =>
+    getNestedValues(value, condition.fieldId).some((nestedValue) =>
+      matchesSearchExpression(formatControlValue(nestedValue), condition.value)
+    )
+  );
+}
+
+function getNestedValues(value: unknown, path: string): unknown[] {
+  const segments = path.split(".").filter(Boolean);
+
+  if (segments.length === 0) {
+    return [value];
+  }
+
+  return getNestedValuesFromSegments(value, segments);
+}
+
+function getNestedValuesFromSegments(value: unknown, segments: string[]): unknown[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => getNestedValuesFromSegments(item, segments));
+  }
+
+  if (segments.length === 0) {
+    return [value];
+  }
+
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  const [segment, ...remainingSegments] = segments;
+  return getNestedValuesFromSegments(value[segment], remainingSegments);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function compareValues(left: unknown, right: unknown): number {

@@ -84,7 +84,7 @@ test("opens related managed identity from Zero Trust Assessment with an Object I
   await clickButton("Zero Trust Assessment");
   await waitForText(container, "Managed identity exposure");
 
-  await clickButton("Open related object mi-object-id");
+  await clickButton("Open related object uami-prod identity");
   await waitForText(container, "uami-prod");
 
   const managedIdentityRequest = fetchMock.mock.calls
@@ -181,7 +181,7 @@ test("opens Zero Trust Assessment filtered by related object from a principal ZT
   await clickButton("Open ZTA remediations 1/3");
   await waitForText(container, "Service principal exposure");
 
-  expect(getInput("Filter Related objects").value).toBe("sp-object-id");
+  expect(getButton("Filter Related objects").textContent).toContain("Service principal ID: sp-object-id");
   expect(container.textContent).toContain("Service principal exposure");
   expect(container.textContent).not.toContain("Unrelated exposure");
 
@@ -229,6 +229,19 @@ test("opens a remediation package tab after creating a package from Zero Trust A
               relatedObject: {
                 id: "sp-object-id",
                 displayName: "Service principal app"
+              },
+              azureEnrichment: {
+                id: "sp-object-id",
+                displayName: "Service principal app",
+                azureRbac: "Owner on rg/rg-app",
+                oauthPemrissionsCount: 2,
+                appRolesPermissionCount: 1,
+                entraPermissionRisk: "high",
+                rbacRoleAssignmentCount: 1,
+                rbacRoleLevel: "high",
+                rbacSubscriptionCount: 1,
+                potentialOwners: ["alice@example.test"],
+                ownerConfidence: "high"
               }
             }
           }
@@ -294,6 +307,13 @@ test("opens a remediation package tab after creating a package from Zero Trust A
   expect(container.textContent).toContain("sp-object-id");
   expect(container.textContent).toContain("Service principal exposure");
   expect(container.textContent).toContain("high");
+  expect(getButton("Sort by Owner confidence").textContent).toContain("Owner confidence");
+  expect(getButton("Sort by Owners").textContent).toContain("Owners");
+  expect(getButton("Sort by Entra permissions").textContent).toContain("Entra permissions");
+  expect(getButton("Sort by Azure RBAC").textContent).toContain("Azure RBAC");
+  expect(container.textContent).toContain("alice@example.test");
+  expect(container.textContent).toContain("OAuth 2 / app roles 1");
+  expect(container.textContent).toContain("Roles 1 / subscriptions 1");
   expect(container.textContent).toContain("Related object");
   expect(container.textContent).toContain("ZTA test zta-1");
   expect(container.textContent).toContain("Status: Failed");
@@ -532,7 +552,7 @@ test("opens Azure RBAC tab for the selected service principal from its RBAC badg
   act(() => root.unmount());
 });
 
-test("opens Graph permissions tab for the selected service principal from its permissions badge", async () => {
+test("opens Entra API permissions tab for the selected service principal from its permissions badge", async () => {
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);
 
@@ -609,7 +629,7 @@ test("opens Graph permissions tab for the selected service principal from its pe
   const { container, root } = renderComponent(<AzureComponent />);
 
   await waitForText(container, "Service principal app");
-  await clickButton("Open Graph permissions 2/1");
+  await clickButton("Open Entra API permissions 2/1");
   await waitForText(container, "User.Read Directory.Read.All");
   await waitForText(container, "Read directory data");
   await waitForText(container, "Risk");
@@ -625,9 +645,9 @@ test("opens Graph permissions tab for the selected service principal from its pe
   const url = new URL(permissionsRequest ?? "", window.location.origin);
   expect(url.searchParams.get("principalId")).toBe("sp-object-id");
 
-  await clickButton("Close Service principal app Graph permissions tab");
+  await clickButton("Close Service principal app Entra API permissions tab");
   await waitFor(() => {
-    expect(queryButton("Close Service principal app Graph permissions tab")).toBeNull();
+    expect(queryButton("Close Service principal app Entra API permissions tab")).toBeNull();
     expect(container.textContent).not.toContain("User.Read Directory.Read.All");
   });
 
@@ -750,6 +770,165 @@ test("opens Azure RBAC tab for the selected managed identity from its RBAC badge
   act(() => root.unmount());
 });
 
+test("handles Backspace as in-app view back navigation outside editable fields", async () => {
+  globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/entra/managedIdentities")) {
+      return jsonResponse({
+        collectionId: "entra.managedIdentities",
+        columns: [],
+        count: 0,
+        page: 1,
+        pageSize: 20,
+        rows: []
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 0,
+      page: 1,
+      pageSize: 20,
+      rows: []
+    });
+  });
+
+  const { root } = renderComponent(<AzureComponent />);
+
+  await clickButton("Managed identities");
+  expect(getButton("Managed identities").getAttribute("data-state")).toBe("active");
+
+  const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Backspace" });
+  await act(async () => {
+    window.dispatchEvent(event);
+  });
+
+  expect(event.defaultPrevented).toBe(true);
+  expect(getButton("Service principals").getAttribute("data-state")).toBe("active");
+
+  act(() => root.unmount());
+});
+
+test("handles browser Back as in-app view navigation before leaving the app page", async () => {
+  window.history.pushState({ beforeOwnerLens: true }, "", "/before-ownerlens");
+  window.history.pushState({}, "", "/ownerlens");
+
+  globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/entra/managedIdentities")) {
+      return jsonResponse({
+        collectionId: "entra.managedIdentities",
+        columns: [],
+        count: 0,
+        page: 1,
+        pageSize: 20,
+        rows: []
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 0,
+      page: 1,
+      pageSize: 20,
+      rows: []
+    });
+  });
+
+  const { root } = renderComponent(<AzureComponent />);
+
+  await clickButton("Managed identities");
+  expect(getButton("Managed identities").getAttribute("data-state")).toBe("active");
+
+  await act(async () => {
+    window.history.back();
+  });
+  await waitFor(() => {
+    expect(getButton("Service principals").getAttribute("data-state")).toBe("active");
+  });
+
+  expect(window.location.pathname).toBe("/ownerlens");
+
+  act(() => root.unmount());
+  window.history.replaceState(null, "", "/");
+});
+
+test("prevents Backspace browser navigation when no in-app view history is available", async () => {
+  globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
+    jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 0,
+      page: 1,
+      pageSize: 20,
+      rows: []
+    })
+  );
+
+  const { root } = renderComponent(<AzureComponent />);
+
+  expect(getButton("Service principals").getAttribute("data-state")).toBe("active");
+
+  const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Backspace" });
+  await act(async () => {
+    window.dispatchEvent(event);
+  });
+
+  expect(event.defaultPrevented).toBe(true);
+  expect(getButton("Service principals").getAttribute("data-state")).toBe("active");
+
+  act(() => root.unmount());
+});
+
+test("leaves Backspace available inside editable fields", async () => {
+  globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/entra/managedIdentities")) {
+      return jsonResponse({
+        collectionId: "entra.managedIdentities",
+        columns: [],
+        count: 0,
+        page: 1,
+        pageSize: 20,
+        rows: []
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 0,
+      page: 1,
+      pageSize: 20,
+      rows: []
+    });
+  });
+
+  const { root } = renderComponent(<AzureComponent />);
+
+  await clickButton("Managed identities");
+  expect(getButton("Managed identities").getAttribute("data-state")).toBe("active");
+
+  const input = document.createElement("input");
+  input.value = "filter";
+  document.body.appendChild(input);
+
+  const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Backspace" });
+  await act(async () => {
+    input.dispatchEvent(event);
+  });
+
+  expect(event.defaultPrevented).toBe(false);
+  expect(getButton("Managed identities").getAttribute("data-state")).toBe("active");
+
+  act(() => root.unmount());
+});
+
 const ztaReport: ZtaReport = {
   Meta: {
     TenantId: "tenant-1",
@@ -763,6 +942,7 @@ const ztaReport: ZtaReport = {
       RelatedObjects: [
         {
           id: "mi-object-id",
+          displayName: "uami-prod identity",
           servicePrincipalType: "ManagedIdentity"
         }
       ]
@@ -873,13 +1053,4 @@ function queryButton(label: string): HTMLButtonElement | null {
   );
 
   return button instanceof HTMLButtonElement ? button : null;
-}
-
-function getInput(label: string): HTMLInputElement {
-  const input = [...document.querySelectorAll("input")].find((candidate) => candidate.getAttribute("aria-label") === label);
-  if (!(input instanceof HTMLInputElement)) {
-    throw new Error(`Expected input ${label}.`);
-  }
-
-  return input;
 }

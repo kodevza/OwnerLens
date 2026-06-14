@@ -16,9 +16,12 @@ import { RemediationPackageStore } from "../../../core/runtime/RemediationPackag
 import type {
   CreateRuntimeRemediationPackageRequest,
   DeleteRuntimeRemediationTasksRequest,
+  JsonValue,
   RemediationPackage,
+  RemediationTask,
   RuntimeRemediationPackageFilter
 } from "../../../core/runtime/remediation";
+import type { SnapshotImportStatus } from "../../../core/runtime/snapshotImportRegistry";
 import type { AzureIdentityEnrichmentStatus } from "./enrichment/azureIdentityEnrichment";
 import { EntraCollectionQueryService } from "./entra/EntraCollectionQueryService";
 import {
@@ -26,15 +29,12 @@ import {
   type EntraPrincipalPermissions,
   type LocalEntraReportCollectionId
 } from "./entra/LocalEntraReportRuntime";
-import type { EntraDuckDbImportStatus } from "./entra/snapshotStore";
 import {
   AzureResourcesCollectionQueryService,
   type LocalAzureResourcesExtendedCollectionId
 } from "./resources/AzureResourcesCollectionQueryService";
 import { LocalAzureResourcesReportRuntime } from "./resources/LocalAzureResourcesReportRuntime";
-import type { AzureResourcesDuckDbImportStatus } from "./resources/snapshotStore";
 import { LocalZeroTrustAssessmentReportRuntime } from "./zta/LocalZeroTrustAssessmentReportRuntime";
-import type { ZeroTrustAssessmentDuckDbImportStatus } from "./zta/snapshotStore";
 import {
   ZeroTrustAssessmentQueryService,
   type LocalZeroTrustAssessmentReportCollectionId
@@ -58,9 +58,9 @@ export type LocalReportRuntimeOptions = {
 export type LocalReportRuntimeStatus = {
   initialized: boolean;
   databasePath: string;
-  entra: EntraDuckDbImportStatus;
-  azureResources: AzureResourcesDuckDbImportStatus;
-  zeroTrustAssessment: ZeroTrustAssessmentDuckDbImportStatus;
+  entra: SnapshotImportStatus;
+  azureResources: SnapshotImportStatus;
+  zeroTrustAssessment: SnapshotImportStatus;
   enrichment: AzureIdentityEnrichmentStatus;
 };
 
@@ -326,7 +326,7 @@ export class LocalReportRuntime {
       throw new RuntimeHttpError("Remediation package not found.", 404);
     }
 
-    return remediationPackage;
+    return this.enrichRemediationPackage(remediationPackage);
   }
 
   async deleteRemediationTasks(request: DeleteRuntimeRemediationTasksRequest): Promise<RemediationPackage> {
@@ -348,7 +348,7 @@ export class LocalReportRuntime {
       throw new RuntimeHttpError("Remediation package not found.", 404);
     }
 
-    return remediationPackage;
+    return this.enrichRemediationPackage(remediationPackage);
   }
 
   async close(): Promise<void> {
@@ -367,6 +367,87 @@ export class LocalReportRuntime {
   private requireConnection(): DuckDBConnection {
     return this.host.requireConnection();
   }
+
+  private async enrichRemediationPackage(remediationPackage: RemediationPackage): Promise<RemediationPackage> {
+    const principalIds = extractRemediationPackagePrincipalIds(remediationPackage);
+    let summariesByPrincipalId: Awaited<ReturnType<EntraCollectionQueryService["readServicePrincipalRemediationSummaries"]>>;
+
+    try {
+      summariesByPrincipalId = await this.entraQueries.readServicePrincipalRemediationSummaries(principalIds);
+    } catch (error) {
+      if (error instanceof RuntimeHttpError && error.statusCode === 404) {
+        return remediationPackage;
+      }
+
+      throw error;
+    }
+
+    if (summariesByPrincipalId.size === 0) {
+      return remediationPackage;
+    }
+
+    return {
+      ...remediationPackage,
+      tasks: remediationPackage.tasks.map((task) => enrichRemediationTask(task, summariesByPrincipalId))
+    };
+  }
+}
+
+function enrichRemediationTask(
+  task: RemediationTask,
+  summariesByPrincipalId: Awaited<ReturnType<EntraCollectionQueryService["readServicePrincipalRemediationSummaries"]>>
+): RemediationTask {
+  const summary = getTaskPrincipalIds(task).map((principalId) => summariesByPrincipalId.get(principalId)).find(Boolean);
+
+  if (!summary || !isRecord(task.sourceEvidence)) {
+    return task;
+  }
+
+  return {
+    ...task,
+    sourceEvidence: {
+      ...task.sourceEvidence,
+      azureEnrichment: toJsonValue(summary)
+    }
+  };
+}
+
+function extractRemediationPackagePrincipalIds(remediationPackage: RemediationPackage): string[] {
+  return [...new Set(remediationPackage.tasks.flatMap(getTaskPrincipalIds))];
+}
+
+function getTaskPrincipalIds(task: RemediationTask): string[] {
+  const ids = [
+    task.targetId,
+    ...getSourceEvidenceRelatedPrincipalIds(task.sourceEvidence)
+  ];
+
+  return ids.map((id) => id.trim().toLowerCase()).filter(Boolean);
+}
+
+function getSourceEvidenceRelatedPrincipalIds(sourceEvidence: JsonValue): string[] {
+  if (!isRecord(sourceEvidence)) {
+    return [];
+  }
+
+  const relatedObject = sourceEvidence.relatedObject;
+  if (!isRecord(relatedObject)) {
+    return [];
+  }
+
+  return [
+    toNullableString(relatedObject.id),
+    toNullableString(relatedObject.object_id),
+    toNullableString(relatedObject.servicePrincipalId)
+  ].filter((value): value is string => value !== null);
+}
+
+function toNullableString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function toJsonValue(value: unknown): JsonValue {
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
 
 function toLocalReportCollectionFilters(
@@ -377,6 +458,24 @@ function toLocalReportCollectionFilters(
   }
 
   return Object.entries(filters).flatMap(([column, filter]) => {
+    if (isRecord(filter) && filter.type === "objectFields") {
+      if (
+        !Array.isArray(filter.conditions) ||
+        !filter.conditions.every(
+          (condition) => isRecord(condition) && typeof condition.fieldId === "string" && typeof condition.value === "string"
+        )
+      ) {
+        throw new RuntimeHttpError("Invalid Zero Trust Assessment remediation package filter conditions.", 400);
+      }
+
+      return filter.conditions
+        .filter((condition) => condition.fieldId.trim() && condition.value.trim())
+        .map((condition) => ({
+          column: condition.fieldId.includes(".") ? condition.fieldId : `${column}.${condition.fieldId}`,
+          values: [condition.value]
+        }));
+    }
+
     const values = getFilterValues(filter);
     return values.length > 0 ? [{ column, values }] : [];
   });

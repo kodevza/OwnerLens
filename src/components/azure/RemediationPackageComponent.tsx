@@ -1,17 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import type { EntraPrincipalAzureRemediationSummary } from "../../core/azure/entra/servicePrincipal";
+import type { ZtaRelatedObject } from "../../core/azure/ztaReport";
+import type { OwnerConfidence } from "../../core/ownership/types";
 import type { JsonValue, RemediationPackage, RemediationTask } from "../../core/runtime/remediation";
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import { formatDate, formatValue } from "../../lib/utils";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
+import { ConfidenceBadge } from "../../report/components/ConfidenceBadge";
+import { PermissionRiskBadge } from "../../report/components/PermissionRiskBadge";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
 import { Badge } from "../../report/components/ui/badge";
 import { Button } from "../../report/components/ui/button";
 import { Card } from "../../report/components/ui/card";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import { deleteRemediationTasks } from "./api";
+import {
+  getRelatedObjectId,
+  getRelatedObjectLabel,
+  getRelatedObjectSearchValuesForObject,
+  ztaRelatedObjectFieldFilter
+} from "./ztaRelatedObjects";
 
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
+const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];
 
 const remediationTaskFields: ReportFieldDescriptor<RemediationTask>[] = [
   {
@@ -29,14 +41,60 @@ const remediationTaskFields: ReportFieldDescriptor<RemediationTask>[] = [
     filter: { kind: "text" }
   },
   {
-    id: "relatedObject",
-    label: "Related object",
+    id: "RelatedObjects",
+    label: "Related objects",
     valueType: "list",
-    getValue: (task) => {
-      const relatedObject = getZtaRelatedObjectContext(task.sourceEvidence);
-      return relatedObject ? [relatedObject.label, relatedObject.id, relatedObject.kind] : [];
-    },
+    getValue: getTaskRelatedObjectSearchValues,
+    filter: ztaRelatedObjectFieldFilter
+  },
+  {
+    id: "ownerConfidence",
+    label: "Owner confidence",
+    valueType: "ownerConfidence",
+    getValue: (task) => getTaskAzureEnrichment(task)?.ownerConfidence ?? "none",
+    filter: { kind: "multiSelect", options: ownerConfidenceOptions }
+  },
+  {
+    id: "potentialOwners",
+    label: "Owners",
+    valueType: "list",
+    getValue: (task) => getTaskAzureEnrichment(task)?.potentialOwners ?? [],
     filter: { kind: "text" }
+  },
+  {
+    id: "entraPermissions",
+    label: "Entra permissions",
+    valueType: "riskLevel",
+    getValue: (task) => getTaskAzureEnrichment(task)?.entraPermissionRisk ?? "none",
+    getFilterValue: (task) => {
+      const enrichment = getTaskAzureEnrichment(task);
+      return enrichment
+        ? [
+            enrichment.entraPermissionRisk,
+            String(enrichment.oauthPemrissionsCount),
+            String(enrichment.appRolesPermissionCount)
+          ]
+        : ["none"];
+    },
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
+  },
+  {
+    id: "azureRbac",
+    label: "Azure RBAC",
+    valueType: "riskLevel",
+    getValue: (task) => getTaskAzureEnrichment(task)?.rbacRoleLevel ?? "none",
+    getFilterValue: (task) => {
+      const enrichment = getTaskAzureEnrichment(task);
+      return enrichment
+        ? [
+            enrichment.rbacRoleLevel,
+            String(enrichment.rbacRoleAssignmentCount),
+            String(enrichment.rbacSubscriptionCount),
+            enrichment.azureRbac
+          ]
+        : ["none"];
+    },
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
     id: "title",
@@ -81,7 +139,12 @@ export function RemediationPackageComponent({ remediationPackage }: { remediatio
           <div className="text-xs text-muted-foreground">{task.targetKind}</div>
         </div>
       ),
-      relatedObject: (task) => <RelatedObjectEvidence task={task} />,
+      RelatedObjects: (task) => <RelatedObjectEvidence task={task} />,
+      ownerConfidence: (task) => (
+        <ConfidenceBadge confidence={getTaskAzureEnrichment(task)?.ownerConfidence ?? "none"} />
+      ),
+      entraPermissions: (task) => <EntraPermissionsEvidence task={task} />,
+      azureRbac: (task) => <AzureRbacEvidence task={task} />,
       sourceContext: (task) => <SourceEvidence task={task} />
     }),
     []
@@ -129,7 +192,7 @@ export function RemediationPackageComponent({ remediationPackage }: { remediatio
         fieldRenderers={fieldRenderers}
         getRowKey={(task) => task.id}
         getRowSelectionLabel={(task) => `Select remediation task ${task.title}`}
-        minWidthClassName="min-w-[1400px]"
+        minWidthClassName="min-w-[1800px]"
         rows={currentPackage.tasks}
         selectedRowKeys={selectedTaskIds}
         onSelectionChange={setSelectedTaskIds}
@@ -159,6 +222,40 @@ export function RemediationPackageComponent({ remediationPackage }: { remediatio
   );
 }
 
+function EntraPermissionsEvidence({ task }: { task: RemediationTask }) {
+  const enrichment = getTaskAzureEnrichment(task);
+
+  if (!enrichment) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <PermissionRiskBadge riskLevel={enrichment.entraPermissionRisk} />
+      <span className="text-xs text-muted-foreground">
+        OAuth {enrichment.oauthPemrissionsCount} / app roles {enrichment.appRolesPermissionCount}
+      </span>
+    </div>
+  );
+}
+
+function AzureRbacEvidence({ task }: { task: RemediationTask }) {
+  const enrichment = getTaskAzureEnrichment(task);
+
+  if (!enrichment) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <PermissionRiskBadge riskLevel={enrichment.rbacRoleLevel} />
+      <span className="text-xs text-muted-foreground" title={enrichment.azureRbac}>
+        Roles {enrichment.rbacRoleAssignmentCount} / subscriptions {enrichment.rbacSubscriptionCount}
+      </span>
+    </div>
+  );
+}
+
 function normalizePermissionRiskLevel(value: string | null): PermissionRiskLevel | null {
   const normalizedValue = value?.toLowerCase();
 
@@ -172,11 +269,15 @@ function RelatedObjectEvidence({ task }: { task: RemediationTask }) {
     return <span className="text-muted-foreground">-</span>;
   }
 
+  const id = getRelatedObjectId(relatedObject);
+
   return (
     <div className="max-w-md text-sm">
-      <div>{relatedObject.label}</div>
-      {relatedObject.id ? <div className="font-mono text-xs text-muted-foreground">{relatedObject.id}</div> : null}
-      {relatedObject.kind ? <div className="text-xs text-muted-foreground">{relatedObject.kind}</div> : null}
+      <div>{getRelatedObjectLabel(relatedObject)}</div>
+      {id ? <div className="font-mono text-xs text-muted-foreground">{id}</div> : null}
+      {relatedObject.servicePrincipalType ? (
+        <div className="text-xs text-muted-foreground">{relatedObject.servicePrincipalType}</div>
+      ) : null}
     </div>
   );
 }
@@ -212,11 +313,7 @@ function getZtaSourceContext(sourceEvidence: JsonValue): {
   };
 }
 
-function getZtaRelatedObjectContext(sourceEvidence: JsonValue): {
-  id: string | null;
-  kind: string | null;
-  label: string;
-} | null {
+function getZtaRelatedObjectContext(sourceEvidence: JsonValue): ZtaRelatedObject | null {
   if (!isRecord(sourceEvidence) || sourceEvidence.sourceKind !== "zeroTrustAssessment") {
     return null;
   }
@@ -227,19 +324,57 @@ function getZtaRelatedObjectContext(sourceEvidence: JsonValue): {
     return null;
   }
 
-  const id = toNullableString(relatedObject.id) ?? toNullableString(relatedObject.object_id);
-  const label =
-    toNullableString(relatedObject.displayName) ??
-    toNullableString(relatedObject.userPrincipalName) ??
-    toNullableString(relatedObject.servicePrincipalId) ??
-    id ??
-    "-";
-
   return {
-    id,
-    kind: toNullableString(relatedObject.servicePrincipalType),
-    label
+    id: toNullableString(relatedObject.id),
+    object_id: toNullableString(relatedObject.object_id),
+    servicePrincipalId: toNullableString(relatedObject.servicePrincipalId),
+    tags: toStringArray(relatedObject.tags),
+    applicationId: toNullableString(relatedObject.applicationId),
+    displayName: toNullableString(relatedObject.displayName),
+    servicePrincipalType: toNullableString(relatedObject.servicePrincipalType),
+    userPrincipalName: toNullableString(relatedObject.userPrincipalName)
   };
+}
+
+function getTaskRelatedObjectSearchValues(task: RemediationTask): string[] {
+  const relatedObject = getZtaRelatedObjectContext(task.sourceEvidence);
+
+  return relatedObject ? getRelatedObjectSearchValuesForObject(relatedObject) : [];
+}
+
+function getTaskAzureEnrichment(task: RemediationTask): EntraPrincipalAzureRemediationSummary | null {
+  if (!isRecord(task.sourceEvidence) || !isRecord(task.sourceEvidence.azureEnrichment)) {
+    return null;
+  }
+
+  const enrichment = task.sourceEvidence.azureEnrichment;
+
+  if (
+    typeof enrichment.id !== "string" ||
+    typeof enrichment.displayName !== "string" ||
+    typeof enrichment.azureRbac !== "string" ||
+    typeof enrichment.oauthPemrissionsCount !== "number" ||
+    typeof enrichment.appRolesPermissionCount !== "number" ||
+    !isPermissionRiskLevel(enrichment.entraPermissionRisk) ||
+    typeof enrichment.rbacRoleAssignmentCount !== "number" ||
+    !isPermissionRiskLevel(enrichment.rbacRoleLevel) ||
+    typeof enrichment.rbacSubscriptionCount !== "number" ||
+    !Array.isArray(enrichment.potentialOwners) ||
+    !enrichment.potentialOwners.every((owner) => typeof owner === "string") ||
+    !isOwnerConfidence(enrichment.ownerConfidence)
+  ) {
+    return null;
+  }
+
+  return enrichment as EntraPrincipalAzureRemediationSummary;
+}
+
+function isPermissionRiskLevel(value: unknown): value is PermissionRiskLevel {
+  return permissionRiskLevelOptions.includes(value as PermissionRiskLevel);
+}
+
+function isOwnerConfidence(value: unknown): value is OwnerConfidence {
+  return ownerConfidenceOptions.includes(value as OwnerConfidence);
 }
 
 function SummaryCard({ label, value }: { label: string; value: unknown }) {
@@ -257,4 +392,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function toNullableString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function toStringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const values = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+
+  return values.length > 0 ? values : null;
 }

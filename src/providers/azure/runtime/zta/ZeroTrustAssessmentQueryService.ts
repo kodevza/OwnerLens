@@ -6,6 +6,7 @@ import type {
   ZtaReportTest
 } from "../../../../core/azure/ztaReport";
 import type { CreateRemediationPackageInput } from "../../../../core/runtime/remediation";
+import { matchesSearchExpression } from "../../../../lib/searchFilterUtils";
 
 import {
   applyRuntimeCollectionFilters,
@@ -128,9 +129,13 @@ function splitRelatedObjectFilters(filters: LocalReportCollectionFilter[]): {
   remainingFilters: LocalReportCollectionFilter[];
 } {
   return {
-    relatedObjectFilters: filters.filter((filter) => filter.column === "RelatedObjects"),
-    remainingFilters: filters.filter((filter) => filter.column !== "RelatedObjects")
+    relatedObjectFilters: filters.filter(isRelatedObjectFilter),
+    remainingFilters: filters.filter((filter) => !isRelatedObjectFilter(filter))
   };
+}
+
+function isRelatedObjectFilter(filter: LocalReportCollectionFilter): boolean {
+  return filter.column === "RelatedObjects" || filter.column.startsWith("RelatedObjects.");
 }
 
 function applyRelatedObjectFilters(
@@ -138,8 +143,11 @@ function applyRelatedObjectFilters(
   filters: LocalReportCollectionFilter[]
 ): ZtaReportTest[] {
   const activeFilters = filters
-    .map((filter) => filter.values.map((value) => value.trim()).filter(Boolean))
-    .filter((values) => values.length > 0);
+    .map((filter) => ({
+      column: filter.column,
+      values: filter.values.map((value) => value.trim()).filter(Boolean)
+    }))
+    .filter((filter) => filter.values.length > 0);
 
   if (activeFilters.length === 0) {
     return tests;
@@ -177,9 +185,54 @@ function formatRelatedObjectsSearchValue(relatedObjects: ZtaRelatedObject[]): st
     .join(" ");
 }
 
-function matchesRelatedObjectFilters(relatedObject: ZtaRelatedObject, filters: string[][]): boolean {
-  const searchableValue = formatRelatedObjectsSearchValue([relatedObject]).toLocaleLowerCase();
-  return filters.every((values) => values.some((value) => searchableValue.includes(value.toLocaleLowerCase())));
+function matchesRelatedObjectFilters(
+  relatedObject: ZtaRelatedObject,
+  filters: LocalReportCollectionFilter[]
+): boolean {
+  return filters.every((filter) => {
+    const pathSegments = getRelatedObjectFilterPathSegments(filter.column);
+    const searchableValues =
+      pathSegments.length === 0
+        ? [formatRelatedObjectsSearchValue([relatedObject])]
+        : getRelatedObjectFilterValues(relatedObject, pathSegments).map(formatRelatedObjectFilterValue);
+
+    return filter.values.some((filterValue) =>
+      searchableValues.some((searchableValue) => matchesSearchExpression(searchableValue, filterValue))
+    );
+  });
+}
+
+function getRelatedObjectFilterPathSegments(column: string): string[] {
+  return column.split(".").slice(1).filter(Boolean);
+}
+
+function getRelatedObjectFilterValues(value: unknown, pathSegments: string[]): unknown[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => getRelatedObjectFilterValues(item, pathSegments));
+  }
+
+  if (pathSegments.length === 0) {
+    return [value];
+  }
+
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  const [segment, ...remainingSegments] = pathSegments;
+  return getRelatedObjectFilterValues(value[segment], remainingSegments);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function formatRelatedObjectFilterValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return typeof value === "string" ? value : JSON.stringify(value);
 }
 
 function isNonEmptyString(value: unknown): value is string {
