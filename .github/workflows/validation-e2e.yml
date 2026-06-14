@@ -1,0 +1,102 @@
+name: Validation E2E
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validation-e2e:
+    runs-on: ubuntu-latest
+    env:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_IDS: ${{ secrets.AZURE_SUBSCRIPTION_IDS }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Validate Azure inputs
+        id: azure-inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          : "${AZURE_CLIENT_ID:?AZURE_CLIENT_ID is required}"
+          : "${AZURE_TENANT_ID:?AZURE_TENANT_ID is required}"
+          : "${AZURE_SUBSCRIPTION_IDS:?AZURE_SUBSCRIPTION_IDS is required}"
+
+          first_subscription="${AZURE_SUBSCRIPTION_IDS%%,*}"
+          first_subscription="$(echo "$first_subscription" | xargs)"
+
+          if [ -z "$first_subscription" ]; then
+            echo "AZURE_SUBSCRIPTION_IDS must contain at least one subscription id." >&2
+            exit 1
+          fi
+
+          echo "subscription_id=$first_subscription" >> "$GITHUB_OUTPUT"
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ steps.azure-inputs.outputs.subscription_id }}
+          enable-AzPSSession: true
+
+      - name: Install collector PowerShell modules
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module Az.Resources,Az.ManagedServiceIdentity -Scope CurrentUser -Force -AllowClobber
+          Install-Module Microsoft.Graph.Authentication,Microsoft.Graph.Applications,Microsoft.Graph.Groups -Scope CurrentUser -Force -AllowClobber
+
+      - name: Connect Microsoft Graph
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $token = (Get-AzAccessToken -ResourceTypeName MSGraph).Token
+          if ($token -is [System.Security.SecureString]) {
+            $accessToken = $token
+          } else {
+            $accessToken = $token | ConvertTo-SecureString -AsPlainText -Force
+          }
+          Connect-MgGraph -AccessToken $accessToken -NoWelcome -ContextScope CurrentUser
+          Get-MgContext | Format-List TenantId,Account,AuthType
+
+      - name: Clear local data
+        run: |
+          rm -rf data
+          mkdir -p data
+
+      - name: Collect Microsoft Entra snapshot
+        run: npm run collect:entra -- -TenantId "$AZURE_TENANT_ID" -SkipLogin
+
+      - name: Collect Azure snapshot
+        run: npm run collect:azure -- -SubscriptionIds "$AZURE_SUBSCRIPTION_IDS" -SkipLogin
+
+      - name: Run validation E2E
+        run: npm run test:e2e:validation
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
