@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ZtaRelatedObject } from "../../core/azure/ztaReport";
 import { createViewHistoryState, getHistoryStateView } from "../../lib/historyState";
 import type { RemediationPackage } from "../../core/runtime/remediation";
-import type { ColumnFilters } from "../../report/components/reportTableControls";
+import type { ColumnFilters } from "../../core/collectionControls";
 import { Tabs, TabsList, TabsTrigger } from "../../report/components/ui/tabs";
 import { AzureRbacComponent } from "./AzureRbacComponent";
 import { ClosableAzureTab } from "./ClosableAzureTab";

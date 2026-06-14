@@ -1,8 +1,10 @@
 import {
   applyColumnObjectFieldFilter,
-  applyColumnFilterOpen,
   applyColumnFilterValueToggle,
-  applyColumnValueToggle,
+  applyColumnValueToggle
+} from "../../core/collectionControls";
+import {
+  applyColumnFilterOpen,
   applyReportTableControls
 } from "./reportTableControls.tsx";
 import type { ReportFieldDescriptor } from "../reportTypes.ts";

@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 
 import { ServicePrincipalComponent } from "./ServicePrincipalComponent";
 import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
+import type { AzureRoleAssignment } from "../../core/azure/resources";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -29,7 +30,7 @@ const columns = [
   "ztaMaxRisk",
   "RemediationPackages",
   "azureRbac",
-  "oauthPemrissionsCount",
+  "oauthPermissionsCount",
   "appRolesPermissionCount",
   "entraPermissionRisk",
   "potentialOwners",
@@ -259,13 +260,13 @@ const graphApi = servicePrincipal({
   appRolesPermissionCount: 1,
   displayName: "Microsoft Graph",
   id: "graph-sp-id",
-  azureRbac: "Owner on subscription (privileged role)",
   entraPermissionRisk: "high",
-  oauthPemrissionsCount: 3,
+  oauthPermissionsCount: 3,
   ownerConfidence: "high",
   permissionRisk: "high",
   potentialOwners: ["platform@example.test"],
   publisherName: "Microsoft",
+  roleAssignments: [roleAssignment("Owner", "/subscriptions/sub-1")],
   rbacRoleAssignmentCount: 1,
   rbacRoleLevel: "high",
   rbacSubscriptionCount: 1,
@@ -318,12 +319,11 @@ function servicePrincipal(input: Partial<ServicePrincipal> & Pick<ServicePrincip
     servicePrincipalType: "Application",
     tags: [],
     permissionRisk: "none",
-    azureRbac: "No Azure RBAC assignments",
     roleAssignments: [],
     rbacRoleAssignmentCount: 0,
     rbacRoleLevel: "none",
     rbacSubscriptionCount: 0,
-    oauthPemrissionsCount: 0,
+    oauthPermissionsCount: 0,
     appRolesPermissionCount: 0,
     entraPermissionRisk: "none",
     ztaRemediationCountAll: 0,
@@ -331,6 +331,24 @@ function servicePrincipal(input: Partial<ServicePrincipal> & Pick<ServicePrincip
     ztaMaxRisk: "none",
     ...input
   } as ServicePrincipal;
+}
+
+function roleAssignment(roleDefinitionName: string, scope: string): AzureRoleAssignment {
+  return {
+    subscriptionId: "sub-1",
+    subscriptionName: "Subscription One",
+    roleAssignmentId: `${roleDefinitionName}-${scope}`,
+    scope,
+    principalId: "graph-sp-id",
+    principalType: "ServicePrincipal",
+    principalDisplayName: "Microsoft Graph",
+    signInName: null,
+    roleDefinitionId: `${roleDefinitionName}-id`,
+    roleDefinitionName,
+    canDelegate: false,
+    condition: null,
+    conditionVersion: null
+  };
 }
 
 function collection(rows: ServicePrincipal[], { page, count }: { page: number; count: number }): ServicePrincipalResponse {

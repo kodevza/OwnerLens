@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 
 import { ManagedIdentityComponent } from "./ManagedIdentityComponent";
 import type { ManagedIdentity } from "../../core/azure/entra/managedIdentity";
+import type { AzureRoleAssignment } from "../../core/azure/resources";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -32,10 +33,10 @@ afterEach(() => {
 test("loads managed identities with runtime risk enrichment", async () => {
   const mediumIdentity = managedIdentity({
     appId: "client-1",
-    azureRbac: "Contributor on rg/rg-app (write-capable role)",
     displayName: "uami-a",
     id: "principal-uami-1",
     permissionRisk: "medium",
+    roleAssignments: [roleAssignment("Contributor", "/subscriptions/sub-1/resourceGroups/rg-app")],
     rbacRoleAssignmentCount: 1,
     rbacRoleLevel: "medium",
     rbacSubscriptionCount: 1,
@@ -49,7 +50,7 @@ test("loads managed identities with runtime risk enrichment", async () => {
         taskCount: 2
       }
     ],
-    oauthPemrissionsCount: 1,
+    oauthPermissionsCount: 1,
     appRolesPermissionCount: 2,
     entraPermissionRisk: "high",
     assignedResourceGroups: ["rg-app"],
@@ -60,10 +61,10 @@ test("loads managed identities with runtime risk enrichment", async () => {
   const highIdentity = managedIdentity({
     accountEnabled: false,
     appId: "client-2",
-    azureRbac: "Owner on subscription (privileged role)",
     displayName: "uami-high",
     id: "principal-uami-2",
     permissionRisk: "high",
+    roleAssignments: [roleAssignment("Owner", "/subscriptions/sub-1")],
     rbacRoleAssignmentCount: 2,
     rbacRoleLevel: "high",
     rbacSubscriptionCount: 1
@@ -201,7 +202,7 @@ const columns = [
   "ztaMaxRisk",
   "RemediationPackages",
   "azureRbac",
-  "oauthPemrissionsCount",
+  "oauthPermissionsCount",
   "appRolesPermissionCount",
   "entraPermissionRisk",
   "assignedResourceGroups",
@@ -217,7 +218,6 @@ function managedIdentity(input: Partial<ManagedIdentity> & Pick<ManagedIdentity,
     accountEnabled: true,
     appDisplayName: null,
     appOwnerOrganizationId: null,
-    azureRbac: "No Azure RBAC assignments",
     homepage: null,
     loginUrl: null,
     managedIdentityAssignments: [],
@@ -228,7 +228,7 @@ function managedIdentity(input: Partial<ManagedIdentity> & Pick<ManagedIdentity,
     rbacSubscriptionCount: 0,
     replyUrls: [],
     roleAssignments: [],
-    oauthPemrissionsCount: 0,
+    oauthPermissionsCount: 0,
     appRolesPermissionCount: 0,
     entraPermissionRisk: "none",
     servicePrincipalNames: [],
@@ -242,6 +242,24 @@ function managedIdentity(input: Partial<ManagedIdentity> & Pick<ManagedIdentity,
     ztaRemediationFailedCount: 0,
     ...input
   } as ManagedIdentity;
+}
+
+function roleAssignment(roleDefinitionName: string, scope: string): AzureRoleAssignment {
+  return {
+    subscriptionId: "sub-1",
+    subscriptionName: "Subscription One",
+    roleAssignmentId: `${roleDefinitionName}-${scope}`,
+    scope,
+    principalId: "principal-uami-1",
+    principalType: "ServicePrincipal",
+    principalDisplayName: "uami-a",
+    signInName: null,
+    roleDefinitionId: `${roleDefinitionName}-id`,
+    roleDefinitionName,
+    canDelegate: false,
+    condition: null,
+    conditionVersion: null
+  };
 }
 
 function collection(rows: ManagedIdentity[], { count }: { count: number }): ManagedIdentityResponse {

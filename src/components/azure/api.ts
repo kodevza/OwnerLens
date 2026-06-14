@@ -10,7 +10,7 @@ import type {
   DeleteRuntimeRemediationTasksRequest,
   RemediationPackage
 } from "../../core/runtime/remediation";
-import type { ColumnFilters } from "../../report/components/reportTableControls";
+import type { ColumnFilters } from "../../core/collectionControls";
 import { appendRuntimeCollectionFilters } from "../../report/runtimeCollectionQuery";
 
 type ServicePrincipalRuntimeResponse = {

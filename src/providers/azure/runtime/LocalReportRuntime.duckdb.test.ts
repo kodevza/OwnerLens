@@ -895,7 +895,7 @@ test("enriches remediation package tasks with Azure principal summaries", async 
         azureEnrichment: {
           id: "sp-1",
           displayName: "Example app",
-          oauthPemrissionsCount: 2,
+          oauthPermissionsCount: 2,
           appRolesPermissionCount: 1,
           entraPermissionRisk: "high",
           rbacRoleAssignmentCount: 1,
@@ -903,10 +903,11 @@ test("enriches remediation package tasks with Azure principal summaries", async 
           rbacSubscriptionCount: 1,
           potentialOwners: ["alice@example.test"],
           ownerConfidence: "high",
-          azureRbac: expect.stringContaining("Owner on rg/rg-app")
+          roleAssignments: [expect.objectContaining({ roleDefinitionName: "Owner", scope: "/subscriptions/sub-1/resourceGroups/rg-app" })]
         }
       })
     });
+    expect((readPackage.tasks[0].sourceEvidence as Record<string, Record<string, unknown>>).azureEnrichment.azureRbac).toBeUndefined();
   });
 });
 
@@ -1649,7 +1650,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         expect.objectContaining({
           id: "sp-1",
           displayName: "Example app",
-          oauthPemrissionsCount: 1,
+          oauthPermissionsCount: 1,
           appRolesPermissionCount: 1,
           entraPermissionRisk: "high",
           rbacRoleAssignmentCount: 0,
@@ -1665,7 +1666,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         expect.objectContaining({
           id: "mi-1",
           servicePrincipalType: "ManagedIdentity",
-          oauthPemrissionsCount: 2,
+          oauthPermissionsCount: 2,
           appRolesPermissionCount: 1,
           entraPermissionRisk: "medium",
           rbacRoleAssignmentCount: 0,
@@ -1676,11 +1677,11 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
     });
     expect(restServicePrincipals).toMatchObject({
       collectionId: "entra.servicePrincipals",
-      columns: expect.arrayContaining(["oauthPemrissionsCount", "appRolesPermissionCount", "entraPermissionRisk"]),
+      columns: expect.arrayContaining(["oauthPermissionsCount", "appRolesPermissionCount", "entraPermissionRisk"]),
       rows: [
         expect.objectContaining({
           id: "sp-1",
-          oauthPemrissionsCount: 1,
+          oauthPermissionsCount: 1,
           appRolesPermissionCount: 1,
           entraPermissionRisk: "high"
         })
@@ -1688,11 +1689,11 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
     });
     expect(restManagedIdentities).toMatchObject({
       collectionId: "entra.managedIdentities",
-      columns: expect.arrayContaining(["oauthPemrissionsCount", "appRolesPermissionCount", "entraPermissionRisk"]),
+      columns: expect.arrayContaining(["oauthPermissionsCount", "appRolesPermissionCount", "entraPermissionRisk"]),
       rows: [
         expect.objectContaining({
           id: "mi-1",
-          oauthPemrissionsCount: 2,
+          oauthPermissionsCount: 2,
           appRolesPermissionCount: 1,
           entraPermissionRisk: "medium"
         })
@@ -2598,12 +2599,12 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
     expect(servicePrincipals[0]).toMatchObject({
       id: "sp-1",
       permissionRisk: "high",
-      azureRbac: expect.stringContaining("Owner on subscription"),
       roleAssignments: [expect.objectContaining({ roleDefinitionName: "Owner" })],
       rbacRoleAssignmentCount: 1,
       rbacRoleLevel: "high",
       rbacSubscriptionCount: 1
     });
+    expect(servicePrincipals[0]).not.toHaveProperty("azureRbac");
     expect(queriedServicePrincipals).toMatchObject({
       collectionId: "entra.servicePrincipals",
       rows: [
@@ -2617,7 +2618,6 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
     expect(managedIdentities[0]).toMatchObject({
       id: "principal-uami-1",
       permissionRisk: "low",
-      azureRbac: expect.stringContaining("Reader on rg/rg-app"),
       roleAssignments: [expect.objectContaining({ roleDefinitionName: "Reader" })],
       rbacRoleAssignmentCount: 1,
       rbacRoleLevel: "low",
@@ -2625,6 +2625,7 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       assignedResourceGroups: ["rg-app"],
       managedIdentityAssignments: [expect.objectContaining({ assignedResourceName: "app-a" })]
     });
+    expect(managedIdentities[0]).not.toHaveProperty("azureRbac");
     expect(queriedManagedIdentities).toMatchObject({
       collectionId: "entra.managedIdentities",
       rows: [

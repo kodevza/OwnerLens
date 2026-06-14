@@ -1,4 +1,4 @@
-import type { ColumnFilter, ColumnFilters } from "./components/reportTableControls";
+import type { ColumnFilter, ColumnFilters } from "../core/collectionControls";
 
 export function appendRuntimeCollectionFilters(url: URL, filters: ColumnFilters): void {
   getRuntimeCollectionFilters(filters).forEach(({ column, values }, filterIndex) => {

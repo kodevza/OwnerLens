@@ -13,7 +13,10 @@ import { Button } from "../../report/components/ui/button";
 import { Card } from "../../report/components/ui/card";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import { deleteRemediationTasks } from "./api";
-import { buildServicePrincipalFieldRenderers } from "./ServicePrincipalFieldRenderers";
+import {
+  buildServicePrincipalFieldRenderers,
+  formatAzureRbacSummary
+} from "./ServicePrincipalFieldRenderers";
 import {
   getRelatedObjectId,
   getRelatedObjectLabel,
@@ -68,16 +71,16 @@ const remediationTaskFields: ReportFieldDescriptor<RemediationTask>[] = [
     }
   },
   {
-    id: "oauthPemrissionsCount",
+    id: "oauthPermissionsCount",
     label: "Entra API permissions",
     valueType: "number",
-    getValue: (task) => getTaskAzureEnrichment(task)?.oauthPemrissionsCount ?? 0,
+    getValue: (task) => getTaskAzureEnrichment(task)?.oauthPermissionsCount ?? 0,
     getFilterValue: (task) => {
       const enrichment = getTaskAzureEnrichment(task);
       return enrichment
         ? [
             enrichment.entraPermissionRisk,
-            String(enrichment.oauthPemrissionsCount),
+            String(enrichment.oauthPermissionsCount),
             String(enrichment.appRolesPermissionCount)
           ]
         : ["none"];
@@ -96,7 +99,7 @@ const remediationTaskFields: ReportFieldDescriptor<RemediationTask>[] = [
             enrichment.rbacRoleLevel,
             String(enrichment.rbacRoleAssignmentCount),
             String(enrichment.rbacSubscriptionCount),
-            enrichment.azureRbac
+            formatAzureRbacSummary(enrichment)
           ]
         : ["none"];
     },
@@ -322,13 +325,13 @@ function getTaskAzureEnrichment(task: RemediationTask): EntraPrincipalAzureRemed
   if (
     typeof enrichment.id !== "string" ||
     typeof enrichment.displayName !== "string" ||
-    typeof enrichment.azureRbac !== "string" ||
-    typeof enrichment.oauthPemrissionsCount !== "number" ||
+    typeof enrichment.oauthPermissionsCount !== "number" ||
     typeof enrichment.appRolesPermissionCount !== "number" ||
     !isPermissionRiskLevel(enrichment.entraPermissionRisk) ||
     typeof enrichment.rbacRoleAssignmentCount !== "number" ||
     !isPermissionRiskLevel(enrichment.rbacRoleLevel) ||
     typeof enrichment.rbacSubscriptionCount !== "number" ||
+    !Array.isArray(enrichment.roleAssignments) ||
     !Array.isArray(enrichment.potentialOwners) ||
     !enrichment.potentialOwners.every((owner) => typeof owner === "string") ||
     !isOwnerConfidence(enrichment.ownerConfidence)

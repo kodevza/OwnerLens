@@ -1,29 +1,8 @@
 import { hasSearchExpression, matchesSearchExpression } from "../lib/searchFilterUtils";
+import type { ColumnFilter, ColumnFilterOptions, ColumnFilters, SortRule } from "../core/collectionControls";
 import type { ReportDetailsValue, ReportFieldDescriptor } from "./reportTypes";
 
-export type SortDirection = "asc" | "desc";
-
-export type SortRule = {
-  columnId: string;
-  direction: SortDirection;
-};
-
-export type ColumnFilter =
-  | {
-      type: "text";
-      value: string;
-    }
-  | {
-      type: "values";
-      values: string[];
-    }
-  | {
-      type: "objectFields";
-      conditions: Array<{ fieldId: string; value: string }>;
-    };
-
-export type ColumnFilters = Record<string, ColumnFilter>;
-export type ColumnFilterOptions = Record<string, string[]>;
+export type { ColumnFilter, ColumnFilterOptions, ColumnFilters, SortRule } from "../core/collectionControls";
 
 type ActiveFieldFilter<TRow> = {
   field: ReportFieldDescriptor<TRow>;

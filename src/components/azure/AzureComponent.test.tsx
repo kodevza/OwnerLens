@@ -54,7 +54,7 @@ test("opens related managed identity from Zero Trust Assessment with an Object I
             publisherName: null,
             replyUrls: [],
             roleAssignments: [],
-            oauthPemrissionsCount: 0,
+            oauthPermissionsCount: 0,
             appRolesPermissionCount: 0,
             entraPermissionRisk: "none",
             servicePrincipalNames: [],
@@ -155,7 +155,7 @@ test("opens related service principal from Zero Trust Assessment with the resolv
             publisherName: null,
             replyUrls: [],
             roleAssignments: [],
-            oauthPemrissionsCount: 0,
+            oauthPermissionsCount: 0,
             appRolesPermissionCount: 0,
             entraPermissionRisk: "none",
             servicePrincipalNames: [],
@@ -315,7 +315,7 @@ test("opens Zero Trust Assessment filtered by related object from a principal ZT
           publisherName: null,
           replyUrls: [],
           roleAssignments: [],
-          oauthPemrissionsCount: 0,
+          oauthPermissionsCount: 0,
           appRolesPermissionCount: 0,
           entraPermissionRisk: "none",
           servicePrincipalNames: [],
@@ -390,8 +390,8 @@ test("opens a remediation package tab after creating a package from Zero Trust A
               azureEnrichment: {
                 id: "sp-object-id",
                 displayName: "Service principal app",
-                azureRbac: "Owner on rg/rg-app",
-                oauthPemrissionsCount: 2,
+                roleAssignments: [testRoleAssignment("Owner", "/subscriptions/sub-1/resourceGroups/rg-app")],
+                oauthPermissionsCount: 2,
                 appRolesPermissionCount: 1,
                 entraPermissionRisk: "high",
                 rbacRoleAssignmentCount: 1,
@@ -665,7 +665,7 @@ test("opens Azure RBAC tab for the selected service principal from its RBAC badg
           publisherName: null,
           replyUrls: [],
           roleAssignments: [],
-          oauthPemrissionsCount: 0,
+          oauthPermissionsCount: 0,
           appRolesPermissionCount: 0,
           entraPermissionRisk: "none",
           servicePrincipalNames: [],
@@ -765,7 +765,7 @@ test("opens Entra API permissions tab for the selected service principal from it
           publisherName: null,
           replyUrls: [],
           roleAssignments: [],
-          oauthPemrissionsCount: 2,
+          oauthPermissionsCount: 2,
           appRolesPermissionCount: 1,
           entraPermissionRisk: "high",
           servicePrincipalNames: [],
@@ -872,7 +872,7 @@ test("opens Azure RBAC tab for the selected managed identity from its RBAC badge
             entraPermissionRisk: "none",
             loginUrl: null,
             managedIdentityAssignments: [],
-            oauthPemrissionsCount: 0,
+            oauthPermissionsCount: 0,
             appRolesPermissionCount: 0,
             ownerConfidence: "none",
             permissionRisk: "medium",
@@ -1124,6 +1124,24 @@ function zeroTrustAssessmentJsonResponse(body: ZtaReport): Response {
     count: body.Tests.length,
     ...body
   });
+}
+
+function testRoleAssignment(roleDefinitionName: string, scope: string) {
+  return {
+    subscriptionId: "sub-1",
+    subscriptionName: "Subscription One",
+    roleAssignmentId: `${roleDefinitionName}-${scope}`,
+    scope,
+    principalId: "sp-object-id",
+    principalType: "ServicePrincipal",
+    principalDisplayName: "Service principal app",
+    signInName: null,
+    roleDefinitionId: `${roleDefinitionName}-id`,
+    roleDefinitionName,
+    canDelegate: false,
+    condition: null,
+    conditionVersion: null
+  };
 }
 
 function renderComponent(component: React.ReactNode): { container: HTMLElement; root: Root } {

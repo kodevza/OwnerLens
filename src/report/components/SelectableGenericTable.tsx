@@ -7,7 +7,7 @@ import {
   type GenericTableSelectionColumn,
   type GenericTableWrapperProps
 } from "./GenericTable";
-import type { ColumnFilters } from "./reportTableControls";
+import type { ColumnFilters } from "../../core/collectionControls";
 
 type SelectionOverlayContext = {
   filters: ColumnFilters;

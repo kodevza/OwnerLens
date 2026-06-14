@@ -3,23 +3,24 @@ import { createPortal } from "react-dom";
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import type { ColumnFilter } from "../applyCollectionControls";
+import type { ColumnFilter } from "../../core/collectionControls";
 import type { ReportObjectFieldFilterDescriptor } from "../reportTypes";
-import type { ReportTableColumn } from "./reportTableControls";
 
 const dropdownGap = 4;
 const dropdownEstimatedHeight = 272;
 const viewportMargin = 16;
 
-export function ColumnObjectFieldFilter<TRow>({
-  column,
+export function ColumnObjectFieldFilter({
+  columnId,
+  columnLabel,
   fields,
   filter,
   isOpen,
   onChange,
   onOpenChange
 }: {
-  column: ReportTableColumn<TRow>;
+  columnId: string;
+  columnLabel: string;
   fields: ReportObjectFieldFilterDescriptor[];
   filter: ColumnFilter | undefined;
   isOpen: boolean;
@@ -52,7 +53,7 @@ export function ColumnObjectFieldFilter<TRow>({
 
   function updateConditions(conditions: Array<{ fieldId: string; value: string }>) {
     setDraftConditions(conditions);
-    onChange(column.id, conditions);
+    onChange(columnId, conditions);
   }
 
   function updateCondition(index: number, condition: { fieldId: string; value: string }) {
@@ -76,7 +77,7 @@ export function ColumnObjectFieldFilter<TRow>({
 
   function clearConditions() {
     setDraftConditions(createObjectFieldConditions(fields, []));
-    onChange(column.id, []);
+    onChange(columnId, []);
   }
 
   function updateMenuPosition() {
@@ -131,7 +132,7 @@ export function ColumnObjectFieldFilter<TRow>({
         return;
       }
 
-      onOpenChange(column.id, false);
+      onOpenChange(columnId, false);
     }
 
     document.addEventListener("mousedown", handleDocumentMouseDown);
@@ -139,18 +140,18 @@ export function ColumnObjectFieldFilter<TRow>({
     return () => {
       document.removeEventListener("mousedown", handleDocumentMouseDown);
     };
-  }, [column.id, isOpen, onOpenChange]);
+  }, [columnId, isOpen, onOpenChange]);
 
   return (
     <div className="relative">
       <Button
         ref={triggerRef}
-        aria-label={`Filter ${column.label}`}
+        aria-label={`Filter ${columnLabel}`}
         className="h-7 w-full cursor-pointer list-none justify-between gap-1 bg-card px-1.5 py-1 font-normal shadow-sm marker:hidden"
         size="sm"
         type="button"
         variant="outline"
-        onClick={() => onOpenChange(column.id, !isOpen)}
+        onClick={() => onOpenChange(columnId, !isOpen)}
       >
         <span className="truncate">{label}</span>
         <span aria-hidden="true" className="text-muted-foreground">
@@ -203,7 +204,7 @@ export function ColumnObjectFieldFilter<TRow>({
                         </div>
                       ) : (
                         <Input
-                          aria-label={`${column.label} ${field?.label ?? condition.fieldId} value`}
+                          aria-label={`${columnLabel} ${field?.label ?? condition.fieldId} value`}
                           className="h-7 min-w-0 bg-card px-1.5 py-1 text-xs shadow-none"
                           placeholder="Filter with RegExp"
                           value={condition.value}

@@ -8,14 +8,27 @@ import { Input } from "./ui/input";
 import { TableHead } from "./ui/table";
 import type { ReportColumnHelp, ReportFieldDescriptor, ReportObjectFieldFilterDescriptor } from "../reportTypes";
 import {
-  applyCollectionControls,
+  applyColumnFilterValueToggle,
+  applyColumnObjectFieldFilter,
+  applyColumnValueToggle,
+  applyColumnValuesFilter,
   type ColumnFilter,
   type ColumnFilterOptions,
   type ColumnFilters,
-  type SortRule
+  type SortRule,
+  toggleSortRule
+} from "../../core/collectionControls";
+import {
+  applyCollectionControls
 } from "../applyCollectionControls";
 
-export type { ColumnFilter, ColumnFilterOptions, ColumnFilters, SortRule } from "../applyCollectionControls";
+export type { ColumnFilter, ColumnFilterOptions, ColumnFilters, SortRule } from "../../core/collectionControls";
+export {
+  applyColumnFilterValueToggle,
+  applyColumnObjectFieldFilter,
+  applyColumnValueToggle,
+  applyColumnValuesFilter
+} from "../../core/collectionControls";
 
 export type ReportTableColumn<TRow> = {
   id: string;
@@ -76,19 +89,7 @@ export function useReportTableControls<TRow>(rows: TRow[], fields: ReportFieldDe
   }
 
   function toggleColumnSort(columnId: string) {
-    setSortRules((current) => {
-      const existingRule = current.find((rule) => rule.columnId === columnId);
-
-      if (!existingRule) {
-        return [...current, { columnId, direction: "asc" }];
-      }
-
-      if (existingRule.direction === "asc") {
-        return current.map((rule) => (rule.columnId === columnId ? { ...rule, direction: "desc" } : rule));
-      }
-
-      return current.filter((rule) => rule.columnId !== columnId);
-    });
+    setSortRules((current) => toggleSortRule(current, columnId));
   }
 
   return {
@@ -118,56 +119,6 @@ export function applyReportTableControls<TRow>(
   });
 }
 
-export function applyColumnValuesFilter(
-  currentFilters: ColumnFilters,
-  columnId: string,
-  values: string[]
-): ColumnFilters {
-  const next = { ...currentFilters };
-
-  if (values.length === 0) {
-    delete next[columnId];
-  } else {
-    next[columnId] = { type: "values", values };
-  }
-
-  return next;
-}
-
-export function applyColumnObjectFieldFilter(
-  currentFilters: ColumnFilters,
-  columnId: string,
-  conditions: Array<{ fieldId: string; value: string }>
-): ColumnFilters {
-  const next = { ...currentFilters };
-  const activeConditions = conditions
-    .map((condition) => ({
-      fieldId: condition.fieldId,
-      value: condition.value
-    }))
-    .filter((condition) => condition.fieldId.trim() && condition.value.trim());
-
-  if (activeConditions.length === 0) {
-    delete next[columnId];
-  } else {
-    next[columnId] = { type: "objectFields", conditions: activeConditions };
-  }
-
-  return next;
-}
-
-export function applyColumnFilterValueToggle(
-  currentFilters: ColumnFilters,
-  columnId: string,
-  value: string,
-  checked: boolean
-): ColumnFilters {
-  const currentFilter = currentFilters[columnId];
-  const selectedValues = currentFilter?.type === "values" ? currentFilter.values : [];
-
-  return applyColumnValuesFilter(currentFilters, columnId, applyColumnValueToggle(selectedValues, value, checked));
-}
-
 export function applyColumnFilterOpen(
   currentColumnId: string | null,
   columnId: string,
@@ -178,14 +129,6 @@ export function applyColumnFilterOpen(
   }
 
   return currentColumnId === columnId ? null : currentColumnId;
-}
-
-export function applyColumnValueToggle(selectedValues: string[], value: string, checked: boolean): string[] {
-  if (checked) {
-    return selectedValues.includes(value) ? selectedValues : [...selectedValues, value];
-  }
-
-  return selectedValues.filter((selectedValue) => selectedValue !== value);
 }
 
 export function ReportTableHead<TRow>({
@@ -248,7 +191,8 @@ export function ReportTableHead<TRow>({
               </div>
               {column.filter === "objectFields" && column.objectFilterFields?.length ? (
                 <ColumnObjectFieldFilter
-                  column={column}
+                  columnId={column.id}
+                  columnLabel={column.label}
                   fields={column.objectFilterFields}
                   filter={filter}
                   isOpen={openFilterColumnId === column.id}

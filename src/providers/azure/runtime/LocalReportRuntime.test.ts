@@ -356,6 +356,8 @@ test("defines local report runtime REST endpoints", async () => {
   const enrichmentRecalculateEndpoint = getEndpoint(endpoints, "/api/data/runtime/enrichment/recalculate");
   const runtimeEndpoint = getEndpoint(endpoints, "/api/data/runtime");
 
+  expect(enrichmentRecalculateEndpoint.method).toBe("POST");
+
   expect(endpoints.map((endpoint) => endpoint.path)).toEqual([
     "/api/data",
     "/api/data/read",

@@ -139,7 +139,7 @@ export const azureManagedIdentityColumnHelp = {
       "Shows no Azure RBAC assignments when no assignment matches."
     ]
   },
-  oauthPemrissionsCount: {
+  oauthPermissionsCount: {
     source: "Computed by app from Entra OAuth2 permission grants and app role assignments JSON.",
     field: "oauth2PermissionGrants[].scope and appRoleAssignments[].principalId",
     logic: [

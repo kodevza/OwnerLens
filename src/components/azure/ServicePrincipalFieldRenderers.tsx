@@ -3,6 +3,7 @@ import type {
   EntraPrincipalPermissionSummary,
   EntraPrincipalRbacSummary
 } from "../../core/azure/entra/servicePrincipal";
+import type { AzureRoleAssignment } from "../../core/azure/resources";
 import type { OwnerConfidence } from "../../core/ownership/types";
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import type { ZtaRemediationSummary } from "../../core/azure/ztaReport";
@@ -12,16 +13,16 @@ import { ZtaRemediationBadge } from "./ZtaRemediationBadge";
 
 type EntraPrincipalSummaryRow = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & ZtaRemediationSummary & {
   accountEnabled?: boolean;
-  azureRbac: string;
   displayName: string;
   id: string;
+  roleAssignments?: AzureRoleAssignment[];
 };
 
 type EntraPrincipalIdentitySummary = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & {
   accountEnabled?: boolean;
-  azureRbac: string;
   displayName: string;
   id: string;
+  roleAssignments?: AzureRoleAssignment[];
 };
 
 export type AzureRbacPrincipalSelection = {
@@ -76,21 +77,21 @@ export function buildServicePrincipalFieldRenderers<TRow>({
           rbacRoleAssignmentCount={sp.rbacRoleAssignmentCount}
           rbacRoleLevel={sp.rbacRoleLevel}
           rbacSubscriptionCount={sp.rbacSubscriptionCount}
-          title={sp.azureRbac}
+          title={formatAzureRbacSummary(sp)}
           onClick={onAzureRbacClick ? () => onAzureRbacClick({ displayName: sp.displayName, objectId: sp.id }) : undefined}
         />
       ) : (
         <EmptyValue />
       );
     },
-    oauthPemrissionsCount: (row) => {
+    oauthPermissionsCount: (row) => {
       const sp = readPrincipalSummary(row);
 
       return sp ? (
         <PermissionCountBadge
           appRolePermissionsCount={sp.appRolesPermissionCount}
           entraPermissionRisk={sp.entraPermissionRisk}
-          oauthPermissionsCount={sp.oauthPemrissionsCount}
+          oauthPermissionsCount={sp.oauthPermissionsCount}
           onClick={
             onEntraPermissionsClick ? () => onEntraPermissionsClick({ displayName: sp.displayName, objectId: sp.id }) : undefined
           }
@@ -116,14 +117,16 @@ export function buildServicePrincipalFieldRenderers<TRow>({
       const principal = readPrincipalSummary(row);
 
       return sp && principal ? (
-        <ZtaRemediationBadge
-          ztaMaxRisk={sp.ztaMaxRisk}
-          ztaRemediationCountAll={sp.ztaRemediationCountAll}
-          ztaRemediationFailedCount={sp.ztaRemediationFailedCount}
-          onClick={onZtaRemediationsClick ? () => onZtaRemediationsClick(principal.id) : undefined}
-        />
+        <span className={`inline-flex ${numericSummaryBadgeClassName}`}>
+          <ZtaRemediationBadge
+            ztaMaxRisk={sp.ztaMaxRisk}
+            ztaRemediationCountAll={sp.ztaRemediationCountAll}
+            ztaRemediationFailedCount={sp.ztaRemediationFailedCount}
+            onClick={onZtaRemediationsClick ? () => onZtaRemediationsClick(principal.id) : undefined}
+          />
+        </span>
       ) : (
-        <EmptyValue />
+        <NumericSummaryEmptyValue />
       );
     }
   };
@@ -193,6 +196,21 @@ function RbacSummaryBadge({
   );
 }
 
+export function formatAzureRbacSummary({
+  rbacRoleAssignmentCount,
+  roleAssignments = []
+}: Pick<EntraPrincipalRbacSummary, "rbacRoleAssignmentCount"> & {
+  roleAssignments?: AzureRoleAssignment[];
+}): string {
+  if (rbacRoleAssignmentCount === 0 || roleAssignments.length === 0) {
+    return "No Azure RBAC assignments";
+  }
+
+  return roleAssignments
+    .map((assignment) => `${assignment.roleDefinitionName ?? "Role"} on ${assignment.scope}`)
+    .join(", ");
+}
+
 export function OwnerBadge({ confidence, owners }: { confidence: OwnerConfidence; owners: string[] }) {
   if (owners.length === 0) {
     return (
@@ -250,6 +268,10 @@ function PermissionCountBadge({
 
 function EmptyValue() {
   return <span className="text-muted-foreground">-</span>;
+}
+
+function NumericSummaryEmptyValue() {
+  return <span className={`text-muted-foreground ${numericSummaryBadgeClassName}`}>-</span>;
 }
 
 function isZtaRemediationSummary(value: unknown): value is ZtaRemediationSummary {

@@ -9,7 +9,7 @@ import type {
 import { formatDate, formatValue } from "../../lib/utils";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
-import type { ColumnFilters } from "../../report/components/reportTableControls";
+import type { ColumnFilters } from "../../core/collectionControls";
 import { Button } from "../../report/components/ui/button";
 import { Card } from "../../report/components/ui/card";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";

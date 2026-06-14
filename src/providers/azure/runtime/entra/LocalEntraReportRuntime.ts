@@ -172,7 +172,7 @@ export class LocalEntraReportRuntime {
     for (const grant of oauth2PermissionGrants) {
       const summary = getOrCreatePrincipalPermissionSummary(permissionsByPrincipalId, grant.clientId);
       const scopeCount = countOAuthPermissionScopes(grant.scope);
-      summary.oauthPemrissionsCount += scopeCount;
+      summary.oauthPermissionsCount += scopeCount;
       if (scopeCount > 0) {
         summary.entraPermissionRisk = maxPermissionRisk(
           summary.entraPermissionRisk,
@@ -203,7 +203,7 @@ function getOrCreatePrincipalPermissionSummary(
   }
 
   const summary = {
-    oauthPemrissionsCount: 0,
+    oauthPermissionsCount: 0,
     appRolesPermissionCount: 0,
     entraPermissionRisk: "none" as PermissionRiskLevel
   };

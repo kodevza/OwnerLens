@@ -8,7 +8,7 @@ import type { RemediationPackage } from "../../core/runtime/remediation";
 import { azureServicePrincipalColumnHelp } from "./azureReportConfig";
 import { readRemediationPackage, readServicePrincipals } from "./api";
 import { GenericTable } from "../../report/components/GenericTable";
-import type { ColumnFilters } from "../../report/components/reportTableControls";
+import type { ColumnFilters } from "../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import {
   buildServicePrincipalFieldRenderers,
@@ -81,24 +81,24 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     id: "azureRbac",
     label: "Azure RBAC",
     valueType: "text",
-    getValue: (sp) => sp.azureRbac,
+    getValue: (sp) => sp.roleAssignments,
     getFilterValue: (sp) => ({
       roleLevel: sp.rbacRoleLevel,
-      summary: sp.azureRbac
+      summary: sp.roleAssignments
     }),
     filter: {
       kind: "objectFields",
       fields: [
         { id: "roleLevel", label: "Role level", filterColumnId: "rbacRoleLevel", options: permissionRiskLevelOptions },
-        { id: "summary", label: "Summary", filterColumnId: "azureRbac" }
+        { id: "summary", label: "Summary", filterColumnId: "roleAssignments" }
       ]
     }
   },
   {
-    id: "oauthPemrissionsCount",
+    id: "oauthPermissionsCount",
     label: "Entra API permissions",
     valueType: "text",
-    getValue: (sp) => sp.oauthPemrissionsCount,
+    getValue: (sp) => sp.oauthPermissionsCount,
     getFilterValue: (sp) => sp.entraPermissionRisk,
     filterColumnId: "entraPermissionRisk",
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }

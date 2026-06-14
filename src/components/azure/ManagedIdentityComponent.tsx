@@ -7,7 +7,7 @@ import type { RemediationPackage } from "../../core/runtime/remediation";
 import { azureManagedIdentityColumnHelp } from "./azureReportConfig";
 import { readManagedIdentities, readRemediationPackage } from "./api";
 import { GenericTable } from "../../report/components/GenericTable";
-import type { ColumnFilters } from "../../report/components/reportTableControls";
+import type { ColumnFilters } from "../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import {
   buildServicePrincipalFieldRenderers,
@@ -75,16 +75,16 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
     id: "azureRbac",
     label: "Azure RBAC",
     valueType: "text",
-    getValue: (identity) => identity.azureRbac,
+    getValue: (identity) => identity.roleAssignments,
     getFilterValue: (identity) => identity.rbacRoleLevel,
     filterColumnId: "rbacRoleLevel",
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
-    id: "oauthPemrissionsCount",
+    id: "oauthPermissionsCount",
     label: "Entra API permissions",
     valueType: "number",
-    getValue: (identity) => identity.oauthPemrissionsCount,
+    getValue: (identity) => identity.oauthPermissionsCount,
     getFilterValue: (identity) => identity.entraPermissionRisk,
     filterColumnId: "entraPermissionRisk",
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }

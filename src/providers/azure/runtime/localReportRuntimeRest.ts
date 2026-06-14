@@ -47,6 +47,7 @@ export function defineLocalReportRuntimeRestEndpoints(runtime: LocalReportRuntim
       handle: ({ body }) => runtime.deleteRemediationTasks(parseDeleteRemediationTasksRequest(body))
     },
     {
+      method: "POST",
       path: `${restBasePath}/runtime/enrichment/recalculate`,
       handle: async () => {
         await runtime.recalculateEnrichment();

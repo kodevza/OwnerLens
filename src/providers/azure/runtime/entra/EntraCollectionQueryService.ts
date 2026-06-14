@@ -74,8 +74,8 @@ export class EntraCollectionQueryService {
       summaries.set(normalizedPrincipalId, {
         id: servicePrincipal.id,
         displayName: servicePrincipal.displayName,
-        azureRbac: servicePrincipal.azureRbac,
-        oauthPemrissionsCount: servicePrincipal.oauthPemrissionsCount,
+        roleAssignments: servicePrincipal.roleAssignments,
+        oauthPermissionsCount: servicePrincipal.oauthPermissionsCount,
         appRolesPermissionCount: servicePrincipal.appRolesPermissionCount,
         entraPermissionRisk: servicePrincipal.entraPermissionRisk,
         rbacRoleAssignmentCount: servicePrincipal.rbacRoleAssignmentCount,

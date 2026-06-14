@@ -2,7 +2,7 @@ import { useCallback } from "react";
 
 import type { AzureRbac } from "../../core/azure/azureRbac";
 import { GenericTable } from "../../report/components/GenericTable";
-import type { ColumnFilters } from "../../report/components/reportTableControls";
+import type { ColumnFilters } from "../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import { readAzureRbac } from "./api";

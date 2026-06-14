@@ -2,19 +2,23 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { buildCollectionColumns, type ReportColumnRenderers } from "../buildCollectionColumns";
 import { getConfiguredFilterOptions } from "../applyCollectionControls";
+import {
+  applyColumnFilterValueToggle,
+  applyColumnObjectFieldFilter,
+  applyColumnTextFilter,
+  applyColumnValuesFilter,
+  toggleSortRule,
+  type ColumnFilterOptions,
+  type ColumnFilters,
+  type SortRule
+} from "../../core/collectionControls";
 import type { ReportColumnHelp, ReportFieldDescriptor } from "../reportTypes";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "./ui/table";
 import {
-  applyColumnFilterValueToggle,
-  applyColumnObjectFieldFilter,
-  applyColumnValuesFilter,
   applyReportTableControls,
   ReportTableHead,
-  type ColumnFilterOptions,
-  type ColumnFilters,
-  type SortRule,
   useReportTableControls
 } from "./reportTableControls";
 
@@ -366,32 +370,6 @@ function TableState({ children, variant = "empty" }: { children: string; variant
       {children}
     </Card>
   );
-}
-
-function applyColumnTextFilter(filters: ColumnFilters, columnId: string, value: string): ColumnFilters {
-  const next = { ...filters };
-
-  if (value.trim()) {
-    next[columnId] = { type: "text", value };
-  } else {
-    delete next[columnId];
-  }
-
-  return next;
-}
-
-function toggleSortRule(sortRules: SortRule[], columnId: string): SortRule[] {
-  const existingRule = sortRules.find((rule) => rule.columnId === columnId);
-
-  if (!existingRule) {
-    return [...sortRules, { columnId, direction: "asc" }];
-  }
-
-  if (existingRule.direction === "asc") {
-    return sortRules.map((rule) => (rule.columnId === columnId ? { ...rule, direction: "desc" } : rule));
-  }
-
-  return sortRules.filter((rule) => rule.columnId !== columnId);
 }
 
 function TablePagination({
