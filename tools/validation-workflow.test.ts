@@ -10,5 +10,8 @@ test("validation workflow uses the supported Graph access token parameter set", 
 
   expect(graphConnectLine).toBeDefined();
   expect(graphConnectLine).toContain("-NoWelcome");
+  expect(graphConnectLine).not.toContain("-Scopes");
   expect(graphConnectLine).not.toContain("-ContextScope");
+  expect(workflow).toContain("GRAPH_ACCESS_TOKEN=$plainToken");
+  expect(workflow).toContain('-AccessToken "$GRAPH_ACCESS_TOKEN" -SkipLogin');
 });

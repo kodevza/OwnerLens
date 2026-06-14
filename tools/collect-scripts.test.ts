@@ -25,6 +25,8 @@ test("package exposes OwnerLens collect commands through the npm bin", () => {
 test("collect wrappers delegate to the snapshot exporters used by the runtime", () => {
   expect(collectEntra).toContain("prepare-entra-snapshot.ps1");
   expect(collectEntra).toContain('Join-Path $OutputDir "entra-snapshot.json"');
+  expect(collectEntra).toContain("[string]$AccessToken");
+  expect(collectEntra).toContain("Connect-MgGraph -AccessToken $secureAccessToken -NoWelcome");
   expect(collectAzure).toContain("prepare-resource-snapshot.ps1");
   expect(collectAzure).toContain('Join-Path $OutputDir "snapshot.json"');
 });
