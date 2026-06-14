@@ -74,7 +74,7 @@ jobs:
           } else {
             $accessToken = $token | ConvertTo-SecureString -AsPlainText -Force
           }
-          Connect-MgGraph -AccessToken $accessToken -NoWelcome -ContextScope CurrentUser
+          Connect-MgGraph -AccessToken $accessToken -NoWelcome
           Get-MgContext | Format-List TenantId,Account,AuthType
 
       - name: Clear local data
