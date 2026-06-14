@@ -77,7 +77,7 @@ export class RemediationPackageStore {
           $createdAt,
           $status,
           $targetKind,
-          $targetId,
+          lower($targetId),
           $targetLabel,
           $title,
           $risk,

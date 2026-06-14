@@ -109,6 +109,13 @@ const ztaTestFields: ReportFieldDescriptor<ZtaReportTest>[] = [
     filter: { kind: "text" }
   },
   {
+    id: "TestMinimumLicense",
+    label: "Minimum license",
+    valueType: "list",
+    getValue: (test) => test.TestMinimumLicense,
+    filter: { kind: "text" }
+  },
+  {
     id: "TestTags",
     label: "Test Tags",
     valueType: "list",

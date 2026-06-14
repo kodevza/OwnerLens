@@ -87,6 +87,8 @@ test("opens related managed identity from Zero Trust Assessment with an Object I
   await clickButton("Open related object uami-prod identity");
   await waitForText(container, "uami-prod");
 
+  expect(getButton("Managed identities").getAttribute("data-state")).toBe("active");
+
   const managedIdentityRequest = fetchMock.mock.calls
     .map(([input]) => String(input))
     .reverse()
@@ -96,6 +98,161 @@ test("opens related managed identity from Zero Trust Assessment with an Object I
   const url = new URL(managedIdentityRequest ?? "", window.location.origin);
   expect(url.searchParams.get("filter[0][column]")).toBe("id");
   expect(url.searchParams.get("filter[0][value][0]")).toBe("mi-object-id");
+
+  act(() => root.unmount());
+});
+
+test("opens related service principal from Zero Trust Assessment with the resolved service principal ID", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/zeroTrustAssessment/report")) {
+      return zeroTrustAssessmentJsonResponse({
+        Meta: {
+          TenantId: "tenant-1",
+          TenantName: "Example Tenant"
+        },
+        Tests: [
+          {
+            TestId: "zta-sp-1",
+            TestStatus: "Completed",
+            TestTitle: "Service principal exposure",
+            RelatedObjects: [
+              {
+                id: "application-object-id",
+                displayName: "Service principal app",
+                servicePrincipalId: "sp-object-id",
+                servicePrincipalType: "Application"
+              }
+            ]
+          }
+        ]
+      });
+    }
+
+    if (requestUrl.startsWith("/api/data/entra/servicePrincipals")) {
+      return jsonResponse({
+        collectionId: "entra.servicePrincipals",
+        columns: [],
+        count: 1,
+        page: 1,
+        pageSize: 20,
+        rows: [
+          {
+            accountEnabled: true,
+            appDisplayName: "Service principal app",
+            appId: "sp-client-id",
+            appOwnerOrganizationId: null,
+            azureRbac: "No Azure RBAC assignments",
+            displayName: "Service principal app",
+            homepage: null,
+            id: "sp-object-id",
+            loginUrl: null,
+            permissionRisk: "none",
+            rbacRoleAssignmentCount: 0,
+            rbacRoleLevel: "none",
+            rbacSubscriptionCount: 0,
+            publisherName: null,
+            replyUrls: [],
+            roleAssignments: [],
+            oauthPemrissionsCount: 0,
+            appRolesPermissionCount: 0,
+            entraPermissionRisk: "none",
+            servicePrincipalNames: [],
+            servicePrincipalType: "Application",
+            potentialOwners: [],
+            ownerConfidence: "none",
+            tags: []
+          }
+        ]
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.managedIdentities",
+      columns: [],
+      count: 0,
+      page: 1,
+      pageSize: 20,
+      rows: []
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await clickButton("Zero Trust Assessment");
+  await waitForText(container, "Service principal exposure");
+
+  await clickButton("Open related object Service principal app");
+  await waitForText(container, "Service principal app");
+
+  expect(getButton("Service principals").getAttribute("data-state")).toBe("active");
+
+  const servicePrincipalRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .reverse()
+    .find((requestUrl) => requestUrl.startsWith("/api/data/entra/servicePrincipals"));
+  expect(servicePrincipalRequest).toBeDefined();
+
+  const url = new URL(servicePrincipalRequest ?? "", window.location.origin);
+  expect(url.searchParams.get("filter[0][column]")).toBe("id");
+  expect(url.searchParams.get("filter[0][value][0]")).toBe("sp-object-id");
+
+  act(() => root.unmount());
+});
+
+test("does not guess a service principal tab for a Zero Trust Assessment related object without a principal type", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/zeroTrustAssessment/report")) {
+      return zeroTrustAssessmentJsonResponse({
+        Meta: {
+          TenantId: "tenant-1",
+          TenantName: "Example Tenant"
+        },
+        Tests: [
+          {
+            TestId: "zta-user-1",
+            TestStatus: "Completed",
+            TestTitle: "User exposure",
+            RelatedObjects: [
+              {
+                id: "user-object-id",
+                userPrincipalName: "user@example.test"
+              }
+            ]
+          }
+        ]
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 0,
+      page: 1,
+      pageSize: 20,
+      rows: []
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await clickButton("Zero Trust Assessment");
+  await waitForText(container, "User exposure");
+
+  const servicePrincipalRequestCountBeforeClick = fetchMock.mock.calls.filter(([input]) =>
+    String(input).startsWith("/api/data/entra/servicePrincipals")
+  ).length;
+  await clickButton("Open related object user@example.test");
+
+  expect(getButton("Zero Trust Assessment").getAttribute("data-state")).toBe("active");
+  expect(
+    fetchMock.mock.calls.filter(([input]) => String(input).startsWith("/api/data/entra/servicePrincipals"))
+  ).toHaveLength(servicePrincipalRequestCountBeforeClick);
 
   act(() => root.unmount());
 });

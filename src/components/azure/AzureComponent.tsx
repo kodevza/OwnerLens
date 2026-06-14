@@ -130,12 +130,16 @@ export function AzureComponent() {
   }, [navigateBack]);
 
   function openRelatedPrincipal(relatedObject: ZtaRelatedObject) {
-    const objectId = relatedObject.id ?? relatedObject.object_id;
+    const view = getRelatedPrincipalView(relatedObject);
+    if (!view) {
+      return;
+    }
+
+    const objectId = getRelatedPrincipalObjectId(relatedObject);
     if (!objectId) {
       return;
     }
 
-    const view = relatedObject.servicePrincipalType === "ManagedIdentity" ? "managedIdentities" : "servicePrincipals";
     setPrincipalObjectFilter({ objectId, view });
     activateView(view);
   }
@@ -313,6 +317,29 @@ function getPrincipalObjectFilters(
       value: principalObjectFilter.objectId
     }
   };
+}
+
+function getRelatedPrincipalObjectId(relatedObject: ZtaRelatedObject): string {
+  for (const value of [relatedObject.servicePrincipalId, relatedObject.id, relatedObject.object_id]) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function getRelatedPrincipalView(relatedObject: ZtaRelatedObject): PrincipalObjectFilter["view"] | null {
+  switch (relatedObject.servicePrincipalType) {
+    case "ManagedIdentity":
+      return "managedIdentities";
+    case "Application":
+    case "SocialIdp":
+    case "Legacy":
+      return "servicePrincipals";
+    default:
+      return null;
+  }
 }
 
 function isEditableBackspaceTarget(target: EventTarget | null): boolean {

@@ -167,6 +167,76 @@ test("persists and reads generic remediation packages independent of ZTA", async
   });
 });
 
+test("normalizes runtime identifier columns on insert", async () => {
+  const rows = await withDuckDb(async ({ connection }) => {
+    await prepareRuntimeSqlSchema(connection);
+    await insertEntraServicePrincipalRows(connection, [
+      servicePrincipal("SP-UPPER", "APP-UPPER", "Uppercase app", "Application")
+    ]);
+    await insertEntraApplicationRows(connection, [
+      application("APP-OBJECT-UPPER", "APP-UPPER", "Uppercase app registration")
+    ]);
+    await importZeroTrustAssessmentReportToDuckDb(
+      connection,
+      {
+        ExecutedAt: "2026-06-03T10:00:00.000Z",
+        TenantId: "tenant-1",
+        Tests: [
+          {
+            TestId: "zta-uppercase",
+            TestStatus: "Failed",
+            RelatedObjects: [
+              { object_id: "SP-UPPER", displayName: "Uppercase service principal" },
+              { object_id: "APP-OBJECT-UPPER", displayName: "Uppercase application" }
+            ]
+          }
+        ]
+      },
+      "zta-report.json"
+    );
+
+    const store = new RemediationPackageStore(() => connection);
+    await store.createPackage({
+      sourceKind: "manual",
+      sourceLabel: "Manual package",
+      sourceQuery: {},
+      tasks: [
+        {
+          targetKind: "servicePrincipal",
+          targetId: "TARGET-UPPER",
+          targetLabel: "Uppercase target",
+          title: "Normalize target id",
+          risk: null,
+          sourceEvidence: {}
+        }
+      ]
+    });
+
+    const servicePrincipalRows = await connection.runAndReadAll(
+      "select id, app_id from entra_service_principals"
+    );
+    const applicationRows = await connection.runAndReadAll("select id, app_id from entra_applications");
+    const relatedObjectRows = await connection.runAndReadAll(
+      "select related_object_id from zta_test_related_objects order by related_object_id"
+    );
+    const remediationTaskRows = await connection.runAndReadAll("select target_id from remediation_tasks");
+
+    return {
+      servicePrincipals: servicePrincipalRows.getRowObjectsJson(),
+      applications: applicationRows.getRowObjectsJson(),
+      relatedObjects: relatedObjectRows.getRowObjectsJson(),
+      remediationTasks: remediationTaskRows.getRowObjectsJson()
+    };
+  });
+
+  expect(rows).toEqual({
+    servicePrincipals: [{ id: "sp-upper", app_id: "app-upper" }],
+    applications: [{ id: "app-object-upper", app_id: "app-upper" }],
+    relatedObjects: [{ related_object_id: "app-object-upper" }, { related_object_id: "sp-upper" }],
+    remediationTasks: [{ target_id: "target-upper" }]
+  });
+});
+
 test("imports Zero Trust Assessment report into DuckDB and reads it back through the runtime", async () => {
   const taggedServicePrincipal = servicePrincipal("tagged-sp-1", "tagged-client-app-1", "Tagged automation app", {
     servicePrincipalType: "Application",
@@ -1183,6 +1253,98 @@ test("enriches Zero Trust Assessment related objects with application object ids
     { related_object_id: "sp-2" },
     { related_object_id: "user-1" }
   ]);
+});
+
+test("enriches Zero Trust Assessment related objects with resolved service principal types", async () => {
+  const report: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-1",
+    Tests: [
+      {
+        TestId: "principal-type-test",
+        TestStatus: "Failed",
+        RelatedObjects: [
+          { object_id: "application-object-1", displayName: "Application registration" },
+          { object_id: "mi-1", displayName: "Managed identity" }
+        ]
+      }
+    ]
+  };
+
+  const imported = await withDuckDb(async ({ connection }) => {
+    await prepareRuntimeSqlSchema(connection);
+    await insertEntraServicePrincipalRows(connection, [
+      servicePrincipal("sp-1", "app-1", "Application app", "Application"),
+      servicePrincipal("mi-1", "mi-app-1", "Managed identity", "ManagedIdentity")
+    ]);
+    await insertEntraApplicationRows(connection, [
+      application("application-object-1", "app-1", "Application app registration")
+    ]);
+
+    await importZeroTrustAssessmentReportToDuckDb(connection, report, "zta-report.json");
+
+    return readZeroTrustAssessmentReportFromDuckDb(connection);
+  });
+
+  expect(imported).toMatchObject({
+    Tests: [
+      {
+        RelatedObjects: [
+          expect.objectContaining({
+            object_id: "application-object-1",
+            servicePrincipalId: "sp-1",
+            servicePrincipalType: "Application"
+          }),
+          expect.objectContaining({
+            object_id: "mi-1",
+            servicePrincipalId: "mi-1",
+            servicePrincipalType: "ManagedIdentity"
+          })
+        ]
+      }
+    ]
+  });
+});
+
+test("enriches previously imported Zero Trust Assessment related objects with resolved service principal types on read", async () => {
+  const report: ZeroTrustAssessmentReport = {
+    ExecutedAt: "2026-06-03T10:00:00.000Z",
+    TenantId: "tenant-1",
+    Tests: [
+      {
+        TestId: "stale-principal-type-test",
+        TestStatus: "Failed",
+        RelatedObjects: [{ object_id: "application-object-1", displayName: "Application registration" }]
+      }
+    ]
+  };
+
+  const imported = await withDuckDb(async ({ connection }) => {
+    await prepareRuntimeSqlSchema(connection);
+    await importZeroTrustAssessmentReportToDuckDb(connection, report, "zta-report.json");
+    await insertEntraServicePrincipalRows(connection, [
+      servicePrincipal("sp-1", "app-1", "Application app", "Application")
+    ]);
+    await insertEntraApplicationRows(connection, [
+      application("application-object-1", "app-1", "Application app registration")
+    ]);
+
+    return readZeroTrustAssessmentReportFromDuckDb(connection);
+  });
+
+  expect(imported).toMatchObject({
+    Tests: [
+      {
+        RelatedObjects: [
+          expect.objectContaining({
+            object_id: "application-object-1",
+            servicePrincipalId: "sp-1",
+            servicePrincipalType: "Application"
+          })
+        ]
+      }
+    ]
+  });
 });
 
 test("imports Entra snapshot into DuckDB and reads it back through the runtime", async () => {

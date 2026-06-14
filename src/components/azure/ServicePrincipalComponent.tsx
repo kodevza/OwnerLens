@@ -47,6 +47,13 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     }
   },
   {
+    id: "servicePrincipalType",
+    label: "Type",
+    valueType: "text",
+    getValue: (sp) => sp.servicePrincipalType,
+    filter: { kind: "multiSelect", options: servicePrincipalTypeOptions }
+  },
+  {
     id: "potentialOwners",
     label: "Owner",
     valueType: "text",
