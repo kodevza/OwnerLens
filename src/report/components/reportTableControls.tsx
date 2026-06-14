@@ -10,7 +10,6 @@ import type { ReportColumnHelp, ReportFieldDescriptor, ReportObjectFieldFilterDe
 import {
   applyColumnFilterValueToggle,
   applyColumnObjectFieldFilter,
-  applyColumnValueToggle,
   applyColumnValuesFilter,
   type ColumnFilter,
   type ColumnFilterOptions,

@@ -1,10 +1,12 @@
 import { RuntimeHttpError } from "../../../core/runtime/localSnapshotFiles";
+import type { SortRule } from "../../../core/collectionControls";
 import { matchesSearchExpression } from "../../../lib/searchFilterUtils";
 
 export type LocalReportCollectionQueryOptions = {
   page?: number;
   pageSize?: number;
   filters?: LocalReportCollectionFilter[];
+  sortRules?: SortRule[];
 };
 
 export type LocalReportCollectionFilter = {
@@ -28,9 +30,10 @@ export function buildPaginatedCollection<CollectionId extends string>(
 ): LocalReportPaginatedCollection<CollectionId> {
   const columns = buildCollectionColumns(rows);
   const filteredRows = applyRuntimeCollectionFilters(rows, columns, query.filters ?? []);
+  const sortedRows = applyRuntimeCollectionSort(filteredRows, columns, query.sortRules ?? []);
   const pageSize = clampInteger(query.pageSize ?? 50, 1, 500);
-  const page = clampInteger(query.page ?? 1, 1, Math.max(1, Math.ceil(filteredRows.length / pageSize)));
-  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
+  const page = clampInteger(query.page ?? 1, 1, Math.max(1, Math.ceil(sortedRows.length / pageSize)));
+  const pageRows = sortedRows.slice((page - 1) * pageSize, page * pageSize);
 
   return {
     collectionId,
@@ -38,7 +41,7 @@ export function buildPaginatedCollection<CollectionId extends string>(
     columns,
     page,
     pageSize,
-    count: filteredRows.length
+    count: sortedRows.length
   };
 }
 
@@ -88,6 +91,43 @@ export function applyRuntimeCollectionFilters(
   );
 }
 
+export function applyRuntimeCollectionSort(
+  rows: Record<string, unknown>[],
+  columns: string[],
+  sortRules: SortRule[]
+): Record<string, unknown>[] {
+  const activeSortRules = sortRules.filter((rule) => rule.columnId.trim());
+
+  if (activeSortRules.length === 0) {
+    return rows;
+  }
+
+  for (const rule of activeSortRules) {
+    const rootColumn = getRuntimeFilterRootColumn(rule.columnId);
+    if (!columns.includes(rootColumn)) {
+      throw new RuntimeHttpError(`Unknown collection column: ${rule.columnId}`, 400);
+    }
+  }
+
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((left, right) => {
+      for (const rule of activeSortRules) {
+        const rootColumn = getRuntimeFilterRootColumn(rule.columnId);
+        const leftValue = getRuntimeFilterValues(left.row[rootColumn], getRuntimeFilterPathSegments(rule.columnId));
+        const rightValue = getRuntimeFilterValues(right.row[rootColumn], getRuntimeFilterPathSegments(rule.columnId));
+        const result = compareRuntimeValues(leftValue, rightValue);
+
+        if (result !== 0) {
+          return rule.direction === "asc" ? result : -result;
+        }
+      }
+
+      return left.index - right.index;
+    })
+    .map(({ row }) => row);
+}
+
 function getRuntimeFilterRootColumn(column: string): string {
   return column.split(".", 1)[0] ?? column;
 }
@@ -128,6 +168,50 @@ function formatRuntimeFilterValue(value: unknown): string {
 
   return JSON.stringify(value);
 }
+
+function compareRuntimeValues(left: unknown, right: unknown): number {
+  const leftText = formatRuntimeSortValue(left);
+  const rightText = formatRuntimeSortValue(right);
+
+  if (!leftText && !rightText) {
+    return 0;
+  }
+
+  if (!leftText) {
+    return 1;
+  }
+
+  if (!rightText) {
+    return -1;
+  }
+
+  return runtimeCollator.compare(leftText, rightText);
+}
+
+function formatRuntimeSortValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(formatRuntimeSortValue).filter(Boolean).join(", ");
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
+const runtimeCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base"
+});
 
 function clampInteger(value: number, min: number, max: number): number {
   const integer = Number.isFinite(value) ? Math.trunc(value) : min;

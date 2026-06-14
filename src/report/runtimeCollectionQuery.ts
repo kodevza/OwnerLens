@@ -1,4 +1,6 @@
-import type { ColumnFilter, ColumnFilters } from "../core/collectionControls";
+import type { ColumnFilters, SortRule } from "../core/collectionControls";
+
+type RuntimeCollectionFilter = { column: string; values: string[] };
 
 export function appendRuntimeCollectionFilters(url: URL, filters: ColumnFilters): void {
   getRuntimeCollectionFilters(filters).forEach(({ column, values }, filterIndex) => {
@@ -13,7 +15,18 @@ export function appendRuntimeCollectionFilters(url: URL, filters: ColumnFilters)
   });
 }
 
-function getRuntimeCollectionFilters(filters: ColumnFilters): Array<{ column: string; values: string[] }> {
+export function appendRuntimeCollectionSortRules(url: URL, sortRules: SortRule[]): void {
+  sortRules.forEach((rule, sortIndex) => {
+    if (!rule.columnId.trim()) {
+      return;
+    }
+
+    url.searchParams.set(`sort[${sortIndex}][column]`, rule.columnId);
+    url.searchParams.set(`sort[${sortIndex}][direction]`, rule.direction);
+  });
+}
+
+function getRuntimeCollectionFilters(filters: ColumnFilters): RuntimeCollectionFilter[] {
   return Object.entries(filters).flatMap(([column, filter]) => {
     if (filter.type === "objectFields") {
       return filter.conditions
@@ -24,23 +37,10 @@ function getRuntimeCollectionFilters(filters: ColumnFilters): Array<{ column: st
         .filter((condition) => condition.values.length > 0);
     }
 
-    return [
-      {
-        column,
-        values: getRuntimeCollectionFilterValues(filter)
-      }
-    ];
+    if (filter.type === "values") {
+      return [{ column, values: filter.values }];
+    }
+
+    return [{ column, values: filter.value.trim() ? [filter.value] : [] }];
   });
-}
-
-function getRuntimeCollectionFilterValues(filter: ColumnFilter): string[] {
-  if (filter.type === "values") {
-    return filter.values;
-  }
-
-  if (filter.type === "objectFields") {
-    return [];
-  }
-
-  return filter.value.trim() ? [filter.value] : [];
 }

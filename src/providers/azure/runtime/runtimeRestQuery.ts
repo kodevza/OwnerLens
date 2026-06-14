@@ -1,8 +1,10 @@
+import type { SortRule } from "../../../core/collectionControls";
 import type { LocalReportCollectionQueryOptions } from "./localReportCollections";
 
 export function parseRuntimeCollectionQueryOptions(url: URL): LocalReportCollectionQueryOptions {
   return {
     filters: parseRuntimeCollectionFilters(url),
+    sortRules: parseRuntimeCollectionSortRules(url),
     page: parseOptionalInteger(url.searchParams.get("page")),
     pageSize: parseOptionalInteger(url.searchParams.get("pageSize") ?? url.searchParams.get("count"))
   };
@@ -34,6 +36,34 @@ function parseRuntimeCollectionFilters(url: URL): Array<{ column: string; values
     .sort(([left], [right]) => left - right)
     .map(([, filter]) => filter)
     .filter((filter) => filter.column && filter.values.length > 0);
+}
+
+function parseRuntimeCollectionSortRules(url: URL): SortRule[] {
+  const sortRules = new Map<number, Partial<SortRule>>();
+
+  for (const [key, value] of url.searchParams) {
+    const match = /^sort\[(\d+)\]\[(column|direction)\]$/.exec(key);
+    if (!match) {
+      continue;
+    }
+
+    const index = Number(match[1]);
+    const property = match[2];
+    const sortRule = sortRules.get(index) ?? {};
+
+    if (property === "column") {
+      sortRule.columnId = value;
+    } else if (value === "asc" || value === "desc") {
+      sortRule.direction = value;
+    }
+
+    sortRules.set(index, sortRule);
+  }
+
+  return [...sortRules.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, rule]) => rule)
+    .filter((rule): rule is SortRule => Boolean(rule.columnId?.trim()) && Boolean(rule.direction));
 }
 
 function parseOptionalInteger(value: string | null): number | undefined {

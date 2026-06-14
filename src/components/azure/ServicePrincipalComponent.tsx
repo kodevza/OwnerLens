@@ -82,6 +82,7 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     label: "Azure RBAC",
     valueType: "text",
     getValue: (sp) => sp.roleAssignments,
+    sortColumnId: "rbacRoleLevel",
     getFilterValue: (sp) => ({
       roleLevel: sp.rbacRoleLevel,
       summary: sp.roleAssignments

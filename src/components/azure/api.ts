@@ -10,8 +10,8 @@ import type {
   DeleteRuntimeRemediationTasksRequest,
   RemediationPackage
 } from "../../core/runtime/remediation";
-import type { ColumnFilters } from "../../core/collectionControls";
-import { appendRuntimeCollectionFilters } from "../../report/runtimeCollectionQuery";
+import type { ColumnFilters, SortRule } from "../../core/collectionControls";
+import { appendRuntimeCollectionFilters, appendRuntimeCollectionSortRules } from "../../report/runtimeCollectionQuery";
 
 type ServicePrincipalRuntimeResponse = {
   collectionId: "entra.servicePrincipals";
@@ -69,16 +69,19 @@ const remotePageSize = 20;
 export async function readServicePrincipals({
   filters,
   page,
-  signal
+  signal,
+  sortRules
 }: {
   filters: ColumnFilters;
   page: number;
   signal: AbortSignal;
+  sortRules: SortRule[];
 }): Promise<ServicePrincipalRuntimeResponse> {
   const url = new URL("/api/data/entra/servicePrincipals", window.location.origin);
   url.searchParams.set("page", String(page));
   url.searchParams.set("count", String(remotePageSize));
   appendRuntimeCollectionFilters(url, filters);
+  appendRuntimeCollectionSortRules(url, sortRules);
 
   const response = await fetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
@@ -91,16 +94,19 @@ export async function readServicePrincipals({
 export async function readManagedIdentities({
   filters,
   page,
-  signal
+  signal,
+  sortRules
 }: {
   filters: ColumnFilters;
   page: number;
   signal: AbortSignal;
+  sortRules: SortRule[];
 }): Promise<ManagedIdentityRuntimeResponse> {
   const url = new URL("/api/data/entra/managedIdentities", window.location.origin);
   url.searchParams.set("page", String(page));
   url.searchParams.set("count", String(remotePageSize));
   appendRuntimeCollectionFilters(url, filters);
+  appendRuntimeCollectionSortRules(url, sortRules);
 
   const response = await fetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
@@ -113,16 +119,19 @@ export async function readManagedIdentities({
 export async function readResourceGroups({
   filters,
   page,
-  signal
+  signal,
+  sortRules
 }: {
   filters: ColumnFilters;
   page: number;
   signal: AbortSignal;
+  sortRules: SortRule[];
 }): Promise<ResourceGroupRuntimeResponse> {
   const url = new URL("/api/data/azureResources/resourceGroupOwnership", window.location.origin);
   url.searchParams.set("page", String(page));
   url.searchParams.set("count", String(remotePageSize));
   appendRuntimeCollectionFilters(url, filters);
+  appendRuntimeCollectionSortRules(url, sortRules);
 
   const response = await fetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
@@ -136,18 +145,21 @@ export async function readAzureRbac({
   filters,
   page,
   servicePrincipalId,
-  signal
+  signal,
+  sortRules
 }: {
   filters: ColumnFilters;
   page: number;
   servicePrincipalId: string;
   signal: AbortSignal;
+  sortRules: SortRule[];
 }): Promise<AzureRbacRuntimeResponse> {
   const url = new URL("/api/data/azureRbac", window.location.origin);
   url.searchParams.set("servicePrincipalId", servicePrincipalId);
   url.searchParams.set("page", String(page));
   url.searchParams.set("count", String(remotePageSize));
   appendRuntimeCollectionFilters(url, filters);
+  appendRuntimeCollectionSortRules(url, sortRules);
 
   const response = await fetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
@@ -179,12 +191,14 @@ export async function readZeroTrustAssessmentReport({
   filters = {},
   page,
   pageSize = remotePageSize,
-  signal
+  signal,
+  sortRules = []
 }: {
   filters?: ColumnFilters;
   page?: number;
   pageSize?: number;
   signal: AbortSignal;
+  sortRules?: SortRule[];
 }): Promise<ZeroTrustAssessmentRuntimeResponse> {
   const url = new URL("/api/data/zeroTrustAssessment/report", window.location.origin);
   if (page !== undefined) {
@@ -194,6 +208,7 @@ export async function readZeroTrustAssessmentReport({
     url.searchParams.set("count", String(pageSize));
   }
   appendRuntimeCollectionFilters(url, filters);
+  appendRuntimeCollectionSortRules(url, sortRules);
 
   const response = await fetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {

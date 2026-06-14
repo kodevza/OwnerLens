@@ -58,7 +58,12 @@ export type GenericRemoteTableProps<TRow> = Omit<
   "filterOptions" | "filters" | "onFiltersChange" | "onPageChange" | "page" | "rows" | "sortRules" | "totalCount"
 > & {
   initialFilters?: ColumnFilters;
-  loadPage: (input: { filters: ColumnFilters; page: number; signal: AbortSignal }) => Promise<GenericTablePage<TRow>>;
+  loadPage: (input: {
+    filters: ColumnFilters;
+    page: number;
+    signal: AbortSignal;
+    sortRules: SortRule[];
+  }) => Promise<GenericTablePage<TRow>>;
   loadingMessage: string;
   onFiltersChange?: (filters: ColumnFilters) => void;
 };
@@ -102,6 +107,7 @@ export function GenericRemoteTable<TRow>({
   const [filters, setFilters] = useState<ColumnFilters>(() => initialFilters ?? {});
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [page, setPage] = useState(1);
+  const [sortRules, setSortRules] = useState<SortRule[]>([]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -113,7 +119,8 @@ export function GenericRemoteTable<TRow>({
         const nextCollection = await loadPage({
           filters: remapColumnFiltersForRuntime(fields, filters),
           page,
-          signal: controller.signal
+          signal: controller.signal,
+          sortRules: remapSortRulesForRuntime(fields, sortRules)
         });
         setCollection(nextCollection);
         setLoadState({ status: "ready" });
@@ -133,7 +140,7 @@ export function GenericRemoteTable<TRow>({
     loadCollectionPage();
 
     return () => controller.abort();
-  }, [fields, filters, loadPage, page]);
+  }, [fields, filters, loadPage, page, sortRules]);
 
   const filterOptions = useMemo(() => getConfiguredFilterOptions(fields), [fields]);
 
@@ -162,7 +169,7 @@ export function GenericRemoteTable<TRow>({
         pageSize={collection.pageSize}
         rows={collection.rows}
         selectionColumn={selectionColumn}
-        sortRules={[]}
+        sortRules={sortRules}
         totalCount={collection.count}
         onFiltersChange={(nextFilters) => {
           setPage(1);
@@ -170,10 +177,25 @@ export function GenericRemoteTable<TRow>({
           onFiltersChange?.(nextFilters);
         }}
         onPageChange={setPage}
-        onSortRulesChange={() => undefined}
+        onSortRulesChange={(nextSortRules) => {
+          setPage(1);
+          setSortRules(nextSortRules);
+        }}
       />
     </>
   );
+}
+
+function remapSortRulesForRuntime<TRow>(
+  fields: ReportFieldDescriptor<TRow>[],
+  sortRules: SortRule[]
+): SortRule[] {
+  const sortColumnByFieldId = new Map(fields.map((field) => [field.id, field.sortColumnId ?? field.id]));
+
+  return sortRules.map((rule) => ({
+    ...rule,
+    columnId: sortColumnByFieldId.get(rule.columnId) ?? rule.columnId
+  }));
 }
 
 export function GenericTableView<TRow>({

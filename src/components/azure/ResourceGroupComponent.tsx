@@ -8,7 +8,7 @@ import { azureOwnerColumnHelp } from "./azureReportConfig";
 import { readResourceGroups, updateDisabledOwnerEvidence } from "./api";
 import { EvidenceList } from "../../report/components/EvidenceList";
 import { GenericTable } from "../../report/components/GenericTable";
-import type { ColumnFilters } from "../../core/collectionControls";
+import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import { Card } from "../../report/components/ui/card";
 import { getOwnerEvidenceKey, isActivityOwnerRow } from "../../report/ownerManualPrecheck";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
@@ -130,7 +130,8 @@ export function ResourceGroupComponent() {
     [handleOwnerEvidenceDisabledChange]
   );
   const loadResourceGroups = useCallback(
-    (input: { filters: ColumnFilters; page: number; signal: AbortSignal }) => readResourceGroups(input),
+    (input: { filters: ColumnFilters; page: number; signal: AbortSignal; sortRules: SortRule[] }) =>
+      readResourceGroups(input),
     [refreshToken]
   );
 

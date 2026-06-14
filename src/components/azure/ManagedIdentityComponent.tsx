@@ -76,6 +76,7 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
     label: "Azure RBAC",
     valueType: "text",
     getValue: (identity) => identity.roleAssignments,
+    sortColumnId: "rbacRoleLevel",
     getFilterValue: (identity) => identity.rbacRoleLevel,
     filterColumnId: "rbacRoleLevel",
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }

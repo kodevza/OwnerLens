@@ -45,6 +45,7 @@ export type ReportFieldDescriptor<TRow> = {
   getValue: (row: TRow) => unknown;
   getFilterValue?: (row: TRow) => unknown;
   filterColumnId?: string;
+  sortColumnId?: string;
   searchable?: boolean;
   filter?: ReportFilterDescriptor;
 };

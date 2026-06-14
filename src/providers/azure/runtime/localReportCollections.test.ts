@@ -1,5 +1,5 @@
 import { RuntimeHttpError } from "../../../core/runtime/localSnapshotFiles";
-import { applyRuntimeCollectionFilters } from "./localReportCollections";
+import { applyRuntimeCollectionFilters, buildPaginatedCollection } from "./localReportCollections";
 
 const rows: Record<string, unknown>[] = [
   {
@@ -65,5 +65,51 @@ test("throws 400 for unknown dotted runtime filter root columns", () => {
     applyRuntimeCollectionFilters(rows, ["id", "RelatedObjects"], [
       { column: "Unknown.id", values: ["sp-1"] }
     ])
+  ).toThrow(RuntimeHttpError);
+});
+
+test("sorts runtime rows before pagination", () => {
+  const collection = buildPaginatedCollection(
+    "test",
+    [
+      { id: "third", displayName: "Gamma 10" },
+      { id: "first", displayName: "Alpha 2" },
+      { id: "second", displayName: "Alpha 10" }
+    ],
+    {
+      page: 1,
+      pageSize: 2,
+      sortRules: [{ columnId: "displayName", direction: "asc" }]
+    }
+  );
+
+  expect(collection.rows.map((row) => row.id)).toEqual(["first", "second"]);
+  expect(collection.count).toBe(3);
+});
+
+test("sorts runtime rows by multiple rules and dotted paths", () => {
+  const collection = buildPaginatedCollection(
+    "test",
+    [
+      { id: "first", owner: { confidence: "low", name: "Bob" } },
+      { id: "second", owner: { confidence: "high", name: "Alice" } },
+      { id: "third", owner: { confidence: "high", name: "Charlie" } }
+    ],
+    {
+      sortRules: [
+        { columnId: "owner.confidence", direction: "asc" },
+        { columnId: "owner.name", direction: "desc" }
+      ]
+    }
+  );
+
+  expect(collection.rows.map((row) => row.id)).toEqual(["third", "second", "first"]);
+});
+
+test("throws 400 for unknown runtime sort columns", () => {
+  expect(() =>
+    buildPaginatedCollection("test", rows, {
+      sortRules: [{ columnId: "Unknown.id", direction: "asc" }]
+    })
   ).toThrow(RuntimeHttpError);
 });

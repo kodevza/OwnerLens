@@ -127,6 +127,14 @@ test("loads service principals through the full table UI and sends filters and p
   expect(container.textContent).toContain("finance");
   expect(container.textContent).toContain("Page 1 of 4");
 
+  await clickButton("Sort by Display name");
+  await waitForRequestContaining("sort%5B0%5D%5Bcolumn%5D=displayName");
+  expect(lastFetchUrl()).toContain("sort%5B0%5D%5Bdirection%5D=asc");
+
+  await clickButton("Sort by Azure RBAC");
+  await waitForRequestContaining("sort%5B1%5D%5Bcolumn%5D=rbacRoleLevel");
+  expect(lastFetchUrl()).toContain("sort%5B1%5D%5Bdirection%5D=asc");
+
   await openValueFilter("Filter Azure RBAC");
   await toggleCheckbox("high", true);
   await toggleCheckbox("medium", true);

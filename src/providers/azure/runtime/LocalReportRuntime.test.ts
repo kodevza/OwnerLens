@@ -392,7 +392,7 @@ test("defines local report runtime REST endpoints", async () => {
     servicePrincipalsEndpoint.handle({
       req: {},
       url: new URL(
-        "http://localhost/api/data/entra/servicePrincipals?page=2&count=25&filter[0][column]=displayName&filter[0][value][0]=app&filter[0][value][1]=api&filter[1][column]=accountEnabled&filter[1][value]=true"
+        "http://localhost/api/data/entra/servicePrincipals?page=2&count=25&filter[0][column]=displayName&filter[0][value][0]=app&filter[0][value][1]=api&filter[1][column]=accountEnabled&filter[1][value]=true&sort[0][column]=displayName&sort[0][direction]=asc&sort[1][column]=permissionRisk&sort[1][direction]=desc"
       )
     })
   ).resolves.toEqual({
@@ -402,6 +402,18 @@ test("defines local report runtime REST endpoints", async () => {
     page: 2,
     pageSize: 25,
     count: 0
+  });
+  expect(runtime.queryEntraServicePrincipals).toHaveBeenLastCalledWith({
+    filters: [
+      { column: "displayName", values: ["app", "api"] },
+      { column: "accountEnabled", values: ["true"] }
+    ],
+    sortRules: [
+      { columnId: "displayName", direction: "asc" },
+      { columnId: "permissionRisk", direction: "desc" }
+    ],
+    page: 2,
+    pageSize: 25
   });
   await managedIdentitiesEndpoint.handle({
     req: {},
@@ -627,72 +639,89 @@ test("defines local report runtime REST endpoints", async () => {
       { column: "displayName", values: ["app", "api"] },
       { column: "accountEnabled", values: ["true"] }
     ],
+    sortRules: [
+      { columnId: "displayName", direction: "asc" },
+      { columnId: "permissionRisk", direction: "desc" }
+    ],
     page: 2,
     pageSize: 25
   });
   expect(runtime.queryEntraManagedIdentities).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.readEntraPrincipalPermissions).toHaveBeenCalledWith("sp-1");
   expect(runtime.queryEntraOAuth2PermissionGrants).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryEntraAppRoleAssignments).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureSubscriptions).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureResourceGroups).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureResourceGroupOwnership).toHaveBeenNthCalledWith(1, {
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureResourceGroupOwnership).toHaveBeenNthCalledWith(2, {
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureResources).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureUserAssignedManagedIdentities).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureRoleAssignments).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureRbac).toHaveBeenCalledWith("sp-1", {
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureActivityLogs).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryZeroTrustAssessmentReport).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });

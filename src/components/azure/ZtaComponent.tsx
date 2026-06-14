@@ -9,7 +9,7 @@ import type {
 import { formatDate, formatValue } from "../../lib/utils";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
-import type { ColumnFilters } from "../../core/collectionControls";
+import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import { Button } from "../../report/components/ui/button";
 import { Card } from "../../report/components/ui/card";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
@@ -178,8 +178,18 @@ export function ZtaComponent({
     [onRelatedObjectClick, onRemediationPackageClick, openRemediationPackage]
   );
   const loadPage = useCallback(
-    async ({ filters, page, signal }: { filters: ColumnFilters; page: number; signal: AbortSignal }) => {
-      const report = await readZeroTrustAssessmentReport({ filters, page, signal });
+    async ({
+      filters,
+      page,
+      signal,
+      sortRules
+    }: {
+      filters: ColumnFilters;
+      page: number;
+      signal: AbortSignal;
+      sortRules: SortRule[];
+    }) => {
+      const report = await readZeroTrustAssessmentReport({ filters, page, signal, sortRules });
       const responsePage = report.page;
       const responsePageSize = report.pageSize;
       const rows = report.Tests ?? report.rows ?? [];
