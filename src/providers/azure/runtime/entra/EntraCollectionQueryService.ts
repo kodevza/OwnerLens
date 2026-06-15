@@ -1,6 +1,9 @@
 import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
 import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
-import type { ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
+import type {
+  EntraPrincipalAzureRemediationSummary,
+  ServicePrincipal
+} from "../../../../core/azure/entra/servicePrincipal";
 import type {
   AzureRoleAssignment,
   AzureUserAssignedManagedIdentity,
@@ -12,7 +15,8 @@ import {
   buildPaginatedCollection,
   type LocalReportCollectionQueryOptions,
   type LocalReportPaginatedCollection
-} from "../localReportCollections";
+} from "../../../../core/runtime/collections";
+import { buildRuntimeCollectionCsvExport, type RuntimeCollectionCsvExport } from "../../../../core/runtime/collectionExport";
 import type { AzureResourcesCollectionQueryService } from "../resources/AzureResourcesCollectionQueryService";
 import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
 import type { ZeroTrustAssessmentQueryService } from "../zta/ZeroTrustAssessmentQueryService";
@@ -44,10 +48,76 @@ export class EntraCollectionQueryService {
     return buildPaginatedCollection("entra.servicePrincipals", await this.readServicePrincipalRows(), options);
   }
 
+  async exportServicePrincipalsCsv(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<RuntimeCollectionCsvExport<"entra.servicePrincipals">> {
+    return buildRuntimeCollectionCsvExport({
+      collectionId: "entra.servicePrincipals",
+      fileName: "ownerlens-service-principals.csv",
+      rows: await this.readServicePrincipalRows(),
+      filters: options.filters,
+      sortRules: options.sortRules,
+      selectedRowKeys: options.selectedRowKeys,
+      getRowKey: getPrincipalRowKey,
+      includeBom: true
+    });
+  }
+
   async queryManagedIdentities(
     options: LocalReportCollectionQueryOptions
   ): Promise<LocalReportPaginatedCollection<"entra.managedIdentities">> {
     return buildPaginatedCollection("entra.managedIdentities", await this.readManagedIdentityRows(), options);
+  }
+
+  async exportManagedIdentitiesCsv(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<RuntimeCollectionCsvExport<"entra.managedIdentities">> {
+    return buildRuntimeCollectionCsvExport({
+      collectionId: "entra.managedIdentities",
+      fileName: "ownerlens-managed-identities.csv",
+      rows: await this.readManagedIdentityRows(),
+      filters: options.filters,
+      sortRules: options.sortRules,
+      selectedRowKeys: options.selectedRowKeys,
+      getRowKey: getPrincipalRowKey,
+      includeBom: true
+    });
+  }
+
+  async readServicePrincipalRemediationSummaries(
+    principalIds: string[]
+  ): Promise<Map<string, EntraPrincipalAzureRemediationSummary>> {
+    const principalIdSet = new Set(principalIds.map((principalId) => principalId.trim().toLowerCase()).filter(Boolean));
+    const summaries = new Map<string, EntraPrincipalAzureRemediationSummary>();
+
+    if (principalIdSet.size === 0) {
+      return summaries;
+    }
+
+    for (const row of await this.readServicePrincipalRows()) {
+      const servicePrincipal = row as unknown as ServicePrincipal;
+      const normalizedPrincipalId = servicePrincipal.id.toLowerCase();
+
+      if (!principalIdSet.has(normalizedPrincipalId)) {
+        continue;
+      }
+
+      summaries.set(normalizedPrincipalId, {
+        id: servicePrincipal.id,
+        displayName: servicePrincipal.displayName,
+        roleAssignments: servicePrincipal.roleAssignments,
+        oauthPermissionsCount: servicePrincipal.oauthPermissionsCount,
+        appRolesPermissionCount: servicePrincipal.appRolesPermissionCount,
+        entraPermissionRisk: servicePrincipal.entraPermissionRisk,
+        rbacRoleAssignmentCount: servicePrincipal.rbacRoleAssignmentCount,
+        rbacRoleLevel: servicePrincipal.rbacRoleLevel,
+        rbacSubscriptionCount: servicePrincipal.rbacSubscriptionCount,
+        potentialOwners: servicePrincipal.potentialOwners ?? [],
+        ownerConfidence: servicePrincipal.ownerConfidence ?? "none"
+      });
+    }
+
+    return summaries;
   }
 
   async queryOAuth2PermissionGrants(
@@ -111,13 +181,21 @@ export class EntraCollectionQueryService {
   }
 
   private async enrichWithZtaRemediationSummaries<Row extends ServicePrincipal | ManagedIdentity>(rows: Row[]): Promise<Row[]> {
-    const summariesByPrincipalId = await this.zeroTrustAssessmentQueries.readRemediationSummaries();
+    const [summariesByPrincipalId, packagesByPrincipalId] = await Promise.all([
+      this.zeroTrustAssessmentQueries.readRemediationSummaries(),
+      this.zeroTrustAssessmentQueries.readRemediationPackageSummariesByPrincipalId()
+    ]);
 
     return rows.map((row) => ({
       ...row,
-      ...(summariesByPrincipalId.get(row.id.toLowerCase()) ?? {})
+      ...(summariesByPrincipalId.get(row.id.toLowerCase()) ?? {}),
+      RemediationPackages: packagesByPrincipalId.get(row.id.toLowerCase()) ?? []
     }));
   }
+}
+
+function getPrincipalRowKey(row: Record<string, unknown>): string {
+  return typeof row.id === "string" ? row.id : "";
 }
 
 type ManagedIdentityOwnerProjection = {

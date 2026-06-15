@@ -8,7 +8,8 @@ import {
   buildPaginatedCollection,
   type LocalReportCollectionQueryOptions,
   type LocalReportPaginatedCollection
-} from "../localReportCollections";
+} from "../../../../core/runtime/collections";
+import { buildRuntimeCollectionCsvExport, type RuntimeCollectionCsvExport } from "../../../../core/runtime/collectionExport";
 import type { DisabledEvidenceStore } from "../DisabledEvidenceStore";
 import type { LocalEntraReportRuntime } from "../entra/LocalEntraReportRuntime";
 import {
@@ -70,6 +71,21 @@ export class AzureResourcesCollectionQueryService {
       await this.readResourceGroupOwnershipRows(),
       options
     );
+  }
+
+  async exportResourceGroupOwnershipCsv(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<RuntimeCollectionCsvExport<"azureResources.resourceGroupOwnership">> {
+    return buildRuntimeCollectionCsvExport({
+      collectionId: "azureResources.resourceGroupOwnership",
+      fileName: "ownerlens-resource-groups.csv",
+      rows: await this.readResourceGroupOwnershipRows(),
+      filters: options.filters,
+      sortRules: options.sortRules,
+      selectedRowKeys: options.selectedRowKeys,
+      getRowKey: getResourceGroupOwnershipRowKey,
+      includeBom: true
+    });
   }
 
   async queryResources(
@@ -142,4 +158,11 @@ export class AzureResourcesCollectionQueryService {
       .filter((assignment) => assignment.principalId.toLowerCase() === normalizedServicePrincipalId)
       .map((assignment) => mapRoleAssignmentToAzureRbac(assignment, evaluateAzureRoleAssignmentRisk(assignment).riskLevel));
   }
+}
+
+function getResourceGroupOwnershipRowKey(row: Record<string, unknown>): string {
+  const subscriptionId = typeof row.subscriptionId === "string" ? row.subscriptionId : "";
+  const resourceGroup = typeof row.resourceGroup === "string" ? row.resourceGroup : "";
+
+  return `${subscriptionId}:${resourceGroup}`;
 }

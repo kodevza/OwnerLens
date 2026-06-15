@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ZtaRelatedObject } from "../../core/azure/ztaReport";
-import type { ColumnFilters } from "../../report/components/reportTableControls";
+import { createViewHistoryState, getHistoryStateView } from "../../lib/historyState";
+import type { RemediationPackage } from "../../core/runtime/remediation";
+import type { ColumnFilters } from "../../core/collectionControls";
 import { Tabs, TabsList, TabsTrigger } from "../../report/components/ui/tabs";
 import { AzureRbacComponent } from "./AzureRbacComponent";
 import { ClosableAzureTab } from "./ClosableAzureTab";
 import { EntraPermissionsComponent } from "./EntraPermissionsComponent";
 import { ManagedIdentityComponent } from "./ManagedIdentityComponent";
+import { RemediationPackageComponent } from "./RemediationPackageComponent";
 import { ResourceGroupComponent } from "./ResourceGroupComponent";
 import { ServicePrincipalComponent } from "./ServicePrincipalComponent";
 import type { AzureRbacPrincipalSelection, EntraPermissionsPrincipalSelection } from "./ServicePrincipalFieldRenderers";
@@ -18,7 +21,18 @@ type AzureView =
   | "resourceGroups"
   | "zeroTrustAssessment"
   | "azureRbac"
-  | "entraPermissions";
+  | "entraPermissions"
+  | "remediationPackage";
+
+const viewValues: AzureView[] = [
+  "servicePrincipals",
+  "managedIdentities",
+  "resourceGroups",
+  "zeroTrustAssessment",
+  "azureRbac",
+  "entraPermissions",
+  "remediationPackage"
+];
 
 type PrincipalObjectFilter = {
   objectId: string;
@@ -26,57 +40,144 @@ type PrincipalObjectFilter = {
 };
 
 type AzureRbacTab = AzureRbacPrincipalSelection & {
-  returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities">;
+  returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities" | "remediationPackage">;
 };
 
 type EntraPermissionsTab = EntraPermissionsPrincipalSelection & {
-  returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities">;
+  returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities" | "remediationPackage">;
+};
+
+type RemediationPackageTab = {
+  remediationPackage: RemediationPackage;
+  returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities" | "zeroTrustAssessment">;
 };
 
 export function AzureComponent() {
   const [activeView, setActiveView] = useState<AzureView>("servicePrincipals");
   const [azureRbacTab, setAzureRbacTab] = useState<AzureRbacTab | null>(null);
   const [entraPermissionsTab, setEntraPermissionsTab] = useState<EntraPermissionsTab | null>(null);
+  const [remediationPackageTab, setRemediationPackageTab] = useState<RemediationPackageTab | null>(null);
   const [principalObjectFilter, setPrincipalObjectFilter] = useState<PrincipalObjectFilter | null>(null);
   const [ztaRelatedObjectFilter, setZtaRelatedObjectFilter] = useState<string | null>(null);
+  const activeViewRef = useRef<AzureView>("servicePrincipals");
+  const viewHistoryRef = useRef<AzureView[]>([]);
+
+  useEffect(() => {
+    activeViewRef.current = activeView;
+  }, [activeView]);
+
+  const activateView = useCallback((nextView: AzureView) => {
+    const currentView = activeViewRef.current;
+    if (nextView === currentView) {
+      return;
+    }
+
+    viewHistoryRef.current = [...viewHistoryRef.current, currentView];
+    activeViewRef.current = nextView;
+    setActiveView(nextView);
+    window.history.pushState(createViewHistoryState(nextView), "", window.location.href);
+  }, []);
+
+  const navigateBack = useCallback((): boolean => {
+    const previousView = viewHistoryRef.current.pop();
+    if (!previousView) {
+      return false;
+    }
+
+    activeViewRef.current = previousView;
+    setActiveView(previousView);
+    return true;
+  }, []);
+
+  useEffect(() => {
+    window.history.replaceState(createViewHistoryState(activeViewRef.current), "", window.location.href);
+
+    function handlePopState(event: PopStateEvent) {
+      const previousView = getHistoryStateView(event.state, viewValues);
+      if (!previousView) {
+        return;
+      }
+
+      const previousViewIndex = viewHistoryRef.current.lastIndexOf(previousView);
+      if (previousViewIndex >= 0) {
+        viewHistoryRef.current = viewHistoryRef.current.slice(0, previousViewIndex);
+      }
+
+      activeViewRef.current = previousView;
+      setActiveView(previousView);
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Backspace" || event.defaultPrevented || isEditableBackspaceTarget(event.target)) {
+        return;
+      }
+
+      event.preventDefault();
+      navigateBack();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [navigateBack]);
 
   function openRelatedPrincipal(relatedObject: ZtaRelatedObject) {
-    const objectId = relatedObject.id ?? relatedObject.object_id;
+    const view = getRelatedPrincipalView(relatedObject);
+    if (!view) {
+      return;
+    }
+
+    const objectId = getRelatedPrincipalObjectId(relatedObject);
     if (!objectId) {
       return;
     }
 
-    const view = relatedObject.servicePrincipalType === "ManagedIdentity" ? "managedIdentities" : "servicePrincipals";
     setPrincipalObjectFilter({ objectId, view });
-    setActiveView(view);
+    activateView(view);
   }
 
   function openZtaRelatedObject(objectId: string) {
     setZtaRelatedObjectFilter(objectId);
-    setActiveView("zeroTrustAssessment");
+    activateView("zeroTrustAssessment");
   }
 
   function openAzureRbac(
     principal: AzureRbacPrincipalSelection,
-    returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities">
+    returnView: AzureRbacTab["returnView"]
   ) {
     setAzureRbacTab({ ...principal, returnView });
-    setActiveView("azureRbac");
+    activateView("azureRbac");
   }
 
   function openEntraPermissions(
     principal: EntraPermissionsPrincipalSelection,
-    returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities">
+    returnView: EntraPermissionsTab["returnView"]
   ) {
     setEntraPermissionsTab({ ...principal, returnView });
-    setActiveView("entraPermissions");
+    activateView("entraPermissions");
+  }
+
+  function openRemediationPackage(
+    remediationPackage: RemediationPackage,
+    returnView: RemediationPackageTab["returnView"]
+  ) {
+    setRemediationPackageTab({ remediationPackage, returnView });
+    activateView("remediationPackage");
   }
 
   function closeAzureRbac() {
     const nextView = azureRbacTab?.returnView ?? "servicePrincipals";
     setAzureRbacTab(null);
     if (activeView === "azureRbac") {
-      setActiveView(nextView);
+      activateView(nextView);
     }
   }
 
@@ -84,13 +185,21 @@ export function AzureComponent() {
     const nextView = entraPermissionsTab?.returnView ?? "servicePrincipals";
     setEntraPermissionsTab(null);
     if (activeView === "entraPermissions") {
-      setActiveView(nextView);
+      activateView(nextView);
+    }
+  }
+
+  function closeRemediationPackage() {
+    const nextView = remediationPackageTab?.returnView ?? "zeroTrustAssessment";
+    setRemediationPackageTab(null);
+    if (activeView === "remediationPackage") {
+      activateView(nextView);
     }
   }
 
   return (
     <section className="flex flex-col">
-      <Tabs className="relative z-10 -mb-px gap-0" value={activeView} onValueChange={(value) => setActiveView(value as AzureView)}>
+      <Tabs className="relative z-10 -mb-px gap-0" value={activeView} onValueChange={(value) => activateView(value as AzureView)}>
         <TabsList aria-label="Azure data" className="w-fit max-w-full items-end gap-1 rounded-none bg-transparent p-0 shadow-none">
           <TabsTrigger className={azureTabTriggerClassName} value="resourceGroups">
             Resource groups
@@ -116,10 +225,19 @@ export function AzureComponent() {
           {entraPermissionsTab ? (
             <ClosableAzureTab
               active={activeView === "entraPermissions"}
-              closeLabel={`Close ${entraPermissionsTab.displayName} Entra permissions tab`}
+              closeLabel={`Close ${entraPermissionsTab.displayName} Entra API permissions tab`}
               label={`${entraPermissionsTab.displayName} permissions`}
               onClose={closeEntraPermissions}
               value="entraPermissions"
+            />
+          ) : null}
+          {remediationPackageTab ? (
+            <ClosableAzureTab
+              active={activeView === "remediationPackage"}
+              closeLabel="Close remediation package tab"
+              label="Remediation package"
+              onClose={closeRemediationPackage}
+              value="remediationPackage"
             />
           ) : null}
         </TabsList>
@@ -131,6 +249,7 @@ export function AzureComponent() {
             initialFilters={getPrincipalObjectFilters(principalObjectFilter, "servicePrincipals")}
             onAzureRbacClick={(principal) => openAzureRbac(principal, "servicePrincipals")}
             onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "servicePrincipals")}
+            onRemediationPackageClick={(remediationPackage) => openRemediationPackage(remediationPackage, "servicePrincipals")}
             onZtaRemediationsClick={openZtaRelatedObject}
           />
         ) : null}
@@ -139,17 +258,31 @@ export function AzureComponent() {
             initialFilters={getPrincipalObjectFilters(principalObjectFilter, "managedIdentities")}
             onAzureRbacClick={(principal) => openAzureRbac(principal, "managedIdentities")}
             onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "managedIdentities")}
+            onRemediationPackageClick={(remediationPackage) => openRemediationPackage(remediationPackage, "managedIdentities")}
             onZtaRemediationsClick={openZtaRelatedObject}
           />
         ) : null}
         {activeView === "zeroTrustAssessment" ? (
-          <ZtaComponent initialFilters={getZtaRelatedObjectFilters(ztaRelatedObjectFilter)} onRelatedObjectClick={openRelatedPrincipal} />
+          <ZtaComponent
+            initialFilters={getZtaRelatedObjectFilters(ztaRelatedObjectFilter)}
+            onRelatedObjectClick={openRelatedPrincipal}
+            onRemediationPackageClick={(remediationPackage) => openRemediationPackage(remediationPackage, "zeroTrustAssessment")}
+            onRemediationPackageCreated={(remediationPackage) => openRemediationPackage(remediationPackage, "zeroTrustAssessment")}
+          />
         ) : null}
         {activeView === "azureRbac" && azureRbacTab ? (
           <AzureRbacComponent key={azureRbacTab.objectId} servicePrincipalId={azureRbacTab.objectId} />
         ) : null}
         {activeView === "entraPermissions" && entraPermissionsTab ? (
           <EntraPermissionsComponent key={entraPermissionsTab.objectId} principalId={entraPermissionsTab.objectId} />
+        ) : null}
+        {activeView === "remediationPackage" && remediationPackageTab ? (
+          <RemediationPackageComponent
+            key={remediationPackageTab.remediationPackage.id}
+            remediationPackage={remediationPackageTab.remediationPackage}
+            onAzureRbacClick={(principal) => openAzureRbac(principal, "remediationPackage")}
+            onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "remediationPackage")}
+          />
         ) : null}
       </div>
     </section>
@@ -166,8 +299,8 @@ function getZtaRelatedObjectFilters(objectId: string | null): ColumnFilters | un
 
   return {
     RelatedObjects: {
-      type: "text",
-      value: objectId
+      type: "objectFields",
+      conditions: [{ fieldId: "servicePrincipalId", value: objectId }]
     }
   };
 }
@@ -186,4 +319,61 @@ function getPrincipalObjectFilters(
       value: principalObjectFilter.objectId
     }
   };
+}
+
+function getRelatedPrincipalObjectId(relatedObject: ZtaRelatedObject): string {
+  for (const value of [relatedObject.servicePrincipalId, relatedObject.id, relatedObject.object_id]) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function getRelatedPrincipalView(relatedObject: ZtaRelatedObject): PrincipalObjectFilter["view"] | null {
+  switch (relatedObject.servicePrincipalType) {
+    case "ManagedIdentity":
+      return "managedIdentities";
+    case "Application":
+    case "SocialIdp":
+    case "Legacy":
+      return "servicePrincipals";
+    default:
+      return null;
+  }
+}
+
+function isEditableBackspaceTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const editableElement = target.closest("input, textarea, [contenteditable]");
+  if (!(editableElement instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (editableElement instanceof HTMLTextAreaElement) {
+    return !editableElement.disabled && !editableElement.readOnly;
+  }
+
+  if (editableElement instanceof HTMLInputElement) {
+    return !editableElement.disabled && !editableElement.readOnly && isTextInputType(editableElement.type);
+  }
+
+  return editableElement.isContentEditable;
+}
+
+function isTextInputType(type: string): boolean {
+  return [
+    "",
+    "email",
+    "number",
+    "password",
+    "search",
+    "tel",
+    "text",
+    "url"
+  ].includes(type);
 }

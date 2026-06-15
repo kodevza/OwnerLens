@@ -1,5 +1,8 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
+import { remediationSchemaSql } from "../../../core/runtime/remediationSqlSchema";
+import { snapshotImportRegistrySql } from "../../../core/runtime/snapshotImportRegistry";
+
 const entraSnapshotSchemaSql = [
   `
     create table if not exists entra_snapshot_meta (
@@ -334,6 +337,7 @@ const azureIdentityEnrichmentSchemaSql = [
 ];
 
 const runtimeSchemaSql = [
+  ...snapshotImportRegistrySql,
   ...entraSnapshotSchemaSql,
   ...entraServicePrincipalSchemaSql,
   ...entraApplicationSchemaSql,
@@ -342,6 +346,7 @@ const runtimeSchemaSql = [
   ...azureResourcesSnapshotSchemaSql,
   ...azureResourcesSchemaSql,
   ...disabledOwnerEvidenceSchemaSql,
+  ...remediationSchemaSql,
   ...zeroTrustAssessmentSchemaSql,
   ...azureIdentityEnrichmentSchemaSql
 ];

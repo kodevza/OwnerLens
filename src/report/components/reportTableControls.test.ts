@@ -1,7 +1,10 @@
 import {
-  applyColumnFilterOpen,
+  applyColumnObjectFieldFilter,
   applyColumnFilterValueToggle,
-  applyColumnValueToggle,
+  applyColumnValueToggle
+} from "../../core/collectionControls";
+import {
+  applyColumnFilterOpen,
   applyReportTableControls
 } from "./reportTableControls.tsx";
 import type { ReportFieldDescriptor } from "../reportTypes.ts";
@@ -10,6 +13,7 @@ type Row = {
   id: string;
   ownership: "External" | "Tenant owned" | "Unknown";
   risk: "high" | "low" | "none";
+  relatedObjects?: Array<{ id: string; displayName?: string; servicePrincipalType?: string }>;
 };
 
 const rows: Row[] = [
@@ -32,6 +36,38 @@ const fields: ReportFieldDescriptor<Row>[] = [
     label: "Permission risk",
     valueType: "riskLevel",
     getValue: (row) => row.risk
+  }
+];
+
+const objectRows: Row[] = [
+  {
+    id: "app-one",
+    ownership: "Tenant owned",
+    risk: "high",
+    relatedObjects: [{ id: "sp-1", displayName: "Payroll API", servicePrincipalType: "Application" }]
+  },
+  {
+    id: "mi-one",
+    ownership: "Tenant owned",
+    risk: "low",
+    relatedObjects: [{ id: "mi-1", displayName: "Worker identity", servicePrincipalType: "ManagedIdentity" }]
+  }
+];
+
+const objectFields: ReportFieldDescriptor<Row>[] = [
+  {
+    id: "relatedObjects",
+    label: "Related objects",
+    valueType: "list",
+    getValue: (row) => row.relatedObjects,
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "id", label: "ID" },
+        { id: "displayName", label: "Display name" },
+        { id: "servicePrincipalType", label: "Service principal type" }
+      ]
+    }
   }
 ];
 
@@ -75,6 +111,47 @@ test("constructs filters from column value toggles", () => {
     "tenant-high",
     "tenant-low"
   ]);
+});
+
+test("constructs object-field filters and removes empty conditions", () => {
+  const constructedFilters = applyColumnObjectFieldFilter({}, "relatedObjects", [
+    { fieldId: "id", value: "sp-1" },
+    { fieldId: "displayName", value: " " }
+  ]);
+
+  expect(constructedFilters).toEqual({
+    relatedObjects: {
+      type: "objectFields",
+      conditions: [{ fieldId: "id", value: "sp-1" }]
+    }
+  });
+
+  expect(applyColumnObjectFieldFilter(constructedFilters, "relatedObjects", [])).toEqual({});
+});
+
+test("applies object-field filters with AND conditions", () => {
+  const result = applyReportTableControls(objectRows, objectFields, {
+    relatedObjects: {
+      type: "objectFields",
+      conditions: [
+        { fieldId: "id", value: "^sp-" },
+        { fieldId: "servicePrincipalType", value: "Application" }
+      ]
+    }
+  });
+
+  expect(result.controlledRows.map((row) => row.id)).toEqual(["app-one"]);
+});
+
+test("matches no local rows for invalid object-field regular expressions", () => {
+  const result = applyReportTableControls(objectRows, objectFields, {
+    relatedObjects: {
+      type: "objectFields",
+      conditions: [{ fieldId: "id", value: "[" }]
+    }
+  });
+
+  expect(result.controlledRows).toEqual([]);
 });
 
 test("keeps only one column filter popover open", () => {

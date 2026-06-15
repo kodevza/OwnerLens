@@ -4,6 +4,7 @@ import {
   listLocalSnapshotFiles,
   pathExists,
   readLocalSnapshotFile,
+  RuntimeHttpError,
   validateSnapshotFileName,
   type LocalSnapshotData,
   type LocalSnapshotFile
@@ -11,6 +12,17 @@ import {
 import type { ManagedIdentity } from "../../../core/azure/entra/managedIdentity";
 import type { ServicePrincipal } from "../../../core/azure/entra/servicePrincipal";
 import type { ZtaReport, ZtaReportTest } from "../../../core/azure/ztaReport";
+import { RemediationPackageStore } from "../../../core/runtime/RemediationPackageStore";
+import type {
+  CreateRuntimeRemediationPackageRequest,
+  DeleteRuntimeRemediationTasksRequest,
+  JsonValue,
+  RemediationPackage,
+  RemediationTask,
+  RuntimeRemediationPackageFilter
+} from "../../../core/runtime/remediation";
+import type { RuntimeCollectionCsvExport } from "../../../core/runtime/collectionExport";
+import type { SnapshotImportStatus } from "../../../core/runtime/snapshotImportRegistry";
 import type { AzureIdentityEnrichmentStatus } from "./enrichment/azureIdentityEnrichment";
 import { EntraCollectionQueryService } from "./entra/EntraCollectionQueryService";
 import {
@@ -18,23 +30,21 @@ import {
   type EntraPrincipalPermissions,
   type LocalEntraReportCollectionId
 } from "./entra/LocalEntraReportRuntime";
-import type { EntraDuckDbImportStatus } from "./entra/snapshotStore";
 import {
   AzureResourcesCollectionQueryService,
   type LocalAzureResourcesExtendedCollectionId
 } from "./resources/AzureResourcesCollectionQueryService";
 import { LocalAzureResourcesReportRuntime } from "./resources/LocalAzureResourcesReportRuntime";
-import type { AzureResourcesDuckDbImportStatus } from "./resources/snapshotStore";
 import { LocalZeroTrustAssessmentReportRuntime } from "./zta/LocalZeroTrustAssessmentReportRuntime";
-import type { ZeroTrustAssessmentDuckDbImportStatus } from "./zta/snapshotStore";
 import {
   ZeroTrustAssessmentQueryService,
   type LocalZeroTrustAssessmentReportCollectionId
 } from "./zta/ZeroTrustAssessmentQueryService";
 import {
+  type LocalReportCollectionFilter,
   type LocalReportCollectionQueryOptions,
   type LocalReportPaginatedCollection
-} from "./localReportCollections";
+} from "../../../core/runtime/collections";
 import { RuntimeHost } from "./RuntimeHost";
 import { SnapshotImporter } from "./SnapshotImporter";
 import { EnrichmentService } from "./EnrichmentService";
@@ -49,9 +59,9 @@ export type LocalReportRuntimeOptions = {
 export type LocalReportRuntimeStatus = {
   initialized: boolean;
   databasePath: string;
-  entra: EntraDuckDbImportStatus;
-  azureResources: AzureResourcesDuckDbImportStatus;
-  zeroTrustAssessment: ZeroTrustAssessmentDuckDbImportStatus;
+  entra: SnapshotImportStatus;
+  azureResources: SnapshotImportStatus;
+  zeroTrustAssessment: SnapshotImportStatus;
   enrichment: AzureIdentityEnrichmentStatus;
 };
 
@@ -72,6 +82,7 @@ export class LocalReportRuntime {
   private readonly snapshotImporter: SnapshotImporter;
   private readonly enrichmentService: EnrichmentService;
   private readonly disabledEvidenceStore: DisabledEvidenceStore;
+  private readonly remediationPackageStore: RemediationPackageStore;
   private initializePromise: Promise<void> | null = null;
 
   constructor(options: LocalReportRuntimeOptions) {
@@ -99,6 +110,7 @@ export class LocalReportRuntime {
     });
     this.enrichmentService = new EnrichmentService(() => this.requireConnection());
     this.disabledEvidenceStore = new DisabledEvidenceStore(() => this.requireConnection());
+    this.remediationPackageStore = new RemediationPackageStore(() => this.requireConnection());
     this.azureResourcesQueries = new AzureResourcesCollectionQueryService({
       entra: this.entra,
       azureResources: this.azureResources,
@@ -191,11 +203,25 @@ export class LocalReportRuntime {
     return this.entraQueries.queryServicePrincipals(options);
   }
 
+  async exportEntraServicePrincipalsCsv(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<RuntimeCollectionCsvExport<"entra.servicePrincipals">> {
+    await this.initialize();
+    return this.entraQueries.exportServicePrincipalsCsv(options);
+  }
+
   async queryEntraManagedIdentities(
     options: LocalReportCollectionQueryOptions
   ): Promise<LocalReportPaginatedCollection<"entra.managedIdentities">> {
     await this.initialize();
     return this.entraQueries.queryManagedIdentities(options);
+  }
+
+  async exportEntraManagedIdentitiesCsv(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<RuntimeCollectionCsvExport<"entra.managedIdentities">> {
+    await this.initialize();
+    return this.entraQueries.exportManagedIdentitiesCsv(options);
   }
 
   async queryEntraOAuth2PermissionGrants(
@@ -236,6 +262,13 @@ export class LocalReportRuntime {
   ): Promise<LocalReportPaginatedCollection<"azureResources.resourceGroupOwnership">> {
     await this.initialize();
     return this.azureResourcesQueries.queryResourceGroupOwnership(options);
+  }
+
+  async exportAzureResourceGroupOwnershipCsv(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<RuntimeCollectionCsvExport<"azureResources.resourceGroupOwnership">> {
+    await this.initialize();
+    return this.azureResourcesQueries.exportResourceGroupOwnershipCsv(options);
   }
 
   async queryAzureResources(
@@ -283,6 +316,73 @@ export class LocalReportRuntime {
     return this.zeroTrustAssessmentQueries.queryReport(options);
   }
 
+  async exportZeroTrustAssessmentReportCsv(
+    options: LocalReportCollectionQueryOptions
+  ): Promise<RuntimeCollectionCsvExport<"zeroTrustAssessment.report">> {
+    await this.initialize();
+    return this.zeroTrustAssessmentQueries.exportReportCsv(options);
+  }
+
+  async createZeroTrustAssessmentRemediationPackage(
+    request: CreateRuntimeRemediationPackageRequest
+  ): Promise<RemediationPackage> {
+    await this.initialize();
+    const selectAllMatchingFilters = normalizeSelectAllMatchingFilters(request.selectAllMatchingFilters);
+    const packageInput = await this.zeroTrustAssessmentQueries.buildRemediationPackageInput({
+      filters: toLocalReportCollectionFilters(request.filters),
+      selectAllMatchingFilters,
+      selectedRowKeys: validateSelectedRowKeys(request.selectedRowKeys)
+    });
+
+    return this.remediationPackageStore.createPackage({
+      ...packageInput,
+      sourceQuery: {
+        filters: request.filters,
+        selectAllMatchingFilters,
+        selectedRowKeys: request.selectedRowKeys
+      }
+    });
+  }
+
+  async readRemediationPackage(packageId: string): Promise<RemediationPackage> {
+    const trimmedPackageId = packageId.trim();
+
+    if (!trimmedPackageId) {
+      throw new RuntimeHttpError("Missing remediation package id.", 400);
+    }
+
+    await this.initialize();
+    const remediationPackage = await this.remediationPackageStore.readPackage(trimmedPackageId);
+
+    if (!remediationPackage) {
+      throw new RuntimeHttpError("Remediation package not found.", 404);
+    }
+
+    return this.enrichRemediationPackage(remediationPackage);
+  }
+
+  async deleteRemediationTasks(request: DeleteRuntimeRemediationTasksRequest): Promise<RemediationPackage> {
+    const packageId = request.packageId.trim();
+    const taskIds = validateRemediationTaskIds(request.taskIds);
+
+    if (!packageId) {
+      throw new RuntimeHttpError("Missing remediation package id.", 400);
+    }
+
+    if (taskIds.length === 0) {
+      throw new RuntimeHttpError("Missing remediation task ids.", 400);
+    }
+
+    await this.initialize();
+    const remediationPackage = await this.remediationPackageStore.deleteTasks(packageId, taskIds);
+
+    if (!remediationPackage) {
+      throw new RuntimeHttpError("Remediation package not found.", 404);
+    }
+
+    return this.enrichRemediationPackage(remediationPackage);
+  }
+
   async close(): Promise<void> {
     await this.host.close();
     this.initializePromise = null;
@@ -299,4 +399,166 @@ export class LocalReportRuntime {
   private requireConnection(): DuckDBConnection {
     return this.host.requireConnection();
   }
+
+  private async enrichRemediationPackage(remediationPackage: RemediationPackage): Promise<RemediationPackage> {
+    const principalIds = extractRemediationPackagePrincipalIds(remediationPackage);
+    let summariesByPrincipalId: Awaited<ReturnType<EntraCollectionQueryService["readServicePrincipalRemediationSummaries"]>>;
+
+    try {
+      summariesByPrincipalId = await this.entraQueries.readServicePrincipalRemediationSummaries(principalIds);
+    } catch (error) {
+      if (error instanceof RuntimeHttpError && error.statusCode === 404) {
+        return remediationPackage;
+      }
+
+      throw error;
+    }
+
+    if (summariesByPrincipalId.size === 0) {
+      return remediationPackage;
+    }
+
+    return {
+      ...remediationPackage,
+      tasks: remediationPackage.tasks.map((task) => enrichRemediationTask(task, summariesByPrincipalId))
+    };
+  }
+}
+
+function enrichRemediationTask(
+  task: RemediationTask,
+  summariesByPrincipalId: Awaited<ReturnType<EntraCollectionQueryService["readServicePrincipalRemediationSummaries"]>>
+): RemediationTask {
+  const summary = getTaskPrincipalIds(task).map((principalId) => summariesByPrincipalId.get(principalId)).find(Boolean);
+
+  if (!summary || !isRecord(task.sourceEvidence)) {
+    return task;
+  }
+
+  return {
+    ...task,
+    sourceEvidence: {
+      ...task.sourceEvidence,
+      azureEnrichment: toJsonValue(summary)
+    }
+  };
+}
+
+function extractRemediationPackagePrincipalIds(remediationPackage: RemediationPackage): string[] {
+  return [...new Set(remediationPackage.tasks.flatMap(getTaskPrincipalIds))];
+}
+
+function getTaskPrincipalIds(task: RemediationTask): string[] {
+  const ids = [
+    task.targetId,
+    ...getSourceEvidenceRelatedPrincipalIds(task.sourceEvidence)
+  ];
+
+  return ids.map((id) => id.trim().toLowerCase()).filter(Boolean);
+}
+
+function getSourceEvidenceRelatedPrincipalIds(sourceEvidence: JsonValue): string[] {
+  if (!isRecord(sourceEvidence)) {
+    return [];
+  }
+
+  const relatedObject = sourceEvidence.relatedObject;
+  if (!isRecord(relatedObject)) {
+    return [];
+  }
+
+  return [
+    toNullableString(relatedObject.id),
+    toNullableString(relatedObject.object_id),
+    toNullableString(relatedObject.servicePrincipalId)
+  ].filter((value): value is string => value !== null);
+}
+
+function toNullableString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function toJsonValue(value: unknown): JsonValue {
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
+}
+
+function toLocalReportCollectionFilters(
+  filters: CreateRuntimeRemediationPackageRequest["filters"]
+): LocalReportCollectionFilter[] {
+  if (!isRecord(filters)) {
+    throw new RuntimeHttpError("Invalid Zero Trust Assessment remediation package filters.", 400);
+  }
+
+  return Object.entries(filters).flatMap(([column, filter]) => {
+    if (isRecord(filter) && filter.type === "objectFields") {
+      if (
+        !Array.isArray(filter.conditions) ||
+        !filter.conditions.every(
+          (condition) => isRecord(condition) && typeof condition.fieldId === "string" && typeof condition.value === "string"
+        )
+      ) {
+        throw new RuntimeHttpError("Invalid Zero Trust Assessment remediation package filter conditions.", 400);
+      }
+
+      return filter.conditions
+        .filter((condition) => condition.fieldId.trim() && condition.value.trim())
+        .map((condition) => ({
+          column: condition.fieldId.includes(".") ? condition.fieldId : `${column}.${condition.fieldId}`,
+          values: [condition.value]
+        }));
+    }
+
+    const values = getFilterValues(filter);
+    return values.length > 0 ? [{ column, values }] : [];
+  });
+}
+
+function getFilterValues(filter: RuntimeRemediationPackageFilter): string[] {
+  if (!isRecord(filter) || typeof filter.type !== "string") {
+    throw new RuntimeHttpError("Invalid Zero Trust Assessment remediation package filter.", 400);
+  }
+
+  if (filter.type === "text") {
+    return typeof filter.value === "string" && filter.value.trim() ? [filter.value] : [];
+  }
+
+  if (filter.type === "values") {
+    if (!Array.isArray(filter.values) || !filter.values.every((value) => typeof value === "string")) {
+      throw new RuntimeHttpError("Invalid Zero Trust Assessment remediation package filter values.", 400);
+    }
+
+    return filter.values;
+  }
+
+  throw new RuntimeHttpError("Invalid Zero Trust Assessment remediation package filter type.", 400);
+}
+
+function validateSelectedRowKeys(selectedRowKeys: unknown): string[] {
+  if (!Array.isArray(selectedRowKeys) || !selectedRowKeys.every((rowKey) => typeof rowKey === "string")) {
+    throw new RuntimeHttpError("Invalid Zero Trust Assessment remediation package selection.", 400);
+  }
+
+  return selectedRowKeys;
+}
+
+function normalizeSelectAllMatchingFilters(value: unknown): boolean {
+  return value === true;
+}
+
+function validateRemediationTaskIds(taskIds: unknown): string[] {
+  if (!Array.isArray(taskIds)) {
+    throw new RuntimeHttpError("Invalid remediation task ids.", 400);
+  }
+
+  return taskIds.map((taskId) => {
+    if (typeof taskId !== "string" || taskId.trim().length === 0) {
+      throw new RuntimeHttpError("Invalid remediation task id.", 400);
+    }
+
+    return taskId.trim();
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

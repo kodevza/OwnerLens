@@ -1,28 +1,52 @@
 import { useCallback, useMemo, useState } from "react";
 
-import type { ZtaRelatedObject, ZtaReportMeta, ZtaReportTest } from "../../core/azure/ztaReport";
+import type { RemediationPackage } from "../../core/runtime/remediation";
+import type {
+  ZtaRelatedObject,
+  ZtaReportMeta,
+  ZtaReportTest
+} from "../../core/azure/ztaReport";
 import { formatDate, formatValue } from "../../lib/utils";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
-import { GenericTable } from "../../report/components/GenericTable";
-import type { ColumnFilters } from "../../report/components/reportTableControls";
-import { Badge } from "../../report/components/ui/badge";
+import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
+import { SelectionActionBar } from "../../report/components/SelectionActionBar";
+import type { ColumnFilters, SortRule } from "../../core/collectionControls";
+import { Button } from "../../report/components/ui/button";
 import { Card } from "../../report/components/ui/card";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
-import { readZeroTrustAssessmentReport } from "./api";
-
-type ZtaTestRow = ZtaReportTest & {
-  rowIndex: number;
-};
+import {
+  createZeroTrustAssessmentRemediationPackage,
+  readRemediationPackage,
+  readZeroTrustAssessmentReport
+} from "./api";
+import {
+  getRemediationPackageSearchValues,
+  ZtaRemediationPackageBadges
+} from "./ZtaRemediationPackageBadges";
+import {
+  getRelatedObjectsWithIds,
+  getRelatedObjectSearchValues,
+  RelatedObjectBadges,
+  ztaRelatedObjectFieldFilter
+} from "./ztaRelatedObjects";
 
 type ZtaComponentProps = {
   initialFilters?: ColumnFilters;
+  onRemediationPackageCreated?: (remediationPackage: RemediationPackage) => void;
+  onRemediationPackageClick?: (remediationPackage: RemediationPackage) => void;
   onRelatedObjectClick?: (relatedObject: ZtaRelatedObject) => void;
+};
+
+type ZtaSelection = {
+  filters: ColumnFilters;
+  selectAllMatchingFilters: boolean;
+  selectedRowKeys: string[];
 };
 
 const ztaStatusOptions = ["Completed", "Skipped", "Passed", "Failed"];
 const ztaRiskOptions = ["High", "Medium", "Low", "None"];
 
-const ztaTestFields: ReportFieldDescriptor<ZtaTestRow>[] = [
+const ztaTestFields: ReportFieldDescriptor<ZtaReportTest>[] = [
   {
     id: "TestId",
     label: "Test ID",
@@ -38,27 +62,6 @@ const ztaTestFields: ReportFieldDescriptor<ZtaTestRow>[] = [
     filter: { kind: "text" }
   },
   {
-    id: "TestStatus",
-    label: "Status",
-    valueType: "text",
-    getValue: (test) => test.TestStatus,
-    filter: { kind: "multiSelect", options: ztaStatusOptions }
-  },
-  {
-    id: "RelatedObjects",
-    label: "Related objects",
-    valueType: "list",
-    getValue: getRelatedObjectSearchValues,
-    filter: { kind: "text" }
-  },
-  {
-    id: "TestRisk",
-    label: "Risk",
-    valueType: "riskLevel",
-    getValue: (test) => test.TestRisk,
-    filter: { kind: "multiSelect", options: ztaRiskOptions }
-  },
-  {
     id: "TestPillar",
     label: "Pillar",
     valueType: "text",
@@ -71,6 +74,27 @@ const ztaTestFields: ReportFieldDescriptor<ZtaTestRow>[] = [
     valueType: "text",
     getValue: (test) => test.TestCategory,
     filter: { kind: "text" }
+  },
+  {
+    id: "TestStatus",
+    label: "Status",
+    valueType: "text",
+    getValue: (test) => test.TestStatus,
+    filter: { kind: "multiSelect", options: ztaStatusOptions }
+  },
+  {
+    id: "RelatedObjects",
+    label: "Related objects",
+    valueType: "list",
+    getValue: getRelatedObjectSearchValues,
+    filter: ztaRelatedObjectFieldFilter
+  },
+  {
+    id: "TestRisk",
+    label: "Risk",
+    valueType: "riskLevel",
+    getValue: (test) => test.TestRisk,
+    filter: { kind: "multiSelect", options: ztaRiskOptions }
   },
   {
     id: "TestImpact",
@@ -95,40 +119,82 @@ const ztaTestFields: ReportFieldDescriptor<ZtaTestRow>[] = [
   },
   {
     id: "TestTags",
-    label: "Tags",
+    label: "Test Tags",
     valueType: "list",
     getValue: (test) => test.TestTags,
     filter: { kind: "text" }
   },
   {
-    id: "SkippedReason",
-    label: "Skipped reason",
-    valueType: "text",
-    getValue: (test) => test.SkippedReason,
+    id: "RemediationPackages",
+    label: "Remediation packages",
+    valueType: "list",
+    getValue: getRemediationPackageSearchValues,
     filter: { kind: "text" }
   }
 ];
 
-export function ZtaComponent({ initialFilters, onRelatedObjectClick }: ZtaComponentProps = {}) {
+export function ZtaComponent({
+  initialFilters,
+  onRemediationPackageClick,
+  onRemediationPackageCreated,
+  onRelatedObjectClick
+}: ZtaComponentProps = {}) {
   const [meta, setMeta] = useState<ZtaReportMeta | null>(null);
   const [testCount, setTestCount] = useState(0);
-  const fieldRenderers = useMemo<ReportColumnRenderers<ZtaTestRow>>(
+  const [createPackageState, setCreatePackageState] = useState<{
+    status: "idle" | "creating" | "error";
+    message?: string;
+  }>({ status: "idle" });
+  const [openPackageState, setOpenPackageState] = useState<{
+    status: "idle" | "error";
+    message?: string;
+  }>({ status: "idle" });
+  const openRemediationPackage = useCallback(
+    async (packageId: string) => {
+      try {
+        const remediationPackage = await readRemediationPackage(packageId);
+
+        setOpenPackageState({ status: "idle" });
+        onRemediationPackageClick?.(remediationPackage);
+      } catch (error) {
+        setOpenPackageState({
+          status: "error",
+          message: error instanceof Error ? error.message : "Could not open remediation package."
+        });
+      }
+    },
+    [onRemediationPackageClick]
+  );
+  const fieldRenderers = useMemo<ReportColumnRenderers<ZtaReportTest>>(
     () => ({
       RelatedObjects: (test) => (
         <RelatedObjectBadges objects={getRelatedObjectsWithIds(test)} onRelatedObjectClick={onRelatedObjectClick} />
+      ),
+      RemediationPackages: (test) => (
+        <ZtaRemediationPackageBadges
+          packages={test.RemediationPackages ?? []}
+          onRemediationPackageClick={onRemediationPackageClick ? openRemediationPackage : undefined}
+        />
       )
     }),
-    [onRelatedObjectClick]
+    [onRelatedObjectClick, onRemediationPackageClick, openRemediationPackage]
   );
   const loadPage = useCallback(
-    async ({ filters, page, signal }: { filters: ColumnFilters; page: number; signal: AbortSignal }) => {
-      const report = await readZeroTrustAssessmentReport({ filters, page, signal });
+    async ({
+      filters,
+      page,
+      signal,
+      sortRules
+    }: {
+      filters: ColumnFilters;
+      page: number;
+      signal: AbortSignal;
+      sortRules: SortRule[];
+    }) => {
+      const report = await readZeroTrustAssessmentReport({ filters, page, signal, sortRules });
       const responsePage = report.page;
       const responsePageSize = report.pageSize;
-      const rows = (report.Tests ?? report.rows ?? []).map((test, rowIndex) => ({
-        ...test,
-        rowIndex: (responsePage - 1) * responsePageSize + rowIndex
-      }));
+      const rows = report.Tests ?? report.rows ?? [];
 
       setMeta(report.Meta);
       setTestCount(report.count);
@@ -142,21 +208,89 @@ export function ZtaComponent({ initialFilters, onRelatedObjectClick }: ZtaCompon
     },
     []
   );
+  const createRemediationPackage = useCallback(
+    async ({ filters, selectAllMatchingFilters, selectedRowKeys }: ZtaSelection) => {
+      setCreatePackageState({ status: "creating" });
+
+      try {
+        const createdPackage = await createZeroTrustAssessmentRemediationPackage({
+          filters,
+          ...(selectAllMatchingFilters ? { selectAllMatchingFilters } : {}),
+          selectedRowKeys
+        });
+        const remediationPackage = await readRemediationPackage(createdPackage.id);
+
+        setCreatePackageState({ status: "idle" });
+        onRemediationPackageCreated?.(remediationPackage);
+      } catch (error) {
+        setCreatePackageState({
+          status: "error",
+          message: error instanceof Error ? error.message : "Could not create remediation package."
+        });
+      }
+    },
+    [onRemediationPackageCreated]
+  );
 
   return (
     <section className="flex flex-col gap-4">
       {meta ? <ZtaMetaPanel meta={meta} testCount={testCount} /> : null}
-      <GenericTable
+      {openPackageState.status === "error" ? (
+        <div className="text-sm text-destructive">{openPackageState.message}</div>
+      ) : null}
+      <SelectableGenericTable
         emptyMessage="No Zero Trust Assessment tests found."
         fields={ztaTestFields}
         fieldRenderers={fieldRenderers}
-        getRowKey={(row) => `${formatValue(row.TestId)}:${row.rowIndex}`}
+        getRowKey={(row) => formatValue(row.TestId)}
+        getRowSelectionLabel={(row) => `Select Zero Trust Assessment test ${formatValue(row.TestId)}`}
         initialFilters={initialFilters}
         loadPage={loadPage}
         loadingMessage="Loading Zero Trust Assessment report..."
         minWidthClassName="min-w-[2200px]"
+        renderSelectionOverlay={({ filters, selectAllMatchingFilters, selectedRowKeys }) => (
+          <ZtaSelectionRemediationBar
+            createPackageState={createPackageState}
+            filters={filters}
+            selectAllMatchingFilters={selectAllMatchingFilters}
+            selectedRowKeys={selectedRowKeys}
+            onCreateRemediationPackage={createRemediationPackage}
+          />
+        )}
       />
     </section>
+  );
+}
+
+function ZtaSelectionRemediationBar({
+  createPackageState,
+  filters,
+  selectAllMatchingFilters,
+  selectedRowKeys,
+  onCreateRemediationPackage
+}: ZtaSelection & {
+  createPackageState: {
+    status: "idle" | "creating" | "error";
+    message?: string;
+  };
+  onCreateRemediationPackage: (selection: ZtaSelection) => void;
+}) {
+  const isCreating = createPackageState.status === "creating";
+  const selectionLabel = selectAllMatchingFilters
+    ? "all filtered Zero Trust Assessment tests"
+    : `${selectedRowKeys.length} selected Zero Trust Assessment tests`;
+
+  return (
+    <SelectionActionBar errorMessage={createPackageState.status === "error" ? createPackageState.message : undefined}>
+      <Button
+        aria-label={`Create remediation package from ${selectionLabel}`}
+        disabled={isCreating}
+        type="button"
+        onClick={() => onCreateRemediationPackage({ filters, selectAllMatchingFilters, selectedRowKeys })}
+      >
+        {isCreating ? "Creating..." : "Create package"}
+      </Button>
+    </SelectionActionBar>
   );
 }
 
@@ -177,100 +311,4 @@ function SummaryCard({ label, value }: { label: string; value: unknown }) {
       <strong className="[overflow-wrap:anywhere] text-xl leading-tight">{formatValue(value)}</strong>
     </Card>
   );
-}
-
-function RelatedObjectBadges({
-  objects,
-  onRelatedObjectClick
-}: {
-  objects: ZtaRelatedObject[];
-  onRelatedObjectClick?: (relatedObject: ZtaRelatedObject) => void;
-}) {
-  if (objects.length === 0) {
-    return formatValue(null);
-  }
-
-  return (
-    <div className="flex max-w-96 flex-wrap gap-1">
-      {objects.map((object) => {
-        const id = getRelatedObjectId(object);
-        const title = getRelatedObjectTooltipTitle(object);
-
-        if (!onRelatedObjectClick) {
-          return (
-            <Badge key={id} className="max-w-full font-mono font-medium" title={title} variant="outline">
-              <span className="truncate">{id}</span>
-            </Badge>
-          );
-        }
-
-        return (
-          <button
-            key={id}
-            aria-label={`Open related object ${id}`}
-            className="inline-flex max-w-full items-center rounded-full border px-2.5 py-0.5 font-mono text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            title={title}
-            type="button"
-            onClick={() => onRelatedObjectClick(object)}
-          >
-            <span className="truncate">{id}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function getRelatedObjectSearchValues(test: ZtaReportTest): string[] {
-  return getRelatedObjectsWithIds(test).flatMap(getRelatedObjectSearchValuesForObject);
-}
-
-function getRelatedObjectSearchValuesForObject(object: ZtaRelatedObject): string[] {
-  return [
-    object.id,
-    object.object_id,
-    object.servicePrincipalId,
-    object.applicationId,
-    object.displayName,
-    object.servicePrincipalType,
-    object.userPrincipalName,
-    ...(object.tags ?? [])
-  ].filter(isNonEmptyString);
-}
-
-function getRelatedObjectsWithIds(test: ZtaReportTest): ZtaRelatedObject[] {
-  return (test.RelatedObjects ?? []).filter((object): object is ZtaRelatedObject & ({ id: string } | { object_id: string }) =>
-    isNonEmptyString(getRelatedObjectId(object))
-  );
-}
-
-function getRelatedObjectId(object: ZtaRelatedObject): string {
-  return object.id ?? object.object_id ?? "";
-}
-
-function getRelatedObjectTooltipTitle(object: ZtaRelatedObject): string {
-  return [
-    ["id", object.id],
-    ["object_id", object.object_id],
-    ["servicePrincipalId", object.servicePrincipalId],
-    ["tags", object.tags],
-    ["applicationId", object.applicationId],
-    ["displayName", object.displayName],
-    ["servicePrincipalType", object.servicePrincipalType],
-    ["userPrincipalName", object.userPrincipalName]
-  ]
-    .map(([label, value]) => `${label}: ${formatTooltipValue(value)}`)
-    .join("\n");
-}
-
-function formatTooltipValue(value: string | string[] | null | undefined): string {
-  if (Array.isArray(value)) {
-    return value.length > 0 ? value.join(", ") : "-";
-  }
-
-  return isNonEmptyString(value) ? value : "-";
-}
-
-function isNonEmptyString(value: string | null | undefined): value is string {
-  return typeof value === "string" && value.trim().length > 0;
 }

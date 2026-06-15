@@ -10,21 +10,5 @@ export function classifyAzureScope(assignment: AzureRoleAssignment): NonNullable
     return assignment.scopeType;
   }
 
-  if (/^\/providers\/Microsoft\.Management\/managementGroups\/[^/]+$/i.test(assignment.scope)) {
-    return "ManagementGroup";
-  }
-
-  if (/^\/subscriptions\/[^/]+$/i.test(assignment.scope)) {
-    return "Subscription";
-  }
-
-  if (/^\/subscriptions\/[^/]+\/resourceGroups\/[^/]+$/i.test(assignment.scope)) {
-    return "ResourceGroup";
-  }
-
-  if (/^\/subscriptions\/[^/]+\/resourceGroups\/[^/]+\/providers\/.+/i.test(assignment.scope)) {
-    return "Resource";
-  }
-
   return "Unknown";
 }

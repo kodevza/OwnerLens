@@ -2,7 +2,7 @@ import { useCallback } from "react";
 
 import type { AzureRbac } from "../../core/azure/azureRbac";
 import { GenericTable } from "../../report/components/GenericTable";
-import type { ColumnFilters } from "../../report/components/reportTableControls";
+import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import { readAzureRbac } from "./api";
@@ -86,8 +86,18 @@ const azureRbacFields: ReportFieldDescriptor<AzureRbac>[] = [
 
 export function AzureRbacComponent({ servicePrincipalId }: { servicePrincipalId: string }) {
   const loadPage = useCallback(
-    ({ filters, page, signal }: { filters: ColumnFilters; page: number; signal: AbortSignal }) =>
-      readAzureRbac({ filters, page, servicePrincipalId, signal }),
+    ({
+      filters,
+      page,
+      signal,
+      sortRules
+    }: {
+      filters: ColumnFilters;
+      page: number;
+      signal: AbortSignal;
+      sortRules: SortRule[];
+    }) =>
+      readAzureRbac({ filters, page, servicePrincipalId, signal, sortRules }),
     [servicePrincipalId]
   );
 

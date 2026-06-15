@@ -1,8 +1,9 @@
-import type { ColumnFilter, ColumnFilters } from "./components/reportTableControls";
+import type { ColumnFilters, SortRule } from "../core/collectionControls";
+
+type RuntimeCollectionFilter = { column: string; values: string[] };
 
 export function appendRuntimeCollectionFilters(url: URL, filters: ColumnFilters): void {
-  Object.entries(filters).forEach(([column, filter], filterIndex) => {
-    const values = getRuntimeCollectionFilterValues(filter);
+  getRuntimeCollectionFilters(filters).forEach(({ column, values }, filterIndex) => {
     if (values.length === 0) {
       return;
     }
@@ -14,10 +15,41 @@ export function appendRuntimeCollectionFilters(url: URL, filters: ColumnFilters)
   });
 }
 
-function getRuntimeCollectionFilterValues(filter: ColumnFilter): string[] {
-  if (filter.type === "values") {
-    return filter.values;
-  }
+export function appendRuntimeCollectionSortRules(url: URL, sortRules: SortRule[]): void {
+  sortRules.forEach((rule, sortIndex) => {
+    if (!rule.columnId.trim()) {
+      return;
+    }
 
-  return filter.value.trim() ? [filter.value] : [];
+    url.searchParams.set(`sort[${sortIndex}][column]`, rule.columnId);
+    url.searchParams.set(`sort[${sortIndex}][direction]`, rule.direction);
+  });
+}
+
+export function appendRuntimeSelectedRowKeys(url: URL, selectedRowKeys: string[]): void {
+  selectedRowKeys
+    .map((rowKey) => rowKey.trim())
+    .filter(Boolean)
+    .forEach((rowKey) => {
+      url.searchParams.append("selectedRowKey", rowKey);
+    });
+}
+
+function getRuntimeCollectionFilters(filters: ColumnFilters): RuntimeCollectionFilter[] {
+  return Object.entries(filters).flatMap(([column, filter]) => {
+    if (filter.type === "objectFields") {
+      return filter.conditions
+        .map((condition) => ({
+          column: condition.fieldId.includes(".") ? condition.fieldId : `${column}.${condition.fieldId}`,
+          values: condition.value.trim() ? [condition.value] : []
+        }))
+        .filter((condition) => condition.values.length > 0);
+    }
+
+    if (filter.type === "values") {
+      return [{ column, values: filter.values }];
+    }
+
+    return [{ column, values: filter.value.trim() ? [filter.value] : [] }];
+  });
 }

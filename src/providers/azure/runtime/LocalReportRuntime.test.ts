@@ -1,5 +1,6 @@
 import { defineLocalReportRuntimeRestEndpoints } from "./localReportRuntimeRest";
 import type { LocalReportRuntime } from "./LocalReportRuntime";
+import { createRuntimeRestMiddleware } from "../../../core/runtime/rest";
 import type { AzureSnapshot } from "../../../core/azure/resources";
 import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
 
@@ -157,8 +158,30 @@ test("defines local report runtime REST endpoints", async () => {
     queryEntraServicePrincipals: jest.fn((options) =>
       Promise.resolve(emptyCollection("entra.servicePrincipals", options))
     ),
+    exportEntraServicePrincipalsCsv: jest.fn(() =>
+      Promise.resolve({
+        kind: "csv",
+        collectionId: "entra.servicePrincipals",
+        fileName: "ownerlens-service-principals.csv",
+        contentType: "text/csv; charset=utf-8",
+        body: "\uFEFFid,displayName\nsp-1,App",
+        columns: ["id", "displayName"],
+        count: 1
+      })
+    ),
     queryEntraManagedIdentities: jest.fn((options) =>
       Promise.resolve(emptyCollection("entra.managedIdentities", options))
+    ),
+    exportEntraManagedIdentitiesCsv: jest.fn(() =>
+      Promise.resolve({
+        kind: "csv",
+        collectionId: "entra.managedIdentities",
+        fileName: "ownerlens-managed-identities.csv",
+        contentType: "text/csv; charset=utf-8",
+        body: "\uFEFFid,displayName\nmi-1,Identity",
+        columns: ["id", "displayName"],
+        count: 1
+      })
     ),
     queryEntraOAuth2PermissionGrants: jest.fn((options) =>
       Promise.resolve(emptyCollection("entra.oauth2PermissionGrants", options))
@@ -207,6 +230,17 @@ test("defines local report runtime REST endpoints", async () => {
         count: 2
       });
     }),
+    exportAzureResourceGroupOwnershipCsv: jest.fn(() =>
+      Promise.resolve({
+        kind: "csv",
+        collectionId: "azureResources.resourceGroupOwnership",
+        fileName: "ownerlens-resource-groups.csv",
+        contentType: "text/csv; charset=utf-8",
+        body: "\uFEFFsubscriptionId,resourceGroup,owner\nsub-1,rg-1,alice@example.test",
+        columns: ["subscriptionId", "resourceGroup", "owner"],
+        count: 1
+      })
+    ),
     queryAzureResources: jest.fn((options) => Promise.resolve(emptyCollection("azureResources.resources", options))),
     queryAzureUserAssignedManagedIdentities: jest.fn((options) =>
       Promise.resolve(emptyCollection("azureResources.userAssignedManagedIdentities", options))
@@ -235,6 +269,89 @@ test("defines local report runtime REST endpoints", async () => {
     ),
     queryZeroTrustAssessmentReport: jest.fn((options) =>
       Promise.resolve(emptyCollection("zeroTrustAssessment.report", options))
+    ),
+    exportZeroTrustAssessmentReportCsv: jest.fn(() =>
+      Promise.resolve({
+        kind: "csv",
+        collectionId: "zeroTrustAssessment.report",
+        fileName: "ownerlens-zero-trust-assessment.csv",
+        contentType: "text/csv; charset=utf-8",
+        body: "\uFEFFTestId,TestStatus\nzta-1,Failed",
+        columns: ["TestId", "TestStatus"],
+        count: 1
+      })
+    ),
+    createZeroTrustAssessmentRemediationPackage: jest.fn(() =>
+      Promise.resolve({
+        id: "package-1",
+        createdAt: "2026-06-12T10:00:00.000Z",
+        sourceKind: "zeroTrustAssessment",
+        sourceLabel: "Zero Trust Assessment",
+        sourceQuery: {
+          filters: {},
+          selectedRowKeys: ["zta-1"]
+        },
+        taskCount: 1,
+        tasks: [
+          {
+            id: "task-1",
+            packageId: "package-1",
+            createdAt: "2026-06-12T10:00:00.000Z",
+            status: "open",
+            targetKind: "Application",
+            targetId: "sp-1",
+            targetLabel: "Service principal app",
+            title: "Service principal exposure",
+            risk: "High",
+            sourceEvidence: {
+              sourceKind: "zeroTrustAssessment"
+            }
+          }
+        ]
+      })
+    ),
+    readRemediationPackage: jest.fn((packageId: string) =>
+      Promise.resolve({
+        id: packageId,
+        createdAt: "2026-06-12T10:00:00.000Z",
+        sourceKind: "zeroTrustAssessment",
+        sourceLabel: "Zero Trust Assessment",
+        sourceQuery: {
+          filters: {},
+          selectedRowKeys: ["zta-1"]
+        },
+        taskCount: 1,
+        tasks: [
+          {
+            id: "task-1",
+            packageId,
+            createdAt: "2026-06-12T10:00:00.000Z",
+            status: "open",
+            targetKind: "zeroTrustAssessmentTest",
+            targetId: "35016",
+            targetLabel: "Mandatory labeling is enabled in sensitivity label policies",
+            title: "Mandatory labeling is enabled in sensitivity label policies",
+            risk: "medium",
+            sourceEvidence: {
+              sourceKind: "zeroTrustAssessment"
+            }
+          }
+        ]
+      })
+    ),
+    deleteRemediationTasks: jest.fn((request: { packageId: string; taskIds: string[] }) =>
+      Promise.resolve({
+        id: request.packageId,
+        createdAt: "2026-06-12T10:00:00.000Z",
+        sourceKind: "zeroTrustAssessment",
+        sourceLabel: "Zero Trust Assessment",
+        sourceQuery: {
+          filters: {},
+          selectedRowKeys: ["zta-1"]
+        },
+        taskCount: 0,
+        tasks: []
+      })
     ),
     readDisabledOwnerEvidenceKeys: jest.fn(() => Promise.resolve(new Set(disabledOwnerKeys))),
     setOwnerEvidenceDisabled: jest.fn((key: string, disabled: boolean) => {
@@ -274,8 +391,16 @@ test("defines local report runtime REST endpoints", async () => {
   const azureRbacEndpoint = getEndpoint(endpoints, "/api/data/azureRbac");
   const activityLogsEndpoint = getEndpoint(endpoints, "/api/data/azureResources/activityLogs");
   const zeroTrustAssessmentReportEndpoint = getEndpoint(endpoints, "/api/data/zeroTrustAssessment/report");
+  const zeroTrustAssessmentRemediationPackagesEndpoint = getEndpoint(
+    endpoints,
+    "/api/data/zeroTrustAssessment/remediationPackages"
+  );
+  const remediationPackagesEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages");
+  const remediationTasksEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages/tasks");
   const enrichmentRecalculateEndpoint = getEndpoint(endpoints, "/api/data/runtime/enrichment/recalculate");
   const runtimeEndpoint = getEndpoint(endpoints, "/api/data/runtime");
+
+  expect(enrichmentRecalculateEndpoint.method).toBe("POST");
 
   expect(endpoints.map((endpoint) => endpoint.path)).toEqual([
     "/api/data",
@@ -295,6 +420,9 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/azureRbac",
     "/api/data/azureResources/activityLogs",
     "/api/data/zeroTrustAssessment/report",
+    "/api/data/zeroTrustAssessment/remediationPackages",
+    "/api/data/remediationPackages",
+    "/api/data/remediationPackages/tasks",
     "/api/data/runtime/enrichment/recalculate",
     "/api/data/runtime"
   ]);
@@ -308,7 +436,7 @@ test("defines local report runtime REST endpoints", async () => {
     servicePrincipalsEndpoint.handle({
       req: {},
       url: new URL(
-        "http://localhost/api/data/entra/servicePrincipals?page=2&count=25&filter[0][column]=displayName&filter[0][value][0]=app&filter[0][value][1]=api&filter[1][column]=accountEnabled&filter[1][value]=true"
+        "http://localhost/api/data/entra/servicePrincipals?page=2&count=25&filter[0][column]=displayName&filter[0][value][0]=app&filter[0][value][1]=api&filter[1][column]=accountEnabled&filter[1][value]=true&sort[0][column]=displayName&sort[0][direction]=asc&sort[1][column]=permissionRisk&sort[1][direction]=desc"
       )
     })
   ).resolves.toEqual({
@@ -319,9 +447,38 @@ test("defines local report runtime REST endpoints", async () => {
     pageSize: 25,
     count: 0
   });
+  expect(runtime.queryEntraServicePrincipals).toHaveBeenLastCalledWith({
+    filters: [
+      { column: "displayName", values: ["app", "api"] },
+      { column: "accountEnabled", values: ["true"] }
+    ],
+    sortRules: [
+      { columnId: "displayName", direction: "asc" },
+      { columnId: "permissionRisk", direction: "desc" }
+    ],
+    page: 2,
+    pageSize: 25
+  });
+  await expect(
+    servicePrincipalsEndpoint.handle({
+      req: {},
+      url: new URL(
+        "http://localhost/api/data/entra/servicePrincipals?format=csv&filter[0][column]=displayName&filter[0][value]=app&sort[0][column]=displayName&sort[0][direction]=asc"
+      )
+    })
+  ).resolves.toMatchObject({
+    kind: "csv",
+    collectionId: "entra.servicePrincipals",
+    fileName: "ownerlens-service-principals.csv",
+    body: "\uFEFFid,displayName\nsp-1,App"
+  });
   await managedIdentitiesEndpoint.handle({
     req: {},
     url: new URL("http://localhost/api/data/entra/managedIdentities?page=1&count=10")
+  });
+  await managedIdentitiesEndpoint.handle({
+    req: {},
+    url: new URL("http://localhost/api/data/entra/managedIdentities?format=csv")
   });
   await expect(
     entraPermissionsEndpoint.handle({
@@ -416,6 +573,12 @@ test("defines local report runtime REST endpoints", async () => {
       })
     ])
   });
+  await resourceGroupOwnershipEndpoint.handle({
+    req: {},
+    url: new URL(
+      "http://localhost/api/data/azureResources/resourceGroupOwnership?format=csv&filter[0][column]=owner&filter[0][value]=alice&sort[0][column]=resourceGroup&sort[0][direction]=asc&selectedRowKey=sub-1%3Arg-1"
+    )
+  });
   await resourcesEndpoint.handle({
     req: {},
     url: new URL("http://localhost/api/data/azureResources/resources?page=1&count=10")
@@ -469,6 +632,68 @@ test("defines local report runtime REST endpoints", async () => {
     pageSize: 10,
     count: 0
   });
+  await zeroTrustAssessmentReportEndpoint.handle({
+    req: {},
+    url: new URL("http://localhost/api/data/zeroTrustAssessment/report?format=csv")
+  });
+  await expect(
+    zeroTrustAssessmentRemediationPackagesEndpoint.handle({
+      body: {
+        filters: {
+          RelatedObjects: {
+            type: "text",
+            value: "sp-1"
+          }
+        },
+        selectAllMatchingFilters: "true",
+        selectedRowKeys: ["zta-1"]
+      },
+      req: {},
+      url: new URL("http://localhost/api/data/zeroTrustAssessment/remediationPackages")
+    })
+  ).resolves.toMatchObject({
+    id: "package-1"
+  });
+  await expect(
+    remediationPackagesEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/remediationPackages?id=package-1")
+    })
+  ).resolves.toMatchObject({
+    id: "package-1",
+    sourceKind: "zeroTrustAssessment",
+    taskCount: 1,
+    tasks: [
+      expect.objectContaining({
+        status: "open",
+        targetId: "35016"
+      })
+    ]
+  });
+  await expect(
+    remediationTasksEndpoint.handle({
+      body: {
+        packageId: "package-1",
+        taskIds: ["task-1"]
+      },
+      req: {},
+      url: new URL("http://localhost/api/data/remediationPackages/tasks")
+    })
+  ).resolves.toMatchObject({
+    id: "package-1",
+    taskCount: 0,
+    tasks: []
+  });
+  await expect(
+    zeroTrustAssessmentRemediationPackagesEndpoint.handle({
+      body: {
+        filters: {},
+        selectedRowKeys: "zta-1"
+      },
+      req: {},
+      url: new URL("http://localhost/api/data/zeroTrustAssessment/remediationPackages")
+    })
+  ).rejects.toThrow("Invalid Zero Trust Assessment remediation package request.");
   await expect(
     enrichmentRecalculateEndpoint.handle({
       req: {},
@@ -486,73 +711,280 @@ test("defines local report runtime REST endpoints", async () => {
       { column: "displayName", values: ["app", "api"] },
       { column: "accountEnabled", values: ["true"] }
     ],
+    sortRules: [
+      { columnId: "displayName", direction: "asc" },
+      { columnId: "permissionRisk", direction: "desc" }
+    ],
     page: 2,
     pageSize: 25
   });
+  expect(runtime.exportEntraServicePrincipalsCsv).toHaveBeenCalledWith({
+    filters: [{ column: "displayName", values: ["app"] }],
+    sortRules: [{ columnId: "displayName", direction: "asc" }],
+    page: undefined,
+    pageSize: undefined
+  });
   expect(runtime.queryEntraManagedIdentities).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
+  });
+  expect(runtime.exportEntraManagedIdentitiesCsv).toHaveBeenCalledWith({
+    filters: [],
+    sortRules: [],
+    page: undefined,
+    pageSize: undefined
   });
   expect(runtime.readEntraPrincipalPermissions).toHaveBeenCalledWith("sp-1");
   expect(runtime.queryEntraOAuth2PermissionGrants).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryEntraAppRoleAssignments).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureSubscriptions).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureResourceGroups).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureResourceGroupOwnership).toHaveBeenNthCalledWith(1, {
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureResourceGroupOwnership).toHaveBeenNthCalledWith(2, {
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
+  expect(runtime.exportAzureResourceGroupOwnershipCsv).toHaveBeenCalledWith({
+    filters: [{ column: "owner", values: ["alice"] }],
+    sortRules: [{ columnId: "resourceGroup", direction: "asc" }],
+    page: undefined,
+    pageSize: undefined,
+    selectedRowKeys: ["sub-1:rg-1"]
+  });
   expect(runtime.queryAzureResources).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureUserAssignedManagedIdentities).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureRoleAssignments).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureRbac).toHaveBeenCalledWith("sp-1", {
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryAzureActivityLogs).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
   expect(runtime.queryZeroTrustAssessmentReport).toHaveBeenCalledWith({
     filters: [],
+    sortRules: [],
     page: 1,
     pageSize: 10
   });
+  expect(runtime.exportZeroTrustAssessmentReportCsv).toHaveBeenCalledWith({
+    filters: [],
+    sortRules: [],
+    page: undefined,
+    pageSize: undefined
+  });
+  expect(runtime.createZeroTrustAssessmentRemediationPackage).toHaveBeenCalledWith({
+    filters: {
+      RelatedObjects: {
+        type: "text",
+        value: "sp-1"
+      }
+    },
+    selectAllMatchingFilters: false,
+    selectedRowKeys: ["zta-1"]
+  });
+  expect(runtime.readRemediationPackage).toHaveBeenCalledWith("package-1");
+  expect(runtime.deleteRemediationTasks).toHaveBeenCalledWith({
+    packageId: "package-1",
+    taskIds: ["task-1"]
+  });
 });
+
+test("returns 201 Created with remediation package id when creating a package", async () => {
+  const runtime = {
+    createZeroTrustAssessmentRemediationPackage: jest.fn(() =>
+      Promise.resolve({
+        id: "package-1",
+        createdAt: "2026-06-12T10:00:00.000Z",
+        sourceKind: "zeroTrustAssessment",
+        sourceLabel: "Zero Trust Assessment",
+        sourceQuery: {
+          filters: {},
+          selectedRowKeys: ["zta-1"]
+        },
+        taskCount: 1,
+        tasks: []
+      })
+    )
+  };
+  const middleware = createRuntimeRestMiddleware({
+    basePath: "/api/data",
+    endpoints: defineLocalReportRuntimeRestEndpoints(runtime as unknown as LocalReportRuntime),
+    getErrorStatusCode: () => 500
+  });
+  const response = createTestResponse();
+  const next = jest.fn();
+
+  await middleware(
+    {
+      body: {
+        filters: {},
+        selectedRowKeys: ["zta-1"]
+      },
+      method: "POST",
+      url: "/api/data/zeroTrustAssessment/remediationPackages"
+    },
+    response,
+    next
+  );
+
+  expect(next).not.toHaveBeenCalled();
+  expect(response.statusCode).toBe(201);
+  expect(JSON.parse(response.body)).toEqual({ id: "package-1" });
+});
+
+test("returns CSV runtime export artifacts as downloadable files", async () => {
+  const middleware = createRuntimeRestMiddleware({
+    basePath: "/api/data",
+    endpoints: [
+      {
+        path: "/api/data/test",
+        handle: () => ({
+          kind: "csv",
+          collectionId: "test.collection",
+          fileName: "test.csv",
+          contentType: "text/csv; charset=utf-8",
+          body: "id\n1",
+          columns: ["id"],
+          count: 1
+        })
+      }
+    ],
+    getErrorStatusCode: () => 500
+  });
+  const response = createTestResponse();
+  const next = jest.fn();
+
+  await middleware(
+    {
+      method: "GET",
+      url: "/api/data/test"
+    },
+    response,
+    next
+  );
+
+  expect(next).not.toHaveBeenCalled();
+  expect(response.statusCode).toBe(200);
+  expect(response.headers.get("Content-Type")).toBe("text/csv; charset=utf-8");
+  expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="test.csv"');
+  expect(response.body).toBe("id\n1");
+});
+
+test("returns 400 for malformed JSON request bodies", async () => {
+  const middleware = createRuntimeRestMiddleware({
+    basePath: "/api/data",
+    endpoints: [
+      {
+        method: "POST",
+        parseJsonBody: true,
+        path: "/api/data/test",
+        handle: ({ body }) => body
+      }
+    ],
+    getErrorStatusCode: (error) => (error instanceof Error && error.message === "Malformed JSON request body." ? 400 : 500)
+  });
+  const response = createTestResponse();
+  const next = jest.fn();
+
+  await middleware(
+    {
+      body: "{not-json",
+      method: "POST",
+      url: "/api/data/test"
+    },
+    response,
+    next
+  );
+
+  expect(next).not.toHaveBeenCalled();
+  expect(response.statusCode).toBe(400);
+  expect(JSON.parse(response.body)).toEqual({ error: "Malformed JSON request body." });
+});
+
+test("returns JSON 404 for unknown runtime API paths", async () => {
+  const middleware = createRuntimeRestMiddleware({
+    basePath: "/api/data",
+    endpoints: [],
+    getErrorStatusCode: (error) => (error instanceof Error && error.message === "Runtime API endpoint not found." ? 404 : 500)
+  });
+  const response = createTestResponse();
+  const next = jest.fn();
+
+  await middleware(
+    {
+      method: "GET",
+      url: "/api/data/remediationPackages"
+    },
+    response,
+    next
+  );
+
+  expect(next).not.toHaveBeenCalled();
+  expect(response.statusCode).toBe(404);
+  expect(response.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
+  expect(JSON.parse(response.body)).toEqual({ error: "Runtime API endpoint not found." });
+});
+
+function createTestResponse() {
+  return {
+    body: "",
+    headers: new Map<string, string>(),
+    statusCode: 200,
+    end(body: string) {
+      this.body = body;
+    },
+    setHeader(name: string, value: string) {
+      this.headers.set(name, value);
+    }
+  };
+}

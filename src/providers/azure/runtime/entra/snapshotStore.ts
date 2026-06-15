@@ -10,32 +10,10 @@ import { importEntraSnapshotMetadata } from "./snapshotMetadataTable";
 
 export const entraSnapshotFileName = "entra-snapshot.json";
 
-export type EntraDuckDbImportStatus = {
-  imported: boolean;
-  fileName: string;
-  servicePrincipalCount: number;
-  applicationCount: number;
-  oauth2PermissionGrantCount: number;
-  appRoleAssignmentCount: number;
-  importedAt: string | null;
-};
-
-export function createEmptyEntraImportStatus(): EntraDuckDbImportStatus {
-  return {
-    imported: false,
-    fileName: entraSnapshotFileName,
-    servicePrincipalCount: 0,
-    applicationCount: 0,
-    oauth2PermissionGrantCount: 0,
-    appRoleAssignmentCount: 0,
-    importedAt: null
-  };
-}
-
 export async function importEntraSnapshotToDuckDb(
   connection: DuckDBConnection,
   snapshot: EntraSnapshot & LocalSnapshotData
-): Promise<EntraDuckDbImportStatus> {
+): Promise<void> {
   await connection.run("begin transaction");
   try {
     await connection.run("delete from entra_snapshot_meta");
@@ -54,15 +32,6 @@ export async function importEntraSnapshotToDuckDb(
     await insertEntraAppRoleAssignmentRows(connection, appRoleAssignments);
 
     await connection.run("commit");
-    return {
-      imported: true,
-      fileName: entraSnapshotFileName,
-      servicePrincipalCount: servicePrincipals.length,
-      applicationCount: applications?.length ?? 0,
-      oauth2PermissionGrantCount: oauth2PermissionGrants?.length ?? 0,
-      appRoleAssignmentCount: appRoleAssignments?.length ?? 0,
-      importedAt: new Date().toISOString()
-    };
   } catch (error) {
     await connection.run("rollback");
     throw error;

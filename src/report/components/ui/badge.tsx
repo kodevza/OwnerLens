@@ -30,6 +30,6 @@ const badgeVariants = cva(
 
 export type BadgeProps = HTMLAttributes<HTMLSpanElement> & VariantProps<typeof badgeVariants>;
 
-export function Badge({ className, variant, ...props }: BadgeProps) {
-  return <span className={cn(badgeVariants({ variant }), className)} {...props} />;
+export function Badge({ className, onClick, variant, ...props }: BadgeProps) {
+  return <span className={cn(badgeVariants({ variant }), onClick ? "cursor-pointer" : undefined, className)} onClick={onClick} {...props} />;
 }

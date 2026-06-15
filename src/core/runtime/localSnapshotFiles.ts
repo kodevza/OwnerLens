@@ -2,6 +2,10 @@ import { constants as fsConstants } from "node:fs";
 import { access, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
+import { RuntimeHttpError } from "./errors";
+
+export { RuntimeHttpError } from "./errors";
+
 export type LocalSnapshotFile = {
   name: string;
   size: number;
@@ -64,11 +68,3 @@ export async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-export class RuntimeHttpError extends Error {
-  readonly statusCode: number;
-
-  constructor(message: string, statusCode: number) {
-    super(message);
-    this.statusCode = statusCode;
-  }
-}

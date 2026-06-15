@@ -1,23 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { buildCollectionColumns, type ReportColumnRenderers } from "../buildCollectionColumns";
 import { getConfiguredFilterOptions } from "../applyCollectionControls";
+import {
+  applyColumnFilterValueToggle,
+  applyColumnObjectFieldFilter,
+  applyColumnTextFilter,
+  applyColumnValuesFilter,
+  toggleSortRule,
+  type ColumnFilterOptions,
+  type ColumnFilters,
+  type SortRule
+} from "../../core/collectionControls";
 import type { ReportColumnHelp, ReportFieldDescriptor } from "../reportTypes";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Table, TableBody, TableCell, TableContainer, TableHeader, TableRow } from "./ui/table";
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "./ui/table";
 import {
-  applyColumnFilterValueToggle,
-  applyColumnValuesFilter,
   applyReportTableControls,
   ReportTableHead,
-  type ColumnFilterOptions,
-  type ColumnFilters,
-  type SortRule,
   useReportTableControls
 } from "./reportTableControls";
 
-type GenericTableProps<TRow> = {
+export type GenericTableProps<TRow> = {
   columnHelp?: Record<string, ReportColumnHelp>;
   emptyMessage: string;
   fields: ReportFieldDescriptor<TRow>[];
@@ -36,23 +41,35 @@ type GenericTableProps<TRow> = {
   totalCount?: number;
 };
 
-type GenericTablePage<TRow> = {
+export type GenericTableSelectionColumn<TRow> = {
+  renderCell: (row: TRow) => ReactNode;
+  renderHeader: (visibleRows: TRow[]) => ReactNode;
+};
+
+export type GenericTablePage<TRow> = {
   rows: TRow[];
   page: number;
   pageSize: number;
   count: number;
 };
 
-type GenericRemoteTableProps<TRow> = Omit<
+export type GenericRemoteTableProps<TRow> = Omit<
   GenericTableProps<TRow>,
   "filterOptions" | "filters" | "onFiltersChange" | "onPageChange" | "page" | "rows" | "sortRules" | "totalCount"
 > & {
   initialFilters?: ColumnFilters;
-  loadPage: (input: { filters: ColumnFilters; page: number; signal: AbortSignal }) => Promise<GenericTablePage<TRow>>;
+  loadPage: (input: {
+    filters: ColumnFilters;
+    page: number;
+    signal: AbortSignal;
+    sortRules: SortRule[];
+  }) => Promise<GenericTablePage<TRow>>;
   loadingMessage: string;
+  onFiltersChange?: (filters: ColumnFilters) => void;
+  onRuntimeControlsChange?: (controls: { filters: ColumnFilters; sortRules: SortRule[] }) => void;
 };
 
-type GenericTableWrapperProps<TRow> = GenericTableProps<TRow> | GenericRemoteTableProps<TRow>;
+export type GenericTableWrapperProps<TRow> = GenericTableProps<TRow> | GenericRemoteTableProps<TRow>;
 
 type LoadState =
   | {
@@ -66,7 +83,7 @@ type LoadState =
       message: string;
     };
 
-function isRemoteTableProps<TRow>(props: GenericTableWrapperProps<TRow>): props is GenericRemoteTableProps<TRow> {
+export function isRemoteTableProps<TRow>(props: GenericTableWrapperProps<TRow>): props is GenericRemoteTableProps<TRow> {
   return "loadPage" in props;
 }
 
@@ -78,17 +95,30 @@ export function GenericTable<TRow>(props: GenericTableWrapperProps<TRow>) {
   return <GenericTableView {...props} rows={props.rows ?? []} />;
 }
 
-function GenericRemoteTable<TRow>({
+export function GenericRemoteTable<TRow>({
   fields,
   initialFilters,
   loadPage,
   loadingMessage,
+  onFiltersChange,
+  onRuntimeControlsChange,
+  selectionColumn,
   ...tableProps
-}: GenericRemoteTableProps<TRow>) {
+}: GenericRemoteTableProps<TRow> & { selectionColumn?: GenericTableSelectionColumn<TRow> }) {
   const [collection, setCollection] = useState<GenericTablePage<TRow> | null>(null);
   const [filters, setFilters] = useState<ColumnFilters>(() => initialFilters ?? {});
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [page, setPage] = useState(1);
+  const [sortRules, setSortRules] = useState<SortRule[]>([]);
+  const runtimeFilters = useMemo(() => remapColumnFiltersForRuntime(fields, filters), [fields, filters]);
+  const runtimeSortRules = useMemo(() => remapSortRulesForRuntime(fields, sortRules), [fields, sortRules]);
+
+  useEffect(() => {
+    onRuntimeControlsChange?.({
+      filters: runtimeFilters,
+      sortRules: runtimeSortRules
+    });
+  }, [onRuntimeControlsChange, runtimeFilters, runtimeSortRules]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -98,9 +128,10 @@ function GenericRemoteTable<TRow>({
 
       try {
         const nextCollection = await loadPage({
-          filters: remapColumnFiltersForRuntime(fields, filters),
+          filters: runtimeFilters,
           page,
-          signal: controller.signal
+          signal: controller.signal,
+          sortRules: runtimeSortRules
         });
         setCollection(nextCollection);
         setLoadState({ status: "ready" });
@@ -120,7 +151,7 @@ function GenericRemoteTable<TRow>({
     loadCollectionPage();
 
     return () => controller.abort();
-  }, [fields, filters, loadPage, page]);
+  }, [loadPage, page, runtimeFilters, runtimeSortRules]);
 
   const filterOptions = useMemo(() => getConfiguredFilterOptions(fields), [fields]);
 
@@ -148,20 +179,37 @@ function GenericRemoteTable<TRow>({
         page={collection.page}
         pageSize={collection.pageSize}
         rows={collection.rows}
-        sortRules={[]}
+        selectionColumn={selectionColumn}
+        sortRules={sortRules}
         totalCount={collection.count}
         onFiltersChange={(nextFilters) => {
           setPage(1);
           setFilters(nextFilters);
+          onFiltersChange?.(nextFilters);
         }}
         onPageChange={setPage}
-        onSortRulesChange={() => undefined}
+        onSortRulesChange={(nextSortRules) => {
+          setPage(1);
+          setSortRules(nextSortRules);
+        }}
       />
     </>
   );
 }
 
-function GenericTableView<TRow>({
+function remapSortRulesForRuntime<TRow>(
+  fields: ReportFieldDescriptor<TRow>[],
+  sortRules: SortRule[]
+): SortRule[] {
+  const sortColumnByFieldId = new Map(fields.map((field) => [field.id, field.sortColumnId ?? field.id]));
+
+  return sortRules.map((rule) => ({
+    ...rule,
+    columnId: sortColumnByFieldId.get(rule.columnId) ?? rule.columnId
+  }));
+}
+
+export function GenericTableView<TRow>({
   columnHelp,
   emptyMessage,
   fields,
@@ -176,9 +224,10 @@ function GenericTableView<TRow>({
   page,
   pageSize,
   rows,
+  selectionColumn,
   sortRules: controlledSortRules,
   totalCount
-}: GenericTableProps<TRow> & { rows: TRow[] }) {
+}: GenericTableProps<TRow> & { rows: TRow[]; selectionColumn?: GenericTableSelectionColumn<TRow> }) {
   const columns = useMemo(
     () => buildCollectionColumns(fields, { columnHelp, renderers: fieldRenderers }),
     [columnHelp, fields, fieldRenderers]
@@ -201,6 +250,12 @@ function GenericTableView<TRow>({
       ? localControls.setColumnValuesFilter
       : (columnId: string, values: string[]) => {
           onFiltersChange(applyColumnValuesFilter(filters, columnId, values));
+        };
+  const setColumnObjectFieldFilter =
+    onFiltersChange === undefined
+      ? localControls.setColumnObjectFieldFilter
+      : (columnId: string, conditions: Array<{ fieldId: string; value: string }>) => {
+          onFiltersChange(applyColumnObjectFieldFilter(filters, columnId, conditions));
         };
   const toggleColumnValueFilter =
     onFiltersChange === undefined
@@ -227,6 +282,11 @@ function GenericTableView<TRow>({
       <Table className={minWidthClassName}>
         <TableHeader>
           <TableRow>
+            {selectionColumn ? (
+              <TableHead className="w-10 min-w-10 px-3">
+                {selectionColumn.renderHeader(controlledRows)}
+              </TableHead>
+            ) : null}
             <ReportTableHead
               columns={columns}
               filterOptions={filterOptions}
@@ -235,6 +295,7 @@ function GenericTableView<TRow>({
               sortRules={sortRules}
               onFilterChange={setColumnFilter}
               onFilterOpenChange={setColumnFilterOpen}
+              onObjectFieldFilterChange={setColumnObjectFieldFilter}
               onValueFilterToggle={toggleColumnValueFilter}
               onValuesFilterChange={setColumnValuesFilter}
               onSortToggle={toggleColumnSort}
@@ -242,13 +303,20 @@ function GenericTableView<TRow>({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {controlledRows.map((row) => (
-            <TableRow key={getRowKey(row)}>
-              {columns.map((column) => (
-                <TableCell key={column.id}>{column.render(row)}</TableCell>
-              ))}
-            </TableRow>
-          ))}
+          {controlledRows.map((row) => {
+            const rowKey = getRowKey(row);
+
+            return (
+              <TableRow key={rowKey}>
+                {selectionColumn ? (
+                  <TableCell className="w-10 min-w-10 px-3">{selectionColumn.renderCell(row)}</TableCell>
+                ) : null}
+                {columns.map((column) => (
+                  <TableCell key={column.id}>{column.render(row)}</TableCell>
+                ))}
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
       {controlledRows.length === 0 ? (
@@ -271,10 +339,41 @@ function remapColumnFiltersForRuntime<TRow>(
   filters: ColumnFilters
 ): ColumnFilters {
   const filterColumnByFieldId = new Map(fields.map((field) => [field.id, field.filterColumnId ?? field.id]));
+  const fieldById = new Map(fields.map((field) => [field.id, field]));
   const next: ColumnFilters = {};
 
   for (const [columnId, filter] of Object.entries(filters)) {
-    next[filterColumnByFieldId.get(columnId) ?? columnId] = filter;
+    const field = fieldById.get(columnId);
+    const runtimeColumnId = filterColumnByFieldId.get(columnId) ?? columnId;
+
+    if (filter.type === "objectFields" && field?.filter?.kind === "objectFields") {
+      const filterFieldById = new Map(field.filter.fields.map((filterField) => [filterField.id, filterField]));
+      const runtimeObjectConditions: Array<{ fieldId: string; value: string }> = [];
+
+      filter.conditions.forEach((condition) => {
+        const filterField = filterFieldById.get(condition.fieldId);
+
+        if (filterField?.filterColumnId) {
+          next[filterField.filterColumnId] = { type: "text", value: condition.value };
+          return;
+        }
+
+        runtimeObjectConditions.push({
+          fieldId: `${runtimeColumnId}.${condition.fieldId}`,
+          value: condition.value
+        });
+      });
+
+      if (runtimeObjectConditions.length > 0) {
+        next[runtimeColumnId] = {
+          type: "objectFields",
+          conditions: runtimeObjectConditions
+        };
+      }
+      continue;
+    }
+
+    next[runtimeColumnId] = filter;
   }
 
   return next;
@@ -304,32 +403,6 @@ function TableState({ children, variant = "empty" }: { children: string; variant
       {children}
     </Card>
   );
-}
-
-function applyColumnTextFilter(filters: ColumnFilters, columnId: string, value: string): ColumnFilters {
-  const next = { ...filters };
-
-  if (value.trim()) {
-    next[columnId] = { type: "text", value };
-  } else {
-    delete next[columnId];
-  }
-
-  return next;
-}
-
-function toggleSortRule(sortRules: SortRule[], columnId: string): SortRule[] {
-  const existingRule = sortRules.find((rule) => rule.columnId === columnId);
-
-  if (!existingRule) {
-    return [...sortRules, { columnId, direction: "asc" }];
-  }
-
-  if (existingRule.direction === "asc") {
-    return sortRules.map((rule) => (rule.columnId === columnId ? { ...rule, direction: "desc" } : rule));
-  }
-
-  return sortRules.filter((rule) => rule.columnId !== columnId);
 }
 
 function TablePagination({

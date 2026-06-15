@@ -20,10 +20,22 @@ export type ReportDetailsValue = {
   searchText?: string;
 };
 
-export type ReportFilterDescriptor = {
-  kind: "text" | "multiSelect";
+export type ReportObjectFieldFilterDescriptor = {
+  id: string;
+  label: string;
+  filterColumnId?: string;
   options?: readonly string[];
 };
+
+export type ReportFilterDescriptor =
+  | {
+      kind: "text" | "multiSelect";
+      options?: readonly string[];
+    }
+  | {
+      kind: "objectFields";
+      fields: ReportObjectFieldFilterDescriptor[];
+    };
 
 export type ReportFieldDescriptor<TRow> = {
   id: string;
@@ -33,6 +45,7 @@ export type ReportFieldDescriptor<TRow> = {
   getValue: (row: TRow) => unknown;
   getFilterValue?: (row: TRow) => unknown;
   filterColumnId?: string;
+  sortColumnId?: string;
   searchable?: boolean;
   filter?: ReportFilterDescriptor;
 };
