@@ -1,6 +1,10 @@
 import type { DuckDBConnection, DuckDBValue } from "@duckdb/node-api";
 
-import type { ZtaRelatedObject, ZtaRemediationSummary } from "../../../../core/azure/ztaReport";
+import type {
+  ZtaRelatedObject,
+  ZtaRemediationPackageSummary,
+  ZtaRemediationSummary
+} from "../../../../core/azure/ztaReport";
 import type { ZeroTrustAssessmentTest } from "./types";
 
 export async function insertZeroTrustAssessmentTestRows(
@@ -80,7 +84,7 @@ export async function insertZeroTrustAssessmentRelatedObjectRows(
         `insert into zta_test_related_objects values (
           $reportId,
           $testOrdinal,
-          $relatedObjectId
+          lower($relatedObjectId)
         )`,
         {
           reportId,
@@ -96,13 +100,16 @@ export async function readZeroTrustAssessmentTestRows(
   connection: DuckDBConnection,
   reportId: string
 ): Promise<ZeroTrustAssessmentTest[]> {
+  const servicePrincipalRelatedObjectIds = await readServicePrincipalRelatedObjectIds(connection);
   const rows = await readRows<{ data: string }>(
     connection,
     "select data from zta_tests where report_id = $reportId order by ordinal",
     { reportId }
   );
 
-  return rows.map((row) => JSON.parse(row.data) as ZeroTrustAssessmentTest);
+  return rows.map((row) =>
+    enrichRelatedObjectsWithServicePrincipalIds(JSON.parse(row.data) as ZeroTrustAssessmentTest, servicePrincipalRelatedObjectIds)
+  );
 }
 
 export async function readZeroTrustAssessmentRemediationSummaries(
@@ -124,7 +131,7 @@ export async function readZeroTrustAssessmentRemediationSummaries(
       ),
       related_tests as (
         select distinct
-          lower(related.related_object_id) as related_object_id,
+          related.related_object_id,
           related.test_ordinal,
           lower(coalesce(test.status, '')) as status,
           case lower(coalesce(test.risk, ''))
@@ -142,24 +149,24 @@ export async function readZeroTrustAssessmentRemediationSummaries(
       ),
       resolved_related_tests as (
         select
-          lower(service_principal.id) as principal_id,
+          service_principal.id as principal_id,
           related_tests.test_ordinal,
           related_tests.status,
           related_tests.risk_rank
         from related_tests
         join entra_service_principals service_principal
-          on lower(service_principal.id) = related_tests.related_object_id
+          on service_principal.id = related_tests.related_object_id
         union
         select
-          lower(service_principal.id) as principal_id,
+          service_principal.id as principal_id,
           related_tests.test_ordinal,
           related_tests.status,
           related_tests.risk_rank
         from related_tests
         join entra_applications application
-          on lower(application.id) = related_tests.related_object_id
+          on application.id = related_tests.related_object_id
         join entra_service_principals service_principal
-          on lower(service_principal.app_id) = lower(application.app_id)
+          on service_principal.app_id = application.app_id
       )
       select
         principal_id as related_object_id,
@@ -183,6 +190,120 @@ export async function readZeroTrustAssessmentRemediationSummaries(
   );
 }
 
+export async function readZeroTrustAssessmentRemediationPackageSummariesByTestId(
+  connection: DuckDBConnection
+): Promise<Map<string, ZtaRemediationPackageSummary[]>> {
+  const rows = await readRows<{
+    test_id: string;
+    package_id: string;
+    created_at: string;
+    task_count: number;
+  }>(
+    connection,
+    `
+      select
+        json_extract_string(task.source_evidence, '$.test.TestId') as test_id,
+        remediation_package.id as package_id,
+        remediation_package.created_at,
+        remediation_package.task_count
+      from remediation_tasks task
+      join remediation_packages remediation_package
+        on remediation_package.id = task.package_id
+      where remediation_package.source_kind = 'zeroTrustAssessment'
+        and json_extract_string(task.source_evidence, '$.sourceKind') = 'zeroTrustAssessment'
+        and json_extract_string(task.source_evidence, '$.test.TestId') is not null
+      group by
+        test_id,
+        remediation_package.id,
+        remediation_package.created_at,
+        remediation_package.task_count
+      order by remediation_package.created_at desc, remediation_package.id
+    `
+  );
+  const summariesByTestId = new Map<string, ZtaRemediationPackageSummary[]>();
+
+  for (const row of rows) {
+    const summaries = summariesByTestId.get(row.test_id) ?? [];
+    summaries.push({
+      id: row.package_id,
+      createdAt: row.created_at,
+      taskCount: Number(row.task_count)
+    });
+    summariesByTestId.set(row.test_id, summaries);
+  }
+
+  return summariesByTestId;
+}
+
+export async function readZeroTrustAssessmentRemediationPackageSummariesByPrincipalId(
+  connection: DuckDBConnection
+): Promise<Map<string, ZtaRemediationPackageSummary[]>> {
+  const rows = await readRows<{
+    principal_id: string;
+    package_id: string;
+    created_at: string;
+    task_count: number;
+  }>(
+    connection,
+    `
+      with resolved_package_principals as (
+        select
+          service_principal.id as principal_id,
+          remediation_package.id as package_id,
+          remediation_package.created_at,
+          remediation_package.task_count
+        from remediation_tasks task
+        join remediation_packages remediation_package
+          on remediation_package.id = task.package_id
+        join entra_service_principals service_principal
+          on service_principal.id = task.target_id
+        where remediation_package.source_kind = 'zeroTrustAssessment'
+          and json_extract_string(task.source_evidence, '$.sourceKind') = 'zeroTrustAssessment'
+        union
+        select
+          service_principal.id as principal_id,
+          remediation_package.id as package_id,
+          remediation_package.created_at,
+          remediation_package.task_count
+        from remediation_tasks task
+        join remediation_packages remediation_package
+          on remediation_package.id = task.package_id
+        join entra_applications application
+          on application.id = task.target_id
+        join entra_service_principals service_principal
+          on service_principal.app_id = application.app_id
+        where remediation_package.source_kind = 'zeroTrustAssessment'
+          and json_extract_string(task.source_evidence, '$.sourceKind') = 'zeroTrustAssessment'
+      )
+      select
+        principal_id,
+        package_id,
+        created_at,
+        task_count
+      from resolved_package_principals
+      group by
+        principal_id,
+        package_id,
+        created_at,
+        task_count
+      order by created_at desc, package_id
+    `
+  );
+  const summariesByPrincipalId = new Map<string, ZtaRemediationPackageSummary[]>();
+
+  for (const row of rows) {
+    const summaries = summariesByPrincipalId.get(row.principal_id) ?? [];
+    summaries.push({
+      id: row.package_id,
+      createdAt: row.created_at,
+      taskCount: Number(row.task_count)
+    });
+    summariesByPrincipalId.set(row.principal_id, summaries);
+  }
+
+  return summariesByPrincipalId;
+}
+
 async function readRows<Row extends Record<string, unknown>>(
   connection: DuckDBConnection,
   sql: string,
@@ -195,22 +316,29 @@ async function readRows<Row extends Record<string, unknown>>(
 type ServicePrincipalRelatedObjectIds = {
   servicePrincipalId: string;
   applicationId: string | null;
+  servicePrincipalType: string;
   tags: string[];
 };
 
 async function readServicePrincipalRelatedObjectIds(
   connection: DuckDBConnection
 ): Promise<Map<string, ServicePrincipalRelatedObjectIds>> {
-  const rows = await readRows<{ service_principal_id: string; application_id: string | null; tags: string | null }>(
+  const rows = await readRows<{
+    service_principal_id: string;
+    application_id: string | null;
+    service_principal_type: string;
+    tags: string | null;
+  }>(
     connection,
     `
       select
-        lower(service_principal.id) as service_principal_id,
+        service_principal.id as service_principal_id,
         application.id as application_id,
+        service_principal.service_principal_type,
         service_principal.tags
       from entra_service_principals service_principal
       left join entra_applications application
-        on lower(application.app_id) = lower(service_principal.app_id)
+        on application.app_id = service_principal.app_id
     `
   );
 
@@ -220,6 +348,7 @@ async function readServicePrincipalRelatedObjectIds(
     const value = {
       servicePrincipalId: row.service_principal_id,
       applicationId: row.application_id,
+      servicePrincipalType: row.service_principal_type,
       tags: parseJsonArray<string>(row.tags)
     };
     relatedObjectIds.set(row.service_principal_id, value);
@@ -236,7 +365,7 @@ function enrichRelatedObjectsWithServicePrincipalIds(
   test: ZeroTrustAssessmentTest,
   servicePrincipalRelatedObjectIds: Map<string, ServicePrincipalRelatedObjectIds>
 ): ZeroTrustAssessmentTest {
-  if (!servicePrincipalRelatedObjectIds.size || !test.RelatedObjects?.length) {
+  if (!test.RelatedObjects?.length) {
     return test;
   }
 
@@ -245,12 +374,14 @@ function enrichRelatedObjectsWithServicePrincipalIds(
       return relatedObject;
     }
 
+    const sanitizedRelatedObject = stripZeroTrustAssessmentRelatedObjectTags(relatedObject);
     const ids = resolveRelatedObjectIds(relatedObject, servicePrincipalRelatedObjectIds);
     return ids === undefined
-      ? relatedObject
+      ? sanitizedRelatedObject
       : {
-          ...relatedObject,
+          ...sanitizedRelatedObject,
           servicePrincipalId: ids.servicePrincipalId,
+          servicePrincipalType: ids.servicePrincipalType,
           tags: ids.tags,
           applicationId: ids.applicationId
         };
@@ -260,6 +391,16 @@ function enrichRelatedObjectsWithServicePrincipalIds(
     ...test,
     RelatedObjects: relatedObjects
   };
+}
+
+function stripZeroTrustAssessmentRelatedObjectTags(relatedObject: ZtaRelatedObject): ZtaRelatedObject {
+  if (!Object.prototype.hasOwnProperty.call(relatedObject, "tags")) {
+    return relatedObject;
+  }
+
+  const sanitizedRelatedObject = { ...relatedObject };
+  delete sanitizedRelatedObject.tags;
+  return sanitizedRelatedObject;
 }
 
 function resolveRelatedObjectIds(
@@ -336,7 +477,7 @@ function getRelatedObjectIds(test: ZeroTrustAssessmentTest): string[] {
       toNullableString(relatedObject.applicationId)
     ]) {
       if (id) {
-        ids.add(id);
+        ids.add(id.toLowerCase());
       }
     }
   }

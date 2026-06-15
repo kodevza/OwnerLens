@@ -7,12 +7,11 @@ import type { EntraServicePrincipal, EntraServicePrincipalType } from "./types";
 
 export type AzureIdentityRuntimeEnrichment = {
   permissionRisk: ManagedIdentityPermissionRiskLevel;
-  azureRbac: string;
   roleAssignments: AzureRoleAssignment[];
 };
 
 export type EntraPrincipalPermissionSummary = {
-  oauthPemrissionsCount: number;
+  oauthPermissionsCount: number;
   appRolesPermissionCount: number;
   entraPermissionRisk: PermissionRiskLevel;
 };
@@ -21,6 +20,17 @@ export type EntraPrincipalRbacSummary = {
   rbacRoleAssignmentCount: number;
   rbacRoleLevel: PermissionRiskLevel;
   rbacSubscriptionCount: number;
+};
+
+export type EntraPrincipalOwnerSummary = {
+  potentialOwners: string[];
+  ownerConfidence: OwnerConfidence;
+};
+
+export type EntraPrincipalAzureRemediationSummary = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & EntraPrincipalOwnerSummary & {
+  displayName: string;
+  id: string;
+  roleAssignments: AzureRoleAssignment[];
 };
 
 export type ServicePrincipal = EntraServicePrincipal & AzureIdentityRuntimeEnrichment & {

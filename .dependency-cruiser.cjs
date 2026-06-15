@@ -227,6 +227,16 @@ module.exports = {
       }
     },
     {
+      name: 'components-must-not-import-providers',
+      severity: 'error',
+      from: {
+        path: '^src/components/'
+      },
+      to: {
+        path: '^src/providers/'
+      }
+    },
+    {
       name: 'report-must-not-import-azure-directly',
       severity: 'error',
       from: {

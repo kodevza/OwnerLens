@@ -1,19 +1,25 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import type { EntraServicePrincipalType } from "../../core/azure/entra/types";
 import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
 import type { OwnerConfidence } from "../../core/ownership/types";
 import type { PermissionRiskLevel } from "../../core/risk/types";
+import type { RemediationPackage } from "../../core/runtime/remediation";
 import { azureServicePrincipalColumnHelp } from "./azureReportConfig";
-import { readServicePrincipals } from "./api";
-import { GenericTable } from "../../report/components/GenericTable";
-import type { ColumnFilters } from "../../report/components/reportTableControls";
+import { exportServicePrincipalsCsv, readRemediationPackage, readServicePrincipals } from "./api";
+import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
+import type { ColumnFilters } from "../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
+import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
 import {
   buildServicePrincipalFieldRenderers,
   type AzureRbacPrincipalSelection,
   type EntraPermissionsPrincipalSelection
 } from "./ServicePrincipalFieldRenderers";
+import {
+  getRemediationPackageSearchValues,
+  ZtaRemediationPackageBadges
+} from "./ZtaRemediationPackageBadges";
 
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];
@@ -22,7 +28,6 @@ const servicePrincipalTypeOptions: Array<Exclude<EntraServicePrincipalType, "Man
   "SocialIdp",
   "Legacy"
 ];
-const accountEnabledOptions = ["true", "false"];
 
 const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
   {
@@ -30,7 +35,17 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     label: "Display name",
     valueType: "text",
     getValue: (sp) => sp.displayName,
-    filter: { kind: "text" }
+    getFilterValue: (sp) => ({
+      displayName: sp.displayName,
+      id: sp.id
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "displayName", label: "Display name", filterColumnId: "displayName" },
+        { id: "id", label: "Object ID", filterColumnId: "id" }
+      ]
+    }
   },
   {
     id: "servicePrincipalType",
@@ -40,10 +55,54 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     filter: { kind: "multiSelect", options: servicePrincipalTypeOptions }
   },
   {
+    id: "potentialOwners",
+    label: "Owner",
+    valueType: "text",
+    getValue: (sp) => sp.potentialOwners?.join(", ") ?? "",
+    getFilterValue: (sp) => ({
+      owner: sp.potentialOwners ?? [],
+      confidence: sp.ownerConfidence ?? "none"
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "owner", label: "Owner", filterColumnId: "potentialOwners" },
+        { id: "confidence", label: "Confidence", filterColumnId: "ownerConfidence", options: ownerConfidenceOptions }
+      ]
+    }
+  },
+  {
     id: "permissionRisk",
     label: "Risk",
     valueType: "riskLevel",
     getValue: (sp) => sp.permissionRisk,
+    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
+  },
+  {
+    id: "azureRbac",
+    label: "Azure RBAC",
+    valueType: "text",
+    getValue: (sp) => sp.roleAssignments,
+    sortColumnId: "rbacRoleLevel",
+    getFilterValue: (sp) => ({
+      roleLevel: sp.rbacRoleLevel,
+      summary: sp.roleAssignments
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "roleLevel", label: "Role level", filterColumnId: "rbacRoleLevel", options: permissionRiskLevelOptions },
+        { id: "summary", label: "Summary", filterColumnId: "roleAssignments" }
+      ]
+    }
+  },
+  {
+    id: "oauthPermissionsCount",
+    label: "Entra API permissions",
+    valueType: "text",
+    getValue: (sp) => sp.oauthPermissionsCount,
+    getFilterValue: (sp) => sp.entraPermissionRisk,
+    filterColumnId: "entraPermissionRisk",
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
@@ -56,49 +115,10 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
-    id: "azureRbac",
-    label: "Azure RBAC",
-    valueType: "text",
-    getValue: (sp) => sp.azureRbac,
-    getFilterValue: (sp) => sp.rbacRoleLevel,
-    filterColumnId: "rbacRoleLevel",
-    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
-  },
-  {
-    id: "oauthPemrissionsCount",
-    label: "Entra permissions",
-    valueType: "text",
-    getValue: (sp) => sp.oauthPemrissionsCount,
-    getFilterValue: (sp) => sp.entraPermissionRisk,
-    filterColumnId: "entraPermissionRisk",
-    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
-  },
-  {
-    id: "potentialOwners",
-    label: "Owner",
+    id: "RemediationPackages",
+    label: "Remediation packages",
     valueType: "list",
-    getValue: (sp) => sp.potentialOwners,
-    filter: { kind: "text" }
-  },
-  {
-    id: "ownerConfidence",
-    label: "Owner confidence",
-    valueType: "ownerConfidence",
-    getValue: (sp) => sp.ownerConfidence ?? "none",
-    filter: { kind: "multiSelect", options: ownerConfidenceOptions }
-  },
-  {
-    id: "accountEnabled",
-    label: "Enabled",
-    valueType: "boolean",
-    getValue: (sp) => sp.accountEnabled,
-    filter: { kind: "multiSelect", options: accountEnabledOptions }
-  },
-  {
-    id: "id",
-    label: "Object ID",
-    valueType: "text",
-    getValue: (sp) => sp.id,
+    getValue: getRemediationPackageSearchValues,
     filter: { kind: "text" }
   },
   {
@@ -122,34 +142,78 @@ export function ServicePrincipalComponent({
   initialFilters,
   onAzureRbacClick,
   onEntraPermissionsClick,
+  onRemediationPackageClick,
   onZtaRemediationsClick
 }: {
   initialFilters?: ColumnFilters;
   onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
   onEntraPermissionsClick?: (principal: EntraPermissionsPrincipalSelection) => void;
+  onRemediationPackageClick?: (remediationPackage: RemediationPackage) => void;
   onZtaRemediationsClick?: (objectId: string) => void;
 }) {
+  const [openPackageState, setOpenPackageState] = useState<{
+    status: "idle" | "error";
+    message?: string;
+  }>({ status: "idle" });
+  const openRemediationPackage = useCallback(
+    async (packageId: string) => {
+      try {
+        const remediationPackage = await readRemediationPackage(packageId);
+
+        setOpenPackageState({ status: "idle" });
+        onRemediationPackageClick?.(remediationPackage);
+      } catch (error) {
+        setOpenPackageState({
+          status: "error",
+          message: error instanceof Error ? error.message : "Could not open remediation package."
+        });
+      }
+    },
+    [onRemediationPackageClick]
+  );
   const fieldRenderers = useMemo(
-    () =>
-      buildServicePrincipalFieldRenderers<ServicePrincipal>({
+    () => ({
+      ...buildServicePrincipalFieldRenderers<ServicePrincipal>({
         onAzureRbacClick,
         onEntraPermissionsClick,
         onZtaRemediationsClick
       }),
-    [onAzureRbacClick, onEntraPermissionsClick, onZtaRemediationsClick]
+      RemediationPackages: (servicePrincipal: ServicePrincipal) => (
+        <ZtaRemediationPackageBadges
+          packages={servicePrincipal.RemediationPackages ?? []}
+          onRemediationPackageClick={onRemediationPackageClick ? openRemediationPackage : undefined}
+        />
+      )
+    }),
+    [onAzureRbacClick, onEntraPermissionsClick, onRemediationPackageClick, onZtaRemediationsClick, openRemediationPackage]
   );
 
   return (
-    <GenericTable
-      columnHelp={azureServicePrincipalColumnHelp}
-      emptyMessage="No service principals match the filter."
-      fieldRenderers={fieldRenderers}
-      fields={servicePrincipalFields}
-      getRowKey={(row) => row.id}
-      initialFilters={initialFilters}
-      loadPage={readServicePrincipals}
-      loadingMessage="Loading service principals..."
-      minWidthClassName="min-w-[2400px]"
-    />
+    <section className="flex flex-col gap-4">
+      {openPackageState.status === "error" ? (
+        <div className="text-sm text-destructive">{openPackageState.message}</div>
+      ) : null}
+      <SelectableGenericTable
+        columnHelp={azureServicePrincipalColumnHelp}
+        emptyMessage="No service principals match the filter."
+        fieldRenderers={fieldRenderers}
+        fields={servicePrincipalFields}
+        getRowKey={(row) => row.id}
+        initialFilters={initialFilters}
+        loadPage={readServicePrincipals}
+        loadingMessage="Loading service principals..."
+        minWidthClassName="min-w-[2380px]"
+        renderSelectionOverlay={({ filters, selectAllMatchingFilters, selectedRowKeys, sortRules }) => (
+          <CsvSelectionActionBar
+            filters={filters}
+            itemLabel="service principals"
+            selectAllMatchingFilters={selectAllMatchingFilters}
+            selectedRowKeys={selectedRowKeys}
+            sortRules={sortRules}
+            onExportCsv={exportServicePrincipalsCsv}
+          />
+        )}
+      />
+    </section>
   );
 }

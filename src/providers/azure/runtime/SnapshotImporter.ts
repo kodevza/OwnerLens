@@ -1,9 +1,7 @@
+import type { SnapshotImportStatus } from "../../../core/runtime/snapshotImportRegistry";
 import { LocalEntraReportRuntime } from "./entra/LocalEntraReportRuntime";
-import type { EntraDuckDbImportStatus } from "./entra/snapshotStore";
 import { LocalAzureResourcesReportRuntime } from "./resources/LocalAzureResourcesReportRuntime";
-import type { AzureResourcesDuckDbImportStatus } from "./resources/snapshotStore";
 import { LocalZeroTrustAssessmentReportRuntime } from "./zta/LocalZeroTrustAssessmentReportRuntime";
-import type { ZeroTrustAssessmentDuckDbImportStatus } from "./zta/snapshotStore";
 
 export type SnapshotImporterOptions = {
   entra: LocalEntraReportRuntime;
@@ -12,9 +10,9 @@ export type SnapshotImporterOptions = {
 };
 
 export type SnapshotImporterStatus = {
-  entra: EntraDuckDbImportStatus;
-  azureResources: AzureResourcesDuckDbImportStatus;
-  zeroTrustAssessment: ZeroTrustAssessmentDuckDbImportStatus;
+  entra: SnapshotImportStatus;
+  azureResources: SnapshotImportStatus;
+  zeroTrustAssessment: SnapshotImportStatus;
 };
 
 export class SnapshotImporter {

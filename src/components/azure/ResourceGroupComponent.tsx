@@ -5,14 +5,16 @@ import { appConfig } from "../../core/config";
 import type { OwnerConfidence } from "../../core/ownership/types";
 import type { OwnerEvidence } from "../../report/types";
 import { azureOwnerColumnHelp } from "./azureReportConfig";
-import { readResourceGroups, updateDisabledOwnerEvidence } from "./api";
+import { exportResourceGroupsCsv, readResourceGroups, updateDisabledOwnerEvidence } from "./api";
 import { EvidenceList } from "../../report/components/EvidenceList";
-import { GenericTable } from "../../report/components/GenericTable";
-import type { ColumnFilters } from "../../report/components/reportTableControls";
+import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
+import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import { Card } from "../../report/components/ui/card";
 import { getOwnerEvidenceKey, isActivityOwnerRow } from "../../report/ownerManualPrecheck";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
+import { OwnerBadge } from "./ServicePrincipalFieldRenderers";
+import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
 
 const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];
 const resourceGroupOwnerSourceOptions = [
@@ -27,28 +29,36 @@ const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = 
     label: "Resource group",
     valueType: "text",
     getValue: (group) => group.resourceGroup,
-    filter: { kind: "text" }
-  },
-  {
-    id: "subscriptionName",
-    label: "Subscription",
-    valueType: "text",
-    getValue: (group) => group.subscriptionName,
-    filter: { kind: "text" }
+    getFilterValue: (group) => ({
+      resourceGroup: group.resourceGroup,
+      subscriptionName: group.subscriptionName,
+      subscriptionId: group.subscriptionId
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "resourceGroup", label: "Resource group", filterColumnId: "resourceGroup" },
+        { id: "subscriptionName", label: "Subscription", filterColumnId: "subscriptionName" },
+        { id: "subscriptionId", label: "Subscription ID", filterColumnId: "subscriptionId" }
+      ]
+    }
   },
   {
     id: "owner",
     label: "Owner",
     valueType: "text",
     getValue: (group) => group.owner,
-    filter: { kind: "text" }
-  },
-  {
-    id: "confidence",
-    label: "Confidence",
-    valueType: "ownerConfidence",
-    getValue: (group) => group.confidence,
-    filter: { kind: "multiSelect", options: ownerConfidenceOptions }
+    getFilterValue: (group) => ({
+      owner: group.owner,
+      confidence: group.confidence
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "owner", label: "Owner", filterColumnId: "owner" },
+        { id: "confidence", label: "Confidence", filterColumnId: "confidence", options: ownerConfidenceOptions }
+      ]
+    }
   },
   {
     id: "source",
@@ -69,13 +79,6 @@ const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = 
     label: "Location",
     valueType: "text",
     getValue: (group) => group.location,
-    filter: { kind: "text" }
-  },
-  {
-    id: "subscriptionId",
-    label: "Subscription ID",
-    valueType: "text",
-    getValue: (group) => group.subscriptionId,
     filter: { kind: "text" }
   },
   {
@@ -108,6 +111,13 @@ export function ResourceGroupComponent() {
   );
   const resourceGroupFieldRenderers = useMemo<ReportColumnRenderers<ResourceGroupOwnershipRow>>(
     () => ({
+      resourceGroup: (group) => (
+        <div>
+          <div>{group.resourceGroup}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">{group.subscriptionName}</div>
+        </div>
+      ),
+      owner: (group) => <OwnerBadge confidence={group.confidence} owners={group.owner ? [group.owner] : []} />,
       evidence: (group) => (
         <EvidenceList
           canDisable={isActivityOwnerRow(group)}
@@ -121,14 +131,15 @@ export function ResourceGroupComponent() {
     [handleOwnerEvidenceDisabledChange]
   );
   const loadResourceGroups = useCallback(
-    (input: { filters: ColumnFilters; page: number; signal: AbortSignal }) => readResourceGroups(input),
+    (input: { filters: ColumnFilters; page: number; signal: AbortSignal; sortRules: SortRule[] }) =>
+      readResourceGroups(input),
     [refreshToken]
   );
 
   return (
     <>
       {toggleError ? <Card className="border-red-200 bg-red-50 p-4 text-sm text-red-900">{toggleError}</Card> : null}
-      <GenericTable
+      <SelectableGenericTable
         columnHelp={azureOwnerColumnHelp}
         emptyMessage="No resource groups match the filter."
         fieldRenderers={resourceGroupFieldRenderers}
@@ -137,6 +148,16 @@ export function ResourceGroupComponent() {
         loadPage={loadResourceGroups}
         loadingMessage="Loading resource groups..."
         minWidthClassName="min-w-[1360px]"
+        renderSelectionOverlay={({ filters, selectAllMatchingFilters, selectedRowKeys, sortRules }) => (
+          <CsvSelectionActionBar
+            filters={filters}
+            itemLabel="resource groups"
+            selectAllMatchingFilters={selectAllMatchingFilters}
+            selectedRowKeys={selectedRowKeys}
+            sortRules={sortRules}
+            onExportCsv={exportResourceGroupsCsv}
+          />
+        )}
       />
     </>
   );

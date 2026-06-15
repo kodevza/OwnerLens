@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 
 import { ServicePrincipalComponent } from "./ServicePrincipalComponent";
 import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
+import type { AzureRoleAssignment } from "../../core/azure/resources";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -27,13 +28,13 @@ const columns = [
   "ztaRemediationCountAll",
   "ztaRemediationFailedCount",
   "ztaMaxRisk",
+  "RemediationPackages",
   "azureRbac",
-  "oauthPemrissionsCount",
+  "oauthPermissionsCount",
   "appRolesPermissionCount",
   "entraPermissionRisk",
   "potentialOwners",
   "ownerConfidence",
-  "accountEnabled",
   "id",
   "appId",
   "appDisplayName",
@@ -47,6 +48,8 @@ beforeAll(() => {
 
 afterEach(() => {
   delete (globalThis as Partial<typeof globalThis>).fetch;
+  URL.createObjectURL = originalCreateObjectUrl;
+  URL.revokeObjectURL = originalRevokeObjectUrl;
   document.body.innerHTML = "";
 });
 
@@ -61,15 +64,15 @@ test("loads service principals through the full table UI and sends filters and p
       return jsonResponse(collection([payrollApi], { page, count: 1 }));
     }
 
+    if (filters.id?.[0] === "graph-sp-id") {
+      return jsonResponse(collection([graphApi], { page: 1, count: 1 }));
+    }
+
     if (filters.servicePrincipalType?.includes("Application")) {
       return jsonResponse(collection([graphApi, payrollApi], { page: 1, count: 2 }));
     }
 
-    if (filters.accountEnabled?.includes("false")) {
-      return jsonResponse(collection([disabledLegacyApp], { page: 1, count: 1 }));
-    }
-
-    if (filters.rbacRoleLevel?.includes("high")) {
+    if (filters.rbacRoleLevel?.some((value) => value.includes("high"))) {
       return jsonResponse(collection([graphApi], { page: 1, count: 1 }));
     }
 
@@ -78,6 +81,14 @@ test("loads service principals through the full table UI and sends filters and p
     }
 
     if (filters.ztaMaxRisk?.includes("high")) {
+      return jsonResponse(collection([graphApi], { page: 1, count: 1 }));
+    }
+
+    if (filters.RemediationPackages?.[0] === "package-1") {
+      return jsonResponse(collection([graphApi], { page: 1, count: 1 }));
+    }
+
+    if (filters.ownerConfidence?.[0]?.includes("high")) {
       return jsonResponse(collection([graphApi], { page: 1, count: 1 }));
     }
 
@@ -101,12 +112,10 @@ test("loads service principals through the full table UI and sends filters and p
   expect(getButton("Sort by Type").textContent).toContain("Type");
   expect(getButton("Sort by Risk").textContent).toContain("Risk");
   expect(getButton("Sort by ZTA remediations").textContent).toContain("ZTA remediations");
+  expect(getButton("Sort by Remediation packages").textContent).toContain("Remediation packages");
   expect(getButton("Sort by Azure RBAC").textContent).toContain("Azure RBAC");
-  expect(getButton("Sort by Entra permissions").textContent).toContain("Entra permissions");
+  expect(getButton("Sort by Entra API permissions").textContent).toContain("Entra API permissions");
   expect(getButton("Sort by Owner").textContent).toContain("Owner");
-  expect(getButton("Sort by Owner confidence").textContent).toContain("Owner confidence");
-  expect(getButton("Sort by Enabled").textContent).toContain("Enabled");
-  expect(getButton("Sort by Object ID").textContent).toContain("Object ID");
   expect(getButton("Sort by Publisher").textContent).toContain("Publisher");
   expect(getButton("Sort by Tags").textContent).toContain("Tags");
   expect(container.textContent).toContain("graph-sp-id");
@@ -114,29 +123,39 @@ test("loads service principals through the full table UI and sends filters and p
   expect(container.textContent).toContain("2/4");
   expect(container.textContent).toContain("3/1");
   expect(container.textContent).toContain("1/1");
+  expect(container.textContent).toContain("2026-06-12T10:00:00.000Z");
   expect(container.textContent).toContain("platform@example.test");
   expect(container.textContent).toContain("Microsoft");
   expect(container.textContent).toContain("finance");
   expect(container.textContent).toContain("Page 1 of 4");
 
+  await clickButton("Sort by Display name");
+  await waitForRequestContaining("sort%5B0%5D%5Bcolumn%5D=displayName");
+  expect(lastFetchUrl()).toContain("sort%5B0%5D%5Bdirection%5D=asc");
+
+  await clickButton("Sort by Azure RBAC");
+  await waitForRequestContaining("sort%5B1%5D%5Bcolumn%5D=rbacRoleLevel");
+  expect(lastFetchUrl()).toContain("sort%5B1%5D%5Bdirection%5D=asc");
+
   await openValueFilter("Filter Azure RBAC");
   await toggleCheckbox("high", true);
+  await toggleCheckbox("medium", true);
   await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=rbacRoleLevel");
-  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=high");
+  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=high%7Cmedium");
   await waitForText(container, "Microsoft Graph");
   expect(container.textContent).not.toContain("Payroll API");
 
   await clearValueFilter("Filter Azure RBAC");
   await waitForText(container, "Page 1 of 4");
 
-  await openValueFilter("Filter Entra permissions");
+  await openValueFilter("Filter Entra API permissions");
   await toggleCheckbox("high", true);
   await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=entraPermissionRisk");
   expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=high");
   await waitForText(container, "Microsoft Graph");
   expect(container.textContent).not.toContain("Payroll API");
 
-  await clearValueFilter("Filter Entra permissions");
+  await clearValueFilter("Filter Entra API permissions");
   await waitForText(container, "Page 1 of 4");
 
   await openValueFilter("Filter ZTA remediations");
@@ -149,14 +168,43 @@ test("loads service principals through the full table UI and sends filters and p
   await clearValueFilter("Filter ZTA remediations");
   await waitForText(container, "Page 1 of 4");
 
-  await changeInput("Filter Display name", "Payroll");
+  await changeInput("Filter Remediation packages", "package-1");
+  await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=RemediationPackages");
+  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=package-1");
+  await waitForText(container, "Microsoft Graph");
+  expect(container.textContent).not.toContain("Payroll API");
+
+  await changeInput("Filter Remediation packages", "");
+  await waitForText(container, "Page 1 of 4");
+
+  await openValueFilter("Filter Owner");
+  await toggleCheckbox("high", true);
+  await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=ownerConfidence");
+  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=high");
+  await waitForText(container, "Microsoft Graph");
+  expect(container.textContent).not.toContain("Payroll API");
+
+  await clearValueFilter("Filter Owner");
+  await waitForText(container, "Page 1 of 4");
+
+  await openValueFilter("Filter Display name");
+  await changeInput("Display name Display name value", "Payroll");
   await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=displayName");
   expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=Payroll");
   await waitForText(container, "Payroll API");
   expect(container.textContent).not.toContain("Microsoft Graph");
 
-  await changeInput("Filter Display name", "");
+  await changeInput("Display name Display name value", "");
   await waitForText(container, "Microsoft Graph");
+
+  await changeInput("Display name Object ID value", "graph-sp-id");
+  await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=id");
+  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=graph-sp-id");
+  await waitForText(container, "Microsoft Graph");
+  expect(container.textContent).not.toContain("Payroll API");
+
+  await changeInput("Display name Object ID value", "");
+  await waitForText(container, "Page 1 of 4");
 
   await openValueFilter("Filter Type");
   await toggleCheckbox("Application", true);
@@ -168,18 +216,10 @@ test("loads service principals through the full table UI and sends filters and p
   await clearValueFilter("Filter Type");
   await waitForText(container, "Page 1 of 4");
 
-  await openValueFilter("Filter Enabled");
-  await toggleCheckbox("false", true);
-  await waitForRequestContaining("filter%5B0%5D%5Bcolumn%5D=accountEnabled");
-  expect(lastFetchUrl()).toContain("filter%5B0%5D%5Bvalue%5D%5B0%5D=false");
-  await waitForText(container, "Legacy disabled app");
-
-  await clearValueFilter("Filter Enabled");
-  await waitForText(container, "Page 1 of 4");
-
   await clickButton("Next");
   await waitForRequestContaining("page=2&count=20");
   await waitForText(container, "Legacy disabled app");
+  expect(getDisplayNameElement("Legacy disabled app").className).toContain("text-muted-foreground");
   expect(container.textContent).toContain("Page 2 of 4");
 
   act(() => root.unmount());
@@ -223,6 +263,47 @@ test("closes an open value filter when the table is clicked", async () => {
   act(() => root.unmount());
 });
 
+test("exports selected and all filtered service principals to CSV", async () => {
+  URL.createObjectURL = jest.fn(() => "blob:ownerlens-export");
+  URL.revokeObjectURL = jest.fn();
+  const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const url = new URL(String(input), window.location.origin);
+
+    if (url.searchParams.get("format") === "csv") {
+      return csvResponse("id,displayName\ngraph-sp-id,Microsoft Graph");
+    }
+
+    return jsonResponse(collection([graphApi, payrollApi], { page: 1, count: 2 }));
+  });
+  globalThis.fetch = fetchMock;
+
+  const { root } = renderComponent(<ServicePrincipalComponent />);
+
+  await waitForText(document.body, "Microsoft Graph");
+
+  await act(async () => {
+    getAriaCheckbox("Select row graph-sp-id").click();
+  });
+  await clickButton("Export 1 selected service principals to CSV");
+  await waitForRequestContaining(fetchMock, "format=csv");
+  expect(lastFetchUrl(fetchMock)).toContain("selectedRowKey=graph-sp-id");
+
+  await act(async () => {
+    getAriaCheckbox("Select").click();
+  });
+  await clickButton("Export all filtered service principals to CSV");
+  await waitFor(() => {
+    const exportRequests = fetchMock.mock.calls.filter(([input]) => String(input).includes("format=csv"));
+    expect(exportRequests).toHaveLength(2);
+  });
+  expect(lastFetchUrl(fetchMock)).toContain("format=csv");
+  expect(lastFetchUrl(fetchMock)).not.toContain("selectedRowKey=");
+
+  act(() => root.unmount());
+  clickSpy.mockRestore();
+});
+
 const graphApi = servicePrincipal({
   accountEnabled: true,
   appDisplayName: "Microsoft Graph",
@@ -230,13 +311,13 @@ const graphApi = servicePrincipal({
   appRolesPermissionCount: 1,
   displayName: "Microsoft Graph",
   id: "graph-sp-id",
-  azureRbac: "Owner on subscription (privileged role)",
   entraPermissionRisk: "high",
-  oauthPemrissionsCount: 3,
+  oauthPermissionsCount: 3,
   ownerConfidence: "high",
   permissionRisk: "high",
   potentialOwners: ["platform@example.test"],
   publisherName: "Microsoft",
+  roleAssignments: [roleAssignment("Owner", "/subscriptions/sub-1")],
   rbacRoleAssignmentCount: 1,
   rbacRoleLevel: "high",
   rbacSubscriptionCount: 1,
@@ -244,7 +325,14 @@ const graphApi = servicePrincipal({
   tags: ["windowsAzureActiveDirectoryIntegratedApp"],
   ztaMaxRisk: "high",
   ztaRemediationCountAll: 4,
-  ztaRemediationFailedCount: 2
+  ztaRemediationFailedCount: 2,
+  RemediationPackages: [
+    {
+      id: "package-1",
+      createdAt: "2026-06-12T10:00:00.000Z",
+      taskCount: 2
+    }
+  ]
 });
 
 const payrollApi = servicePrincipal({
@@ -282,12 +370,11 @@ function servicePrincipal(input: Partial<ServicePrincipal> & Pick<ServicePrincip
     servicePrincipalType: "Application",
     tags: [],
     permissionRisk: "none",
-    azureRbac: "No Azure RBAC assignments",
     roleAssignments: [],
     rbacRoleAssignmentCount: 0,
     rbacRoleLevel: "none",
     rbacSubscriptionCount: 0,
-    oauthPemrissionsCount: 0,
+    oauthPermissionsCount: 0,
     appRolesPermissionCount: 0,
     entraPermissionRisk: "none",
     ztaRemediationCountAll: 0,
@@ -295,6 +382,24 @@ function servicePrincipal(input: Partial<ServicePrincipal> & Pick<ServicePrincip
     ztaMaxRisk: "none",
     ...input
   } as ServicePrincipal;
+}
+
+function roleAssignment(roleDefinitionName: string, scope: string): AzureRoleAssignment {
+  return {
+    subscriptionId: "sub-1",
+    subscriptionName: "Subscription One",
+    roleAssignmentId: `${roleDefinitionName}-${scope}`,
+    scope,
+    principalId: "graph-sp-id",
+    principalType: "ServicePrincipal",
+    principalDisplayName: "Microsoft Graph",
+    signInName: null,
+    roleDefinitionId: `${roleDefinitionName}-id`,
+    roleDefinitionName,
+    canDelegate: false,
+    condition: null,
+    conditionVersion: null
+  };
 }
 
 function collection(rows: ServicePrincipal[], { page, count }: { page: number; count: number }): ServicePrincipalResponse {
@@ -311,6 +416,17 @@ function collection(rows: ServicePrincipal[], { page, count }: { page: number; c
 function jsonResponse(body: ServicePrincipalResponse): Response {
   return {
     json: async () => body,
+    ok: true,
+    status: 200
+  } as Response;
+}
+
+function csvResponse(body: string): Response {
+  return {
+    blob: async () => new Blob([body], { type: "text/csv; charset=utf-8" }),
+    headers: new Headers({
+      "Content-Disposition": 'attachment; filename="ownerlens-service-principals.csv"'
+    }),
     ok: true,
     status: 200
   } as Response;
@@ -435,6 +551,15 @@ function getCell(text: string): HTMLTableCellElement {
   return cell;
 }
 
+function getDisplayNameElement(text: string): HTMLDivElement {
+  const element = [...getCell(text).querySelectorAll<HTMLDivElement>("div")].find((candidate) => candidate.textContent === text);
+  if (!element) {
+    throw new Error(`Could not find display name element: ${text}`);
+  }
+
+  return element;
+}
+
 function findButton(label: string): HTMLButtonElement | undefined {
   return [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (element) => element.getAttribute("aria-label") === label || element.textContent?.trim() === label
@@ -450,6 +575,33 @@ function getCheckbox(label: string): HTMLInputElement {
 
   return checkbox;
 }
+
+function getAriaCheckbox(label: string): HTMLInputElement {
+  const checkbox = document.querySelector<HTMLInputElement>(`input[type="checkbox"][aria-label="${label}"]`);
+  if (!checkbox) {
+    throw new Error(`Could not find checkbox: ${label}`);
+  }
+
+  return checkbox;
+}
+
+async function waitForRequestContaining(fetchMock: jest.Mock<Promise<Response>, Parameters<typeof fetch>>, part: string) {
+  await waitFor(() => {
+    expect(lastFetchUrl(fetchMock)).toContain(part);
+  });
+}
+
+function lastFetchUrl(fetchMock: jest.Mock<Promise<Response>, Parameters<typeof fetch>>): string {
+  const lastCall = fetchMock.mock.calls.at(-1);
+  if (!lastCall) {
+    throw new Error("Expected fetch to have been called.");
+  }
+
+  return String(lastCall[0]);
+}
+
+const originalCreateObjectUrl = URL.createObjectURL;
+const originalRevokeObjectUrl = URL.revokeObjectURL;
 
 function setNativeInputValue(input: HTMLInputElement, value: string) {
   const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");

@@ -9,6 +9,13 @@ export type ZtaRemediationSummary = {
   ztaRemediationCountAll: number;
   ztaRemediationFailedCount: number;
   ztaMaxRisk: PermissionRiskLevel;
+  RemediationPackages?: ZtaRemediationPackageSummary[] | null;
+};
+
+export type ZtaRemediationPackageSummary = {
+  id: string;
+  createdAt: string;
+  taskCount: number;
 };
 
 export type ZtaReportMeta = {
@@ -54,5 +61,6 @@ export type ZtaReportTest = {
   TestSfiPillar?: string | null;
   TestAppliesTo?: string[] | null;
   RelatedObjects?: ZtaRelatedObject[] | null;
+  RemediationPackages?: ZtaRemediationPackageSummary[] | null;
   [key: string]: unknown;
 };

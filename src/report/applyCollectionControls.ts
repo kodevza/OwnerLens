@@ -1,25 +1,8 @@
-import { hasSearchExpression, matchesSearchExpression } from "../lib/searchFilterUtils";
+import { hasSearchExpression, matchesSearchExpression } from "../core/searchFilterUtils";
+import type { ColumnFilter, ColumnFilterOptions, ColumnFilters, SortRule } from "../core/collectionControls";
 import type { ReportDetailsValue, ReportFieldDescriptor } from "./reportTypes";
 
-export type SortDirection = "asc" | "desc";
-
-export type SortRule = {
-  columnId: string;
-  direction: SortDirection;
-};
-
-export type ColumnFilter =
-  | {
-      type: "text";
-      value: string;
-    }
-  | {
-      type: "values";
-      values: string[];
-    };
-
-export type ColumnFilters = Record<string, ColumnFilter>;
-export type ColumnFilterOptions = Record<string, string[]>;
+export type { ColumnFilter, ColumnFilterOptions, ColumnFilters, SortRule } from "../core/collectionControls";
 
 type ActiveFieldFilter<TRow> = {
   field: ReportFieldDescriptor<TRow>;
@@ -50,8 +33,6 @@ export function applyCollectionControls<TRow>(
   const filteredRows = applyCollectionFieldFilters(searchedRows, activeFilters);
   const controlledRows = applyCollectionSort(filteredRows, fields, sortRules);
 
-  logCollectionControlDebug(rows, controlledRows, activeFilters, fields, filters);
-
   return {
     controlledRows,
     filterOptions
@@ -60,7 +41,10 @@ export function applyCollectionControls<TRow>(
 
 export function getConfiguredFilterOptions<TRow>(fields: ReportFieldDescriptor<TRow>[]): ColumnFilterOptions {
   return Object.fromEntries(
-    fields.map((field) => [field.id, field.filter?.options ? [...field.filter.options] : []])
+    fields.map((field) => [
+      field.id,
+      field.filter?.kind === "multiSelect" && field.filter.options ? [...field.filter.options] : []
+    ])
   );
 }
 
@@ -93,12 +77,16 @@ function applyCollectionFieldFilters<TRow>(
 
   return rows.filter((row) =>
     activeFilters.every(({ field, filter }) => {
-      const fieldValue = formatControlValue(getFieldFilterValue(field, row));
-
       if (filter.type === "values") {
+        const fieldValue = formatControlValue(getFieldFilterValue(field, row));
         return filter.values.includes(fieldValue);
       }
 
+      if (filter.type === "objectFields") {
+        return matchesObjectFieldFilter(getFieldFilterValue(field, row), filter.conditions);
+      }
+
+      const fieldValue = formatControlValue(getFieldFilterValue(field, row));
       return matchesSearchExpression(fieldValue, filter.value);
     })
   );
@@ -160,7 +148,59 @@ function isActiveFilter(filter: ColumnFilter | undefined): boolean {
     return filter.values.length > 0;
   }
 
+  if (filter.type === "objectFields") {
+    return filter.conditions.some((condition) => hasSearchExpression(condition.value));
+  }
+
   return hasSearchExpression(filter.value);
+}
+
+function matchesObjectFieldFilter(
+  value: unknown,
+  conditions: Array<{ fieldId: string; value: string }>
+): boolean {
+  const activeConditions = conditions.filter((condition) => hasSearchExpression(condition.value));
+
+  if (activeConditions.length === 0) {
+    return true;
+  }
+
+  return activeConditions.every((condition) =>
+    getNestedValues(value, condition.fieldId).some((nestedValue) =>
+      matchesSearchExpression(formatControlValue(nestedValue), condition.value)
+    )
+  );
+}
+
+function getNestedValues(value: unknown, path: string): unknown[] {
+  const segments = path.split(".").filter(Boolean);
+
+  if (segments.length === 0) {
+    return [value];
+  }
+
+  return getNestedValuesFromSegments(value, segments);
+}
+
+function getNestedValuesFromSegments(value: unknown, segments: string[]): unknown[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => getNestedValuesFromSegments(item, segments));
+  }
+
+  if (segments.length === 0) {
+    return [value];
+  }
+
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  const [segment, ...remainingSegments] = segments;
+  return getNestedValuesFromSegments(value[segment], remainingSegments);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function compareValues(left: unknown, right: unknown): number {
@@ -231,59 +271,5 @@ function isReportDetailsValue(value: unknown): value is ReportDetailsValue {
     "title" in value &&
     "details" in value &&
     Array.isArray((value as ReportDetailsValue).details)
-  );
-}
-
-function logCollectionControlDebug<TRow>(
-  rows: TRow[],
-  controlledRows: TRow[],
-  activeFilters: ActiveFieldFilter<TRow>[],
-  fields: ReportFieldDescriptor<TRow>[],
-  filters: ColumnFilters
-): void {
-  if (!isReportTableFilterDebugEnabled()) {
-    return;
-  }
-
-  const activeFieldIds = new Set(activeFilters.map(({ field }) => field.id));
-  const debugFields = fields.filter((field) => activeFieldIds.has(field.id));
-  const controlledRowSet = new Set(controlledRows);
-
-  console.groupCollapsed(
-    `[OwnerLens table filters] ${controlledRows.length}/${rows.length} rows after ${activeFilters.length} filters`
-  );
-  console.log("filters", filters);
-  console.log(
-    "activeFilters",
-    activeFilters.map(({ field, filter }) => ({
-      columnId: field.id,
-      label: field.label,
-      filter
-    }))
-  );
-  console.table(
-    rows.map((row) => {
-      const rowRecord = row as Record<string, unknown>;
-      const debugRow: Record<string, unknown> = {
-        included: controlledRowSet.has(row),
-        id: rowRecord.id,
-        displayName: rowRecord.displayName,
-        appId: rowRecord.appId
-      };
-
-      for (const field of debugFields) {
-        debugRow[field.id] = formatControlValue(field.getValue(row));
-      }
-
-      return debugRow;
-    })
-  );
-  console.groupEnd();
-}
-
-function isReportTableFilterDebugEnabled(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    window.localStorage.getItem("ownerLensDebugTableFilters") === "1"
   );
 }

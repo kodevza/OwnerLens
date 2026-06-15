@@ -18,7 +18,10 @@ export function defineAzureResourcesLocalReportRuntimeRestEndpoints(
     },
     {
       path: `${restBasePath}/azureResources/resourceGroupOwnership`,
-      handle: ({ url }) => runtime.queryAzureResourceGroupOwnership(parseRuntimeCollectionQueryOptions(url))
+      handle: ({ url }) =>
+        isCsvRequest(url)
+          ? runtime.exportAzureResourceGroupOwnershipCsv(parseRuntimeCollectionQueryOptions(url))
+          : runtime.queryAzureResourceGroupOwnership(parseRuntimeCollectionQueryOptions(url))
     },
     {
       path: `${restBasePath}/azureResources/resourceGroupOwnership/disabledEvidence`,
@@ -56,6 +59,10 @@ export function defineAzureResourcesLocalReportRuntimeRestEndpoints(
       handle: ({ url }) => runtime.queryAzureActivityLogs(parseRuntimeCollectionQueryOptions(url))
     }
   ];
+}
+
+function isCsvRequest(url: URL): boolean {
+  return url.searchParams.get("format")?.trim().toLowerCase() === "csv";
 }
 
 function readRequiredSearchParam(url: URL, name: string): string {

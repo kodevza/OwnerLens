@@ -68,7 +68,10 @@ export const azureManagedIdentityColumnHelp = {
   displayName: {
     source: "Direct from Entra JSON.",
     field: "displayName",
-    logic: ["Displayed as-is, with empty values shown as a dash."]
+    logic: [
+      "Display name is shown as-is, with empty values shown as a dash.",
+      "Object ID from the same Entra object is shown below the display name for traceability."
+    ]
   },
   resourceGroup: {
     source: "Computed by app from Azure resource snapshot JSON.",
@@ -120,6 +123,14 @@ export const azureManagedIdentityColumnHelp = {
       "Column shows the highest adjusted risk across all matching assignments; no assignments returns none."
     ]
   },
+  RemediationPackages: {
+    source: "Computed by app from local runtime remediation packages.",
+    logic: [
+      "Finds Zero Trust Assessment remediation package tasks whose target matches this Entra service principal object ID.",
+      "Also resolves tasks targeting an application object ID back to the matching service principal by appId.",
+      "Shows each matching package by creation time; clicking opens the local remediation package tab."
+    ]
+  },
   azureRbac: {
     source: "Computed by app from Azure roleAssignments JSON.",
     logic: [
@@ -128,7 +139,7 @@ export const azureManagedIdentityColumnHelp = {
       "Shows no Azure RBAC assignments when no assignment matches."
     ]
   },
-  oauthPemrissionsCount: {
+  oauthPermissionsCount: {
     source: "Computed by app from Entra OAuth2 permission grants and app role assignments JSON.",
     field: "oauth2PermissionGrants[].scope and appRoleAssignments[].principalId",
     logic: [
@@ -155,7 +166,7 @@ export const azureManagedIdentityColumnHelp = {
     logic: [
       "Returns high when any matching OAuth2 permission grant has consentType equal to AllPrincipals.",
       "Returns medium when matching delegated scopes or app role assignments exist without tenant-wide delegated consent.",
-      "Returns none when no matching Entra permissions exist."
+      "Returns none when no matching Entra API permissions exist."
     ]
   },
   enabled: {

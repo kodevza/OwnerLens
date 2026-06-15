@@ -21,36 +21,10 @@ import {
 
 export const azureResourcesSnapshotFileName = "snapshot.json";
 
-export type AzureResourcesDuckDbImportStatus = {
-  imported: boolean;
-  fileName: string;
-  subscriptionCount: number;
-  resourceGroupCount: number;
-  resourceCount: number;
-  userAssignedManagedIdentityCount: number;
-  roleAssignmentCount: number;
-  activityLogCount: number;
-  importedAt: string | null;
-};
-
-export function createEmptyAzureResourcesImportStatus(): AzureResourcesDuckDbImportStatus {
-  return {
-    imported: false,
-    fileName: azureResourcesSnapshotFileName,
-    subscriptionCount: 0,
-    resourceGroupCount: 0,
-    resourceCount: 0,
-    userAssignedManagedIdentityCount: 0,
-    roleAssignmentCount: 0,
-    activityLogCount: 0,
-    importedAt: null
-  };
-}
-
 export async function importAzureResourcesSnapshotToDuckDb(
   connection: DuckDBConnection,
   snapshot: AzureSnapshotInput & LocalSnapshotData
-): Promise<AzureResourcesDuckDbImportStatus> {
+): Promise<void> {
   await connection.run("begin transaction");
   try {
     await connection.run("delete from azure_resources_snapshot_meta");
@@ -80,17 +54,6 @@ export async function importAzureResourcesSnapshotToDuckDb(
     await insertAzureActivityLogRows(connection, activityLogs);
 
     await connection.run("commit");
-    return {
-      imported: true,
-      fileName: azureResourcesSnapshotFileName,
-      subscriptionCount: subscriptions.length,
-      resourceGroupCount: resourceGroups.length,
-      resourceCount: resources.length,
-      userAssignedManagedIdentityCount: userAssignedManagedIdentities.length,
-      roleAssignmentCount: roleAssignments.length,
-      activityLogCount: activityLogs.length,
-      importedAt: new Date().toISOString()
-    };
   } catch (error) {
     await connection.run("rollback");
     throw error;

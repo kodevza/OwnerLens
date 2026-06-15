@@ -2,6 +2,7 @@ param(
   [string]$OutputDir = ".\data",
   [string]$OutputPath = "",
   [string]$TenantId = "",
+  [string]$AccessToken = "",
   [string[]]$Scopes = @("Application.Read.All", "Group.Read.All", "Directory.Read.All"),
   [switch]$SkipLogin
 )
@@ -27,7 +28,11 @@ try {
 }
 
 $context = Get-MgContext
-if (-not $SkipLogin -and -not $context) {
+if (-not [string]::IsNullOrWhiteSpace($AccessToken)) {
+  Write-CollectProgress "Using provided Microsoft Graph access token."
+  $secureAccessToken = $AccessToken | ConvertTo-SecureString -AsPlainText -Force
+  Connect-MgGraph -AccessToken $secureAccessToken -NoWelcome | Out-Null
+} elseif (-not $SkipLogin -and -not $context) {
   Write-CollectProgress "Microsoft Graph context not found. Starting Connect-MgGraph."
 
   $connectParams = @{

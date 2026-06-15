@@ -66,7 +66,7 @@ function getEntraPrincipalPermissionSummary(
 
 function createEmptyPermissionSummary(): EntraPrincipalPermissionSummary {
   return {
-    oauthPemrissionsCount: 0,
+    oauthPermissionsCount: 0,
     appRolesPermissionCount: 0,
     entraPermissionRisk: "none"
   };
@@ -91,7 +91,6 @@ function getAzureIdentityRuntimeEnrichment(
 
   return {
     permissionRisk: permissionRisk.riskLevel,
-    azureRbac: formatAzureRbac(permissionRisk, roleAssignments),
     roleAssignments,
     ...createRbacSummary(permissionRisk, roleAssignments)
   };
@@ -106,42 +105,6 @@ function createRiskSummary(principalId: string): ManagedIdentityPermissionRiskSu
     broadScopeAssignmentCount: 0,
     roleAssignments: []
   };
-}
-
-function formatAzureRbac(
-  permissionRisk: ManagedIdentityPermissionRiskSummary,
-  roleAssignments: AzureRoleAssignment[]
-): string {
-  if (permissionRisk.assignmentCount > 0) {
-    return permissionRisk.roleAssignments
-      .map((assignment) => {
-        const reasons = assignment.reasons.length > 0 ? ` (${assignment.reasons.join(", ")})` : "";
-        return `${assignment.roleDefinitionName ?? "Role"} on ${formatScope(assignment.scope)}${reasons}`;
-      })
-      .join(", ");
-  }
-
-  if (roleAssignments.length > 0) {
-    return roleAssignments
-      .map((assignment) => `${assignment.roleDefinitionName ?? "Role"} on ${formatScope(assignment.scope)}`)
-      .join(", ");
-  }
-
-  return "No Azure RBAC assignments";
-}
-
-function formatScope(scope: string): string {
-  const resourceGroupMatch = scope.match(/\/resourceGroups\/([^/]+)/i);
-  if (resourceGroupMatch) {
-    return `rg/${resourceGroupMatch[1]}`;
-  }
-
-  const subscriptionMatch = scope.match(/^\/subscriptions\/([^/]+)$/i);
-  if (subscriptionMatch) {
-    return "subscription";
-  }
-
-  return scope.split("/").filter(Boolean).slice(-2).join("/") || scope;
 }
 
 function createRbacSummary(

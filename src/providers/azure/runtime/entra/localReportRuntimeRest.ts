@@ -10,11 +10,17 @@ export function defineEntraLocalReportRuntimeRestEndpoints(
   return [
     {
       path: `${restBasePath}/entra/servicePrincipals`,
-      handle: ({ url }) => runtime.queryEntraServicePrincipals(parseRuntimeCollectionQueryOptions(url))
+      handle: ({ url }) =>
+        isCsvRequest(url)
+          ? runtime.exportEntraServicePrincipalsCsv(parseRuntimeCollectionQueryOptions(url))
+          : runtime.queryEntraServicePrincipals(parseRuntimeCollectionQueryOptions(url))
     },
     {
       path: `${restBasePath}/entra/managedIdentities`,
-      handle: ({ url }) => runtime.queryEntraManagedIdentities(parseRuntimeCollectionQueryOptions(url))
+      handle: ({ url }) =>
+        isCsvRequest(url)
+          ? runtime.exportEntraManagedIdentitiesCsv(parseRuntimeCollectionQueryOptions(url))
+          : runtime.queryEntraManagedIdentities(parseRuntimeCollectionQueryOptions(url))
     },
     {
       path: `${restBasePath}/entra/permissions`,
@@ -38,4 +44,8 @@ function readRequiredSearchParam(url: URL, name: string): string {
   }
 
   return value;
+}
+
+function isCsvRequest(url: URL): boolean {
+  return url.searchParams.get("format")?.trim().toLowerCase() === "csv";
 }

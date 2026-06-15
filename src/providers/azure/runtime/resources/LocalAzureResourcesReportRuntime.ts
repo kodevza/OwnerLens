@@ -13,13 +13,18 @@ import type {
   AzureUserAssignedManagedIdentity
 } from "../../../../core/azure/resources";
 import { pathExists, RuntimeHttpError, type LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
+import {
+  createEmptySnapshotImportStatus,
+  prepareSnapshotImportDecision,
+  recordSnapshotImport,
+  snapshotImportStatusFromRecord,
+  type SnapshotImportStatus
+} from "../../../../core/runtime/snapshotImportRegistry";
 import type { AzureSnapshot as AzureSnapshotInput } from "../../inputTransferObject/resources/AzureSnapshot";
 import {
   azureResourcesSnapshotFileName,
-  createEmptyAzureResourcesImportStatus,
   importAzureResourcesSnapshotToDuckDb,
-  readAzureResourcesSnapshotFromDuckDb,
-  type AzureResourcesDuckDbImportStatus
+  readAzureResourcesSnapshotFromDuckDb
 } from "./snapshotStore";
 import {
   readAzureActivityLogRows,
@@ -46,14 +51,15 @@ export type LocalAzureResourcesReportRuntimeOptions = {
 export class LocalAzureResourcesReportRuntime {
   private readonly dataDir: string;
   private readonly getConnection: () => DuckDBConnection;
-  private status = createEmptyAzureResourcesImportStatus();
+  private status = createEmptySnapshotImportStatus(azureResourcesSnapshotFileName);
+  private readonly importSource = "azureResources";
 
   constructor(options: LocalAzureResourcesReportRuntimeOptions) {
     this.dataDir = options.dataDir;
     this.getConnection = options.getConnection;
   }
 
-  getStatus(): AzureResourcesDuckDbImportStatus {
+  getStatus(): SnapshotImportStatus {
     return this.status;
   }
 
@@ -67,8 +73,23 @@ export class LocalAzureResourcesReportRuntime {
       return;
     }
 
+    const connection = this.getConnection();
+    const decision = await prepareSnapshotImportDecision(connection, {
+      source: this.importSource,
+      filePath: snapshotPath,
+      fileName: azureResourcesSnapshotFileName
+    });
+
+    if (!decision.shouldImport) {
+      const registry = await recordSnapshotImport(connection, this.importSource, decision.metadata, true);
+      this.status = snapshotImportStatusFromRecord(registry);
+      return;
+    }
+
     const snapshot = JSON.parse(await readFile(snapshotPath, "utf8")) as AzureSnapshotInput & LocalSnapshotData;
-    this.status = await importAzureResourcesSnapshotToDuckDb(this.getConnection(), snapshot);
+    await importAzureResourcesSnapshotToDuckDb(connection, snapshot);
+    const registry = await recordSnapshotImport(connection, this.importSource, decision.metadata, false);
+    this.status = snapshotImportStatusFromRecord(registry);
   }
 
   async readSnapshot(): Promise<AzureSnapshot & LocalSnapshotData> {
