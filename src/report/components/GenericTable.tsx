@@ -359,7 +359,7 @@ function remapColumnFiltersForRuntime<TRow>(
         }
 
         runtimeObjectConditions.push({
-          fieldId: `${runtimeColumnId}.${condition.fieldId}`,
+          fieldId: condition.fieldId,
           value: condition.value
         });
       });
