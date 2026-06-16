@@ -4,271 +4,145 @@ param(
   [switch]$LoadFunctionsOnly
 )
 
-function Get-DirectoryObjectSnapshotValue {
-  param(
-    [Parameter(Mandatory = $true)]
-    $DirectoryObject,
+. "$PSScriptRoot/utils.ps1"
 
-    [Parameter(Mandatory = $true)]
-    [string]$Name
-  )
+$ownerExpand = "owners(`$select=id,displayName,userPrincipalName,mail)"
 
-  $value = $DirectoryObject.$Name
+function Write-EntraSnapshotProgress {
+  param([string]$Message)
 
-  if ($null -ne $value) {
-    return $value
-  }
-
-  $camelName = $Name.Substring(0, 1).ToLowerInvariant() + $Name.Substring(1)
-  if (-not $DirectoryObject.AdditionalProperties) {
-    return $null
-  }
-
-  return $DirectoryObject.AdditionalProperties[$camelName]
+  $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+  Write-Host "[$timestamp] $Message"
 }
 
-function ConvertTo-OwnerSnapshot {
+function Get-EntraGroupMembersIncludingServicePrincipals {
   param(
     [Parameter(Mandatory = $true)]
-    $Owner
+    [string]$GroupId
   )
 
-  [pscustomobject]@{
-    id = Get-DirectoryObjectSnapshotValue -DirectoryObject $Owner -Name "Id"
-    displayName = Get-DirectoryObjectSnapshotValue -DirectoryObject $Owner -Name "DisplayName"
-    userPrincipalName = Get-DirectoryObjectSnapshotValue -DirectoryObject $Owner -Name "UserPrincipalName"
-    mail = Get-DirectoryObjectSnapshotValue -DirectoryObject $Owner -Name "Mail"
-    ownerType = if ($Owner.AdditionalProperties) { $Owner.AdditionalProperties["@odata.type"] } else { $null }
+  $members = @()
+  $uri = "/beta/groups/$($GroupId)/members?`$select=id,displayName,userPrincipalName,mail,appId,servicePrincipalType&`$top=999"
+
+  while ($uri) {
+    $response = Invoke-MgGraphRequest -Method GET -Uri $uri -OutputType PSObject
+    $members += @($response.value)
+
+    $nextLinkProperty = $response.PSObject.Properties["@odata.nextLink"]
+    $uri = if ($nextLinkProperty) { $nextLinkProperty.Value } else { $null }
   }
+
+  return $members
 }
 
-function Get-ExpandedOwnerSnapshots {
-  param(
-    [Parameter(Mandatory = $true)]
-    $DirectoryObject
-  )
+function Get-EntraOAuth2PermissionGrants {
+  $grants = @()
+  $uri = "/v1.0/oauth2PermissionGrants?`$select=id,clientId,consentType,principalId,resourceId,scope&`$top=999"
 
-  $owners = $DirectoryObject.Owners
+  while ($uri) {
+    $response = Invoke-MgGraphRequest -Method GET -Uri $uri -OutputType PSObject
+    $grants += @($response.value)
 
-  if ($null -eq $owners -and $DirectoryObject.AdditionalProperties) {
-    $owners = $DirectoryObject.AdditionalProperties["owners"]
+    $nextLinkProperty = $response.PSObject.Properties["@odata.nextLink"]
+    $uri = if ($nextLinkProperty) { $nextLinkProperty.Value } else { $null }
   }
 
-  return @(
-    foreach ($owner in @($owners)) {
-      if ($owner) {
-        ConvertTo-OwnerSnapshot -Owner $owner
+  return $grants
+}
+
+function ConvertTo-GraphBatchRelativeUrl {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Url
+  )
+
+  if ($Url.StartsWith("https://graph.microsoft.com/v1.0", [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $Url.Substring("https://graph.microsoft.com/v1.0".Length)
+  }
+
+  if ($Url.StartsWith("/v1.0/", [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $Url.Substring("/v1.0".Length)
+  }
+
+  if ($Url.StartsWith("/", [System.StringComparison]::Ordinal)) {
+    return $Url
+  }
+
+  return "/$Url"
+}
+
+function Get-EntraServicePrincipalAppRoleAssignmentsBatch {
+  param(
+    [array]$ServicePrincipals = @()
+  )
+
+  $assignments = @()
+  $pendingRequests = @(
+    foreach ($sp in @($ServicePrincipals)) {
+      if ($sp -and -not [string]::IsNullOrWhiteSpace([string]$sp.Id)) {
+        [pscustomobject]@{
+          servicePrincipalId = [string]$sp.Id
+          servicePrincipalDisplayName = [string]$sp.DisplayName
+          url = "/servicePrincipals/$($sp.Id)/appRoleAssignments?`$select=id,appRoleId,principalId,principalDisplayName,resourceId,resourceDisplayName&`$top=999"
+        }
       }
     }
   )
-}
+  $completedRequestCount = 0
+  $totalInitialRequestCount = $pendingRequests.Count
+  $batchSize = 20
 
-function ConvertTo-GroupMemberType {
-  param(
-    [string]$ODataType
-  )
+  while ($pendingRequests.Count -gt 0) {
+    $currentBatch = @($pendingRequests | Select-Object -First $batchSize)
+    $pendingRequests = @($pendingRequests | Select-Object -Skip $currentBatch.Count)
 
-  switch -Regex ($ODataType) {
-    "servicePrincipal$" { return "servicePrincipal" }
-    "user$" { return "user" }
-    "group$" { return "group" }
-    "device$" { return "device" }
-    default { return "unknown" }
-  }
-}
+    $batchRequests = @()
+    $requestById = @{}
 
-function ConvertTo-GroupMemberSnapshot {
-  param(
-    [Parameter(Mandatory = $true)]
-    $Group,
+    for ($requestIndex = 0; $requestIndex -lt $currentBatch.Count; $requestIndex++) {
+      $requestId = [string]($requestIndex + 1)
+      $request = $currentBatch[$requestIndex]
+      $requestById[$requestId] = $request
+      $batchRequests += [pscustomobject]@{
+        id = $requestId
+        method = "GET"
+        url = $request.url
+      }
+    }
 
-    [Parameter(Mandatory = $true)]
-    $Member,
+    $body = @{ requests = $batchRequests } | ConvertTo-Json -Depth 10
+    $response = Invoke-MgGraphRequest -Method POST -Uri "/v1.0/`$batch" -Body $body -ContentType "application/json" -OutputType PSObject
 
-    [hashtable]$ServicePrincipalById = @{}
-  )
+    foreach ($batchResponse in @($response.responses)) {
+      $request = $requestById[[string]$batchResponse.id]
 
-  $memberId = Get-DirectoryObjectSnapshotValue -DirectoryObject $Member -Name "Id"
-  $servicePrincipal = if ($memberId -and $ServicePrincipalById.ContainsKey($memberId)) { $ServicePrincipalById[$memberId] } else { $null }
-  $odataType = if ($Member.AdditionalProperties) { $Member.AdditionalProperties["@odata.type"] } else { $null }
-
-  [pscustomobject]@{
-    groupId = $Group.Id
-    groupDisplayName = $Group.DisplayName
-    memberId = $memberId
-    memberDisplayName = Get-DirectoryObjectSnapshotValue -DirectoryObject $Member -Name "DisplayName"
-    memberType = ConvertTo-GroupMemberType -ODataType $odataType
-    memberUserPrincipalName = Get-DirectoryObjectSnapshotValue -DirectoryObject $Member -Name "UserPrincipalName"
-    memberMail = Get-DirectoryObjectSnapshotValue -DirectoryObject $Member -Name "Mail"
-    memberAppId = if ($servicePrincipal) { $servicePrincipal.AppId } else { Get-DirectoryObjectSnapshotValue -DirectoryObject $Member -Name "AppId" }
-    memberServicePrincipalType = if ($servicePrincipal) { $servicePrincipal.ServicePrincipalType } else { Get-DirectoryObjectSnapshotValue -DirectoryObject $Member -Name "ServicePrincipalType" }
-  }
-}
-
-function ConvertTo-SnapshotPropertyName {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Name
-  )
-
-  if ($Name.Length -le 1) {
-    return $Name.ToLowerInvariant()
-  }
-
-  return $Name.Substring(0, 1).ToLowerInvariant() + $Name.Substring(1)
-}
-
-function ConvertTo-SafeSnapshotValue {
-  param(
-    $Value
-  )
-
-  if ($null -eq $Value) {
-    return $null
-  }
-
-  if (
-    $Value -is [string] -or
-    $Value -is [bool] -or
-    $Value -is [byte] -or
-    $Value -is [int] -or
-    $Value -is [long] -or
-    $Value -is [decimal] -or
-    $Value -is [double] -or
-    $Value -is [single]
-  ) {
-    return $Value
-  }
-
-  if ($Value -is [datetime]) {
-    return $Value.ToUniversalTime().ToString("o")
-  }
-
-  if ($Value -is [datetimeoffset]) {
-    return $Value.ToUniversalTime().ToString("o")
-  }
-
-  if ($Value -is [guid]) {
-    return $Value.ToString()
-  }
-
-  if ($Value -is [System.Collections.IDictionary]) {
-    $converted = [ordered]@{}
-
-    foreach ($key in $Value.Keys) {
-      if ([string]$key -ieq "secretText") {
+      if (-not $request) {
         continue
       }
 
-      $converted[$key] = ConvertTo-SafeSnapshotValue -Value $Value[$key]
-    }
-
-    return [pscustomobject]$converted
-  }
-
-  if ($Value -is [System.Collections.IEnumerable] -and -not ($Value -is [string])) {
-    return @(
-      foreach ($item in $Value) {
-        ConvertTo-SafeSnapshotValue -Value $item
-      }
-    )
-  }
-
-  $convertedObject = [ordered]@{}
-
-  foreach ($property in $Value.PSObject.Properties) {
-    if ($property.Name -ieq "secretText") {
-      continue
-    }
-
-    $convertedObject[(ConvertTo-SnapshotPropertyName -Name $property.Name)] = ConvertTo-SafeSnapshotValue -Value $property.Value
-  }
-
-  return [pscustomobject]$convertedObject
-}
-
-function ConvertTo-ApplicationAppRoleSnapshot {
-  param(
-    [Parameter(Mandatory = $true)]
-    $AppRole
-  )
-
-  [pscustomobject]@{
-    id = $AppRole.Id
-    value = $AppRole.Value
-    displayName = $AppRole.DisplayName
-    description = $AppRole.Description
-    isEnabled = $AppRole.IsEnabled
-    allowedMemberTypes = $AppRole.AllowedMemberTypes
-  }
-}
-
-function Merge-OwnerSnapshots {
-  param(
-    [array]$OwnerSets = @()
-  )
-
-  $seenOwnerIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-  $mergedOwners = @()
-
-  foreach ($ownerSet in $OwnerSets) {
-    foreach ($owner in @($ownerSet)) {
-      if (-not $owner) {
-        continue
+      if ($batchResponse.status -lt 200 -or $batchResponse.status -ge 300) {
+        throw "Graph batch app role assignment query failed for service principal $($request.servicePrincipalDisplayName) ($($request.servicePrincipalId)) with status $($batchResponse.status)."
       }
 
-      $ownerId = [string]$owner.id
+      $assignments += @($batchResponse.body.value)
+      $nextLinkProperty = $batchResponse.body.PSObject.Properties["@odata.nextLink"]
 
-      if (-not [string]::IsNullOrWhiteSpace($ownerId)) {
-        if (-not $seenOwnerIds.Add($ownerId)) {
-          continue
+      if ($nextLinkProperty) {
+        $pendingRequests += [pscustomobject]@{
+          servicePrincipalId = $request.servicePrincipalId
+          servicePrincipalDisplayName = $request.servicePrincipalDisplayName
+          url = ConvertTo-GraphBatchRelativeUrl -Url $nextLinkProperty.Value
         }
       }
 
-      $mergedOwners += $owner
-    }
-  }
-
-  return $mergedOwners
-}
-
-function New-ApplicationOwnerIndex {
-  param(
-    [array]$Applications = @()
-  )
-
-  $ownersByAppId = @{}
-
-  foreach ($app in @($Applications)) {
-    if (-not $app.AppId) {
-      continue
+      $completedRequestCount += 1
     }
 
-    $ownersByAppId[[string]$app.AppId] = Get-ExpandedOwnerSnapshots -DirectoryObject $app
+    Write-EntraSnapshotProgress "Loaded app role assignment pages: $completedRequestCount; initial service principal requests: $totalInitialRequestCount; pending page requests: $($pendingRequests.Count)"
   }
 
-  return $ownersByAppId
+  return $assignments
 }
-
-function Get-ApplicationOwnersByAppId {
-  param(
-    [string]$AppId,
-
-    [hashtable]$ApplicationOwnersByAppId = @{}
-  )
-
-  if ([string]::IsNullOrWhiteSpace($AppId)) {
-    return @()
-  }
-
-  if (-not $ApplicationOwnersByAppId.ContainsKey($AppId)) {
-    return @()
-  }
-
-  return @($ApplicationOwnersByAppId[$AppId])
-}
-
-$ownerExpand = "owners(`$select=id,displayName,userPrincipalName,mail)"
 
 if ($LoadFunctionsOnly) {
   return
@@ -287,6 +161,7 @@ foreach ($moduleName in $requiredGraphModules) {
   }
 }
 
+Write-EntraSnapshotProgress "Checking Microsoft Graph context"
 $context = Get-MgContext
 
 if (-not $context) {
@@ -336,10 +211,13 @@ function Add-OAuth2PermissionGrantSnapshot {
   }
 }
 
+Write-EntraSnapshotProgress "Loading service principals from Microsoft Graph"
 $servicePrincipals = Get-MgServicePrincipal `
   -All `
   -Property Id,AppId,DisplayName,ServicePrincipalType,PublisherName,AccountEnabled,AppOwnerOrganizationId,AppDisplayName,Homepage,LoginUrl,ReplyUrls,ServicePrincipalNames,Tags,AppRoles `
   -ExpandProperty $ownerExpand
+$servicePrincipals = @($servicePrincipals)
+Write-EntraSnapshotProgress "Loaded $($servicePrincipals.Count) service principals"
 
 $servicePrincipalById = @{}
 
@@ -347,10 +225,13 @@ foreach ($sp in $servicePrincipals) {
   $servicePrincipalById[$sp.Id] = $sp
 }
 
+Write-EntraSnapshotProgress "Loading applications from Microsoft Graph"
 $applications = Get-MgApplication `
   -All `
   -Property Id,AppId,DisplayName,SignInAudience,PublisherDomain,IdentifierUris,Tags,AppRoles,Api,RequiredResourceAccess,Web,Spa,PublicClient,PasswordCredentials,KeyCredentials,CreatedDateTime,DeletedDateTime,DisabledByMicrosoftStatus,Info,Notes `
   -ExpandProperty $ownerExpand
+$applications = @($applications)
+Write-EntraSnapshotProgress "Loaded $($applications.Count) applications"
 
 $applicationOwnersByAppId = New-ApplicationOwnerIndex -Applications $applications
 
@@ -364,7 +245,7 @@ foreach ($app in $applications) {
     signInAudience = $app.SignInAudience
     publisherDomain = $app.PublisherDomain
     identifierUris = $app.IdentifierUris
-    tags = $app.Tags
+    tags = @(ConvertTo-EntraSnapshotTags -Tags $app.Tags)
     appRoles = @($app.AppRoles | ForEach-Object { ConvertTo-ApplicationAppRoleSnapshot -AppRole $_ })
     oauth2PermissionScopes = @($app.Api.Oauth2PermissionScopes | ForEach-Object { ConvertTo-SafeSnapshotValue -Value $_ })
     requiredResourceAccess = @($app.RequiredResourceAccess | ForEach-Object { ConvertTo-SafeSnapshotValue -Value $_ })
@@ -378,7 +259,7 @@ foreach ($app in $applications) {
     disabledByMicrosoftStatus = $app.DisabledByMicrosoftStatus
     info = ConvertTo-SafeSnapshotValue -Value $app.Info
     notes = $app.Notes
-    owners = $applicationOwners
+    owners = @($applicationOwners)
   }
 }
 
@@ -400,11 +281,11 @@ foreach ($sp in $servicePrincipals) {
     loginUrl = $sp.LoginUrl
     replyUrls = $sp.ReplyUrls
     servicePrincipalNames = $sp.ServicePrincipalNames
-    tags = $sp.Tags
-    owners = $owners
-    appOwners = $owners
-    servicePrincipalOwners = $servicePrincipalOwners
-    applicationOwners = $applicationOwners
+    tags = @(ConvertTo-EntraSnapshotTags -Tags $sp.Tags)
+    owners = @($owners)
+    appOwners = @($owners)
+    servicePrincipalOwners = @($servicePrincipalOwners)
+    applicationOwners = @($applicationOwners)
     appRoles = @(
       $sp.AppRoles | ForEach-Object {
         [pscustomobject]@{
@@ -420,58 +301,35 @@ foreach ($sp in $servicePrincipals) {
   }
 }
 
-$globalOAuth2PermissionGrantCommand = Get-Command Get-MgOauth2PermissionGrant -ErrorAction SilentlyContinue
+Write-EntraSnapshotProgress "Loading global OAuth2 permission grants from Microsoft Graph REST"
+$oauth2PermissionGrants = @(Get-EntraOAuth2PermissionGrants)
+Write-EntraSnapshotProgress "Loaded $($oauth2PermissionGrants.Count) global OAuth2 permission grants"
 
-if ($globalOAuth2PermissionGrantCommand) {
-  try {
-    $oauth2PermissionGrants = Get-MgOauth2PermissionGrant `
-      -All `
-      -Property Id,ClientId,ConsentType,PrincipalId,ResourceId,Scope `
-      -ErrorAction Stop
-
-    foreach ($grant in $oauth2PermissionGrants) {
-      Add-OAuth2PermissionGrantSnapshot -Grant $grant
-    }
-  } catch {
-    Write-Warning "Global OAuth2 permission grant query failed. Falling back to per-service-principal queries. $($_.Exception.Message)"
-  }
+foreach ($grant in $oauth2PermissionGrants) {
+  Add-OAuth2PermissionGrantSnapshot -Grant $grant
 }
 
-foreach ($sp in $servicePrincipals) {
-  $servicePrincipalOauth2PermissionGrants = Get-MgServicePrincipalOauth2PermissionGrant `
-    -ServicePrincipalId $sp.Id `
-    -All `
-    -Property Id,ClientId,ConsentType,PrincipalId,ResourceId,Scope `
-    -ErrorAction Stop
+Write-EntraSnapshotProgress "Loading app role assignments from Microsoft Graph REST batch for $($servicePrincipals.Count) service principals"
+$appRoleAssignments = @(Get-EntraServicePrincipalAppRoleAssignmentsBatch -ServicePrincipals $servicePrincipals)
+Write-EntraSnapshotProgress "Loaded $($appRoleAssignments.Count) app role assignments"
 
-  foreach ($grant in $servicePrincipalOauth2PermissionGrants) {
-    Add-OAuth2PermissionGrantSnapshot -Grant $grant
+foreach ($assignment in $appRoleAssignments) {
+  $resourceServicePrincipal = $servicePrincipalById[$assignment.ResourceId]
+  $appRole = $null
+
+  if ($resourceServicePrincipal -and $resourceServicePrincipal.AppRoles) {
+    $appRole = $resourceServicePrincipal.AppRoles | Where-Object { [string]$_.Id -eq [string]$assignment.AppRoleId } | Select-Object -First 1
   }
-}
 
-foreach ($sp in $servicePrincipals) {
-  $assignments = Get-MgServicePrincipalAppRoleAssignment `
-    -ServicePrincipalId $sp.Id `
-    -All
-
-  foreach ($assignment in $assignments) {
-    $resourceServicePrincipal = $servicePrincipalById[$assignment.ResourceId]
-    $appRole = $null
-
-    if ($resourceServicePrincipal -and $resourceServicePrincipal.AppRoles) {
-      $appRole = $resourceServicePrincipal.AppRoles | Where-Object { [string]$_.Id -eq [string]$assignment.AppRoleId } | Select-Object -First 1
-    }
-
-    $snapshot.appRoleAssignments += [pscustomobject]@{
-      id = $assignment.Id
-      appRoleId = $assignment.AppRoleId
-      appRoleDisplayName = if ($appRole) { $appRole.DisplayName } else { $null }
-      appRoleValue = if ($appRole) { $appRole.Value } else { $null }
-      principalId = $assignment.PrincipalId
-      principalDisplayName = $assignment.PrincipalDisplayName
-      resourceId = $assignment.ResourceId
-      resourceDisplayName = $assignment.ResourceDisplayName
-    }
+  $snapshot.appRoleAssignments += [pscustomobject]@{
+    id = $assignment.Id
+    appRoleId = $assignment.AppRoleId
+    appRoleDisplayName = if ($appRole) { $appRole.DisplayName } else { $null }
+    appRoleValue = if ($appRole) { $appRole.Value } else { $null }
+    principalId = $assignment.PrincipalId
+    principalDisplayName = $assignment.PrincipalDisplayName
+    resourceId = $assignment.ResourceId
+    resourceDisplayName = $assignment.ResourceDisplayName
   }
 }
 
@@ -485,20 +343,24 @@ try {
 }
 
 if ($canReadGroups) {
+  Write-EntraSnapshotProgress "Loading groups from Microsoft Graph"
   $groups = Get-MgGroup `
     -All `
     -Property Id,DisplayName,Description,Mail,MailEnabled,SecurityEnabled,GroupTypes,ProxyAddresses,Visibility
+  $groups = @($groups)
+  Write-EntraSnapshotProgress "Loaded $($groups.Count) groups"
 
-  foreach ($group in $groups) {
-    $members = Get-MgGroupMember `
-      -GroupId $group.Id `
-      -All `
-      -Property Id,DisplayName,UserPrincipalName,Mail,AppId,ServicePrincipalType
+  for ($groupIndex = 0; $groupIndex -lt $groups.Count; $groupIndex++) {
+    $group = $groups[$groupIndex]
+    Write-EntraSnapshotProgress "[$($groupIndex + 1)/$($groups.Count)] Loading group members for group: $($group.DisplayName) ($($group.Id))"
+    $members = Get-EntraGroupMembersIncludingServicePrincipals -GroupId $group.Id
+    $members = @($members)
+    Write-EntraSnapshotProgress "[$($groupIndex + 1)/$($groups.Count)] Loaded $($members.Count) group members"
 
     $memberEmails = @(
       $members | ForEach-Object {
-        $mail = $_.AdditionalProperties["mail"]
-        $userPrincipalName = $_.AdditionalProperties["userPrincipalName"]
+        $mail = Get-DirectoryObjectSnapshotValue -DirectoryObject $_ -Name "Mail"
+        $userPrincipalName = Get-DirectoryObjectSnapshotValue -DirectoryObject $_ -Name "UserPrincipalName"
 
         if ($mail) {
           $mail
