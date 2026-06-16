@@ -106,22 +106,6 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
-    id: "ztaRemediationCountAll",
-    label: "ZTA remediations",
-    valueType: "number",
-    getValue: (sp) => sp.ztaRemediationCountAll,
-    getFilterValue: (sp) => sp.ztaMaxRisk,
-    filterColumnId: "ztaMaxRisk",
-    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
-  },
-  {
-    id: "RemediationPackages",
-    label: "Remediation packages",
-    valueType: "list",
-    getValue: getRemediationPackageSearchValues,
-    filter: { kind: "text" }
-  },
-  {
     id: "publisherName",
     label: "Publisher",
     valueType: "text",

@@ -210,9 +210,6 @@ export function AzureComponent() {
           <TabsTrigger className={azureTabTriggerClassName} value="managedIdentities">
             Managed identities
           </TabsTrigger>
-          <TabsTrigger className={azureTabTriggerClassName} value="zeroTrustAssessment">
-            Zero Trust Assessment
-          </TabsTrigger>
           {azureRbacTab ? (
             <ClosableAzureTab
               active={activeView === "azureRbac"}
@@ -262,28 +259,13 @@ export function AzureComponent() {
             onZtaRemediationsClick={openZtaRelatedObject}
           />
         ) : null}
-        {activeView === "zeroTrustAssessment" ? (
-          <ZtaComponent
-            initialFilters={getZtaRelatedObjectFilters(ztaRelatedObjectFilter)}
-            onRelatedObjectClick={openRelatedPrincipal}
-            onRemediationPackageClick={(remediationPackage) => openRemediationPackage(remediationPackage, "zeroTrustAssessment")}
-            onRemediationPackageCreated={(remediationPackage) => openRemediationPackage(remediationPackage, "zeroTrustAssessment")}
-          />
-        ) : null}
         {activeView === "azureRbac" && azureRbacTab ? (
           <AzureRbacComponent key={azureRbacTab.objectId} servicePrincipalId={azureRbacTab.objectId} />
         ) : null}
         {activeView === "entraPermissions" && entraPermissionsTab ? (
           <EntraPermissionsComponent key={entraPermissionsTab.objectId} principalId={entraPermissionsTab.objectId} />
         ) : null}
-        {activeView === "remediationPackage" && remediationPackageTab ? (
-          <RemediationPackageComponent
-            key={remediationPackageTab.remediationPackage.id}
-            remediationPackage={remediationPackageTab.remediationPackage}
-            onAzureRbacClick={(principal) => openAzureRbac(principal, "remediationPackage")}
-            onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "remediationPackage")}
-          />
-        ) : null}
+
       </div>
     </section>
   );
