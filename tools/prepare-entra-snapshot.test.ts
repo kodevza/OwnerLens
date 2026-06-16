@@ -12,3 +12,11 @@ test("Entra snapshot preparation reads delegated grants per service principal", 
   expect(script).toContain("Get-MgServicePrincipalOauth2PermissionGrant");
   expect(script).toContain("Add-OAuth2PermissionGrantSnapshot");
 });
+
+test("Entra snapshot preparation records group members separately from groups", () => {
+  expect(script).toContain("groupMembers = @()");
+  expect(script).toContain("Get-MgGroupMember");
+  expect(script).toContain("ConvertTo-GroupMemberSnapshot");
+  expect(script).toContain("$snapshot.groupMembers += $memberSnapshot");
+  expect(script).toContain("$snapshot.meta.groupMemberCount = $snapshot.groupMembers.Count");
+});

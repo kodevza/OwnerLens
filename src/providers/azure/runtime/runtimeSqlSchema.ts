@@ -102,6 +102,23 @@ const entraAppRoleAssignmentSchemaSql = [
   `
 ];
 
+const entraGroupMemberSchemaSql = [
+  `
+    create table if not exists entra_group_members (
+      ordinal integer not null,
+      group_id varchar not null,
+      group_display_name varchar,
+      member_id varchar not null,
+      member_display_name varchar,
+      member_type varchar,
+      member_user_principal_name varchar,
+      member_mail varchar,
+      member_app_id varchar,
+      member_service_principal_type varchar
+    )
+  `
+];
+
 const azureResourcesSnapshotSchemaSql = [
   "create table if not exists azure_resources_snapshot_meta (data json not null)",
   "create table if not exists azure_resources_snapshot_extra (data json not null)"
@@ -343,6 +360,7 @@ const runtimeSchemaSql = [
   ...entraApplicationSchemaSql,
   ...entraOAuth2PermissionGrantSchemaSql,
   ...entraAppRoleAssignmentSchemaSql,
+  ...entraGroupMemberSchemaSql,
   ...azureResourcesSnapshotSchemaSql,
   ...azureResourcesSchemaSql,
   ...disabledOwnerEvidenceSchemaSql,

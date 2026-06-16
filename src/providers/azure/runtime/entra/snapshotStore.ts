@@ -4,6 +4,7 @@ import type { EntraSnapshot } from "../../inputTransferObject/entra/EntraSnapsho
 import type { LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
 import { insertEntraApplicationRows, readEntraApplicationRows } from "./applicationsTable";
 import { insertEntraAppRoleAssignmentRows, readEntraAppRoleAssignmentRows } from "./appRoleAssignmentsTable";
+import { insertEntraGroupMemberRows, readEntraGroupMemberRows } from "./groupMembersTable";
 import { insertEntraOAuth2PermissionGrantRows, readEntraOAuth2PermissionGrantRows } from "./oauth2PermissionGrantsTable";
 import { insertEntraServicePrincipalRows, readEntraServicePrincipalRows } from "./servicePrincipalsTable";
 import { importEntraSnapshotMetadata } from "./snapshotMetadataTable";
@@ -22,14 +23,16 @@ export async function importEntraSnapshotToDuckDb(
     await connection.run("delete from entra_applications");
     await connection.run("delete from entra_oauth2_permission_grants");
     await connection.run("delete from entra_app_role_assignments");
+    await connection.run("delete from entra_group_members");
 
-    const { servicePrincipals, applications, oauth2PermissionGrants, appRoleAssignments } = snapshot;
+    const { servicePrincipals, applications, oauth2PermissionGrants, appRoleAssignments, groupMembers } = snapshot;
     await importEntraSnapshotMetadata(connection, snapshot);
 
     await insertEntraServicePrincipalRows(connection, servicePrincipals);
     await insertEntraApplicationRows(connection, applications);
     await insertEntraOAuth2PermissionGrantRows(connection, oauth2PermissionGrants);
     await insertEntraAppRoleAssignmentRows(connection, appRoleAssignments);
+    await insertEntraGroupMemberRows(connection, groupMembers);
 
     await connection.run("commit");
   } catch (error) {
@@ -47,6 +50,7 @@ export async function readEntraSnapshotFromDuckDb(
   const applications = await readEntraApplicationRows(connection);
   const oauth2PermissionGrants = await readEntraOAuth2PermissionGrantRows(connection);
   const appRoleAssignments = await readEntraAppRoleAssignmentRows(connection);
+  const groupMembers = await readEntraGroupMemberRows(connection);
 
   return {
     ...parseJsonObject(extraRows[0]?.data),
@@ -54,7 +58,8 @@ export async function readEntraSnapshotFromDuckDb(
     servicePrincipals,
     applications,
     oauth2PermissionGrants,
-    appRoleAssignments
+    appRoleAssignments,
+    groupMembers
   };
 }
 

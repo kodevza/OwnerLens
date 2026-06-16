@@ -138,4 +138,7 @@ export type AzureRoleAssignment = {
   canDelegate: boolean | null;
   condition: string | null;
   conditionVersion: string | null;
+  assignmentSource?: "direct" | "group";
+  inheritedFromGroupId?: string;
+  inheritedFromGroupDisplayName?: string | null;
 };

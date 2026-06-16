@@ -153,10 +153,22 @@ export class AzureResourcesCollectionQueryService {
 
   private async readAzureRbacRows(servicePrincipalId: string): Promise<AzureRbac[]> {
     const normalizedServicePrincipalId = servicePrincipalId.trim().toLowerCase();
+    const servicePrincipals = await this.entra.readServicePrincipals();
+    const servicePrincipal = servicePrincipals.find(
+      (candidate) => candidate.id.toLowerCase() === normalizedServicePrincipalId
+    );
 
-    return (await this.azureResources.readAzureRoleAssignments())
-      .filter((assignment) => assignment.principalId.toLowerCase() === normalizedServicePrincipalId)
-      .map((assignment) => mapRoleAssignmentToAzureRbac(assignment, evaluateAzureRoleAssignmentRisk(assignment).riskLevel));
+    if (!servicePrincipal) {
+      return [];
+    }
+
+    return servicePrincipal.roleAssignments.map((assignment) =>
+      mapRoleAssignmentToAzureRbac(
+        assignment,
+        evaluateAzureRoleAssignmentRisk(assignment).riskLevel,
+        servicePrincipal.id
+      )
+    );
   }
 }
 

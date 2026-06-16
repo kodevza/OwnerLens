@@ -14,11 +14,12 @@ export type AzureRbac = AzureRoleAssignment & {
 
 export function mapRoleAssignmentToAzureRbac(
   assignment: AzureRoleAssignment,
-  permissionRiskLevel: PermissionRiskLevel
+  permissionRiskLevel: PermissionRiskLevel,
+  servicePrincipalId = assignment.principalId
 ): AzureRbac {
   return {
     ...assignment,
-    servicePrincipalId: assignment.principalId,
+    servicePrincipalId,
     accessRisk: permissionRiskLevel,
     accessScope: assignment.scope,
     accessScopeType: assignment.scopeType ?? "Unknown",

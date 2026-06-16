@@ -35,6 +35,7 @@ $snapshot = [ordered]@{
   oauth2PermissionGrants = @()
   appRoleAssignments = @()
   groups = @()
+  groupMembers = @()
 }
 
 function Get-DirectoryObjectSnapshotValue {
@@ -72,6 +73,48 @@ function ConvertTo-OwnerSnapshot {
     userPrincipalName = Get-DirectoryObjectSnapshotValue -DirectoryObject $Owner -Name "UserPrincipalName"
     mail = Get-DirectoryObjectSnapshotValue -DirectoryObject $Owner -Name "Mail"
     ownerType = if ($Owner.AdditionalProperties) { $Owner.AdditionalProperties["@odata.type"] } else { $null }
+  }
+}
+
+function ConvertTo-GroupMemberType {
+  param(
+    [string]$ODataType
+  )
+
+  switch -Regex ($ODataType) {
+    "servicePrincipal$" { return "servicePrincipal" }
+    "user$" { return "user" }
+    "group$" { return "group" }
+    "device$" { return "device" }
+    default { return "unknown" }
+  }
+}
+
+function ConvertTo-GroupMemberSnapshot {
+  param(
+    [Parameter(Mandatory = $true)]
+    $Group,
+
+    [Parameter(Mandatory = $true)]
+    $Member,
+
+    [hashtable]$ServicePrincipalById = @{}
+  )
+
+  $memberId = Get-DirectoryObjectSnapshotValue -DirectoryObject $Member -Name "Id"
+  $servicePrincipal = if ($memberId -and $ServicePrincipalById.ContainsKey($memberId)) { $ServicePrincipalById[$memberId] } else { $null }
+  $odataType = if ($Member.AdditionalProperties) { $Member.AdditionalProperties["@odata.type"] } else { $null }
+
+  [pscustomobject]@{
+    groupId = $Group.Id
+    groupDisplayName = $Group.DisplayName
+    memberId = $memberId
+    memberDisplayName = Get-DirectoryObjectSnapshotValue -DirectoryObject $Member -Name "DisplayName"
+    memberType = ConvertTo-GroupMemberType -ODataType $odataType
+    memberUserPrincipalName = Get-DirectoryObjectSnapshotValue -DirectoryObject $Member -Name "UserPrincipalName"
+    memberMail = Get-DirectoryObjectSnapshotValue -DirectoryObject $Member -Name "Mail"
+    memberAppId = if ($servicePrincipal) { $servicePrincipal.AppId } else { Get-DirectoryObjectSnapshotValue -DirectoryObject $Member -Name "AppId" }
+    memberServicePrincipalType = if ($servicePrincipal) { $servicePrincipal.ServicePrincipalType } else { Get-DirectoryObjectSnapshotValue -DirectoryObject $Member -Name "ServicePrincipalType" }
   }
 }
 
@@ -358,7 +401,8 @@ if ($canReadGroups) {
   foreach ($group in $groups) {
     $members = Get-MgGroupMember `
       -GroupId $group.Id `
-      -All
+      -All `
+      -Property Id,DisplayName,UserPrincipalName,Mail,AppId,ServicePrincipalType
 
     $memberEmails = @(
       $members | ForEach-Object {
@@ -372,6 +416,13 @@ if ($canReadGroups) {
         }
       } | Where-Object { $_ } | Select-Object -Unique
     )
+
+    foreach ($member in $members) {
+      $memberSnapshot = ConvertTo-GroupMemberSnapshot -Group $group -Member $member -ServicePrincipalById $servicePrincipalById
+      if ($memberSnapshot.memberId) {
+        $snapshot.groupMembers += $memberSnapshot
+      }
+    }
 
     $snapshot.groups += [pscustomobject]@{
       id = $group.Id
@@ -394,6 +445,7 @@ $snapshot.meta.applicationCount = $snapshot.applications.Count
 $snapshot.meta.oauth2PermissionGrantCount = $snapshot.oauth2PermissionGrants.Count
 $snapshot.meta.appRoleAssignmentCount = $snapshot.appRoleAssignments.Count
 $snapshot.meta.groupCount = $snapshot.groups.Count
+$snapshot.meta.groupMemberCount = $snapshot.groupMembers.Count
 
 $outputDirectory = Split-Path -Parent $OutputPath
 if (-not [string]::IsNullOrWhiteSpace($outputDirectory) -and -not (Test-Path $outputDirectory)) {

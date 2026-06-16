@@ -17,7 +17,9 @@ import { isBroadAzureScope } from "./azureScopeClassifier";
 import { evaluateAzureRoleAssignmentRisk } from "./evaluateAzureRoleAssignmentRisk";
 import { getResourceManagedIdentityAssignments } from "../../identities/buildAzureManagedIdentityAssignmentIndex";
 import type { AzureManagedIdentityResourceAssignment } from "../../identities/azureIdentityTypes";
+import type { InputEntraGroupMember } from "../../inputTransferObject/entra/InputEntraGroupMember";
 import type { EntraServicePrincipal } from "../../inputTransferObject/entra/EntraServicePrincipal";
+import { readEntraGroupMemberRows } from "../entra/groupMembersTable";
 import { readEntraServicePrincipalRows } from "../entra/servicePrincipalsTable";
 import { readAzureResourceRows, readAzureRoleAssignmentRows } from "../resources/tables";
 
@@ -53,9 +55,15 @@ export async function recalculateAzureIdentityEnrichment(
   try {
     const servicePrincipals = await readEntraServicePrincipalRows(connection);
     const roleAssignments = await readOptionalRows(connection, readAzureRoleAssignmentRows);
+    const groupMembers = await readOptionalRows(connection, readEntraGroupMemberRows);
     const resources = await readOptionalRows(connection, readAzureResourceRows);
-    const roleEnrichment = buildRoleAssignmentEnrichment(servicePrincipals, roleAssignments);
-    const accessRiskEnrichment = buildAccessRiskEnrichment(servicePrincipals, roleAssignments);
+    const effectiveRoleAssignments = buildEffectiveRoleAssignmentsByPrincipalId(
+      servicePrincipals,
+      roleAssignments,
+      groupMembers
+    );
+    const roleEnrichment = buildRoleAssignmentEnrichment(effectiveRoleAssignments);
+    const accessRiskEnrichment = buildAccessRiskEnrichment(servicePrincipals, effectiveRoleAssignments);
     const managedIdentityEnrichment = buildManagedIdentityAssignmentEnrichment(servicePrincipals, resources);
     const completedAt = new Date().toISOString();
 
@@ -213,23 +221,8 @@ export async function readLatestAzureIdentityEnrichment(
 }
 
 function buildRoleAssignmentEnrichment(
-  servicePrincipals: EntraServicePrincipal[],
-  roleAssignments: AzureRoleAssignment[]
+  assignmentsByPrincipalId: Map<string, AzureRoleAssignment[]>
 ): AzureRoleAssignmentEnrichment[] {
-  const identityIds = new Set(servicePrincipals.map((servicePrincipal) => normalizeKey(servicePrincipal.id)));
-  const assignmentsByPrincipalId = new Map<string, AzureRoleAssignment[]>();
-
-  for (const assignment of roleAssignments) {
-    const principalId = normalizeKey(assignment.principalId);
-    if (!identityIds.has(principalId)) {
-      continue;
-    }
-
-    const assignments = assignmentsByPrincipalId.get(principalId) ?? [];
-    assignments.push(assignment);
-    assignmentsByPrincipalId.set(principalId, assignments);
-  }
-
   return [...assignmentsByPrincipalId.entries()]
     .map(([principalId, assignments]) => ({
       principalId,
@@ -239,9 +232,52 @@ function buildRoleAssignmentEnrichment(
     .sort((left, right) => left.principalId.localeCompare(right.principalId));
 }
 
+function buildEffectiveRoleAssignmentsByPrincipalId(
+  servicePrincipals: EntraServicePrincipal[],
+  roleAssignments: AzureRoleAssignment[],
+  groupMembers: InputEntraGroupMember[]
+): Map<string, AzureRoleAssignment[]> {
+  const identityIds = new Set(servicePrincipals.map((servicePrincipal) => normalizeKey(servicePrincipal.id)));
+  const assignmentsByPrincipalId = new Map<string, AzureRoleAssignment[]>();
+  const groupMembershipsByServicePrincipalId = buildGroupMembershipsByServicePrincipalId(identityIds, groupMembers);
+  const assignmentsByGroupId = buildRoleAssignmentsByGroupId(roleAssignments);
+
+  for (const assignment of roleAssignments) {
+    const principalId = normalizeKey(assignment.principalId);
+    if (!identityIds.has(principalId)) {
+      continue;
+    }
+
+    const assignments = assignmentsByPrincipalId.get(principalId) ?? [];
+    assignments.push({ ...assignment, assignmentSource: "direct" });
+    assignmentsByPrincipalId.set(principalId, assignments);
+  }
+
+  for (const [servicePrincipalId, memberships] of groupMembershipsByServicePrincipalId.entries()) {
+    const assignments = assignmentsByPrincipalId.get(servicePrincipalId) ?? [];
+
+    for (const membership of memberships) {
+      for (const assignment of assignmentsByGroupId.get(membership.groupId) ?? []) {
+        assignments.push({
+          ...assignment,
+          assignmentSource: "group",
+          inheritedFromGroupId: membership.groupId,
+          inheritedFromGroupDisplayName: membership.groupDisplayName
+        });
+      }
+    }
+
+    if (assignments.length > 0) {
+      assignmentsByPrincipalId.set(servicePrincipalId, assignments);
+    }
+  }
+
+  return assignmentsByPrincipalId;
+}
+
 function buildAccessRiskEnrichment(
   servicePrincipals: EntraServicePrincipal[],
-  roleAssignments: AzureRoleAssignment[]
+  roleAssignmentsByPrincipalId: Map<string, AzureRoleAssignment[]>
 ): ManagedIdentityPermissionRiskSummary[] {
   const summariesByPrincipalId = new Map<string, ManagedIdentityPermissionRiskSummary>();
 
@@ -249,23 +285,24 @@ function buildAccessRiskEnrichment(
     summariesByPrincipalId.set(normalizeKey(servicePrincipal.id), createRiskSummary(servicePrincipal.id));
   }
 
-  for (const assignment of roleAssignments) {
-    const normalizedPrincipalId = normalizeKey(assignment.principalId);
-    const summary = summariesByPrincipalId.get(normalizedPrincipalId);
+  for (const [principalId, roleAssignments] of roleAssignmentsByPrincipalId.entries()) {
+    const summary = summariesByPrincipalId.get(principalId);
     if (!summary) {
       continue;
     }
 
-    const riskAssignment = evaluateAzureRoleAssignmentRisk(assignment);
-    summary.roleAssignments.push(riskAssignment);
-    summary.assignmentCount += 1;
-    summary.riskLevel = maxRisk(summary.riskLevel, riskAssignment.riskLevel);
+    for (const assignment of roleAssignments) {
+      const riskAssignment = evaluateAzureRoleAssignmentRisk(assignment);
+      summary.roleAssignments.push(riskAssignment);
+      summary.assignmentCount += 1;
+      summary.riskLevel = maxRisk(summary.riskLevel, riskAssignment.riskLevel);
 
-    if (riskAssignment.riskLevel === "high") {
-      summary.highRiskAssignmentCount += 1;
-    }
-    if (isBroadAzureScope(assignment)) {
-      summary.broadScopeAssignmentCount += 1;
+      if (riskAssignment.riskLevel === "high") {
+        summary.highRiskAssignmentCount += 1;
+      }
+      if (isBroadAzureScope(assignment)) {
+        summary.broadScopeAssignmentCount += 1;
+      }
     }
   }
 
@@ -407,6 +444,58 @@ function addManagedIdentityAssignment(
   const assignments = assignmentsByKey.get(normalizedKey) ?? [];
   assignments.push(assignment);
   assignmentsByKey.set(normalizedKey, assignments);
+}
+
+type ServicePrincipalGroupMembership = {
+  groupId: string;
+  groupDisplayName: string | null;
+};
+
+function buildGroupMembershipsByServicePrincipalId(
+  servicePrincipalIds: Set<string>,
+  groupMembers: InputEntraGroupMember[]
+): Map<string, ServicePrincipalGroupMembership[]> {
+  const membershipsByServicePrincipalId = new Map<string, ServicePrincipalGroupMembership[]>();
+
+  for (const groupMember of groupMembers) {
+    const memberId = normalizeKey(groupMember.memberId);
+    if (!servicePrincipalIds.has(memberId)) {
+      continue;
+    }
+
+    const memberType = groupMember.memberType?.toLowerCase();
+    if (memberType !== "serviceprincipal" && memberType !== "unknown") {
+      continue;
+    }
+
+    const memberships = membershipsByServicePrincipalId.get(memberId) ?? [];
+    memberships.push({
+      groupId: normalizeKey(groupMember.groupId),
+      groupDisplayName: groupMember.groupDisplayName
+    });
+    membershipsByServicePrincipalId.set(memberId, memberships);
+  }
+
+  return membershipsByServicePrincipalId;
+}
+
+function buildRoleAssignmentsByGroupId(
+  roleAssignments: AzureRoleAssignment[]
+): Map<string, AzureRoleAssignment[]> {
+  const assignmentsByGroupId = new Map<string, AzureRoleAssignment[]>();
+
+  for (const assignment of roleAssignments) {
+    if (assignment.principalType?.toLowerCase() !== "group") {
+      continue;
+    }
+
+    const groupId = normalizeKey(assignment.principalId);
+    const assignments = assignmentsByGroupId.get(groupId) ?? [];
+    assignments.push(assignment);
+    assignmentsByGroupId.set(groupId, assignments);
+  }
+
+  return assignmentsByGroupId;
 }
 
 function isManagedIdentity(servicePrincipal: EntraServicePrincipal): boolean {
