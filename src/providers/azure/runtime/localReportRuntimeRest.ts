@@ -6,6 +6,7 @@ import { createRuntimeRestMiddleware, type RuntimeRestEndpoint } from "../../../
 import { defineEntraLocalReportRuntimeRestEndpoints } from "./entra/localReportRuntimeRest";
 import { LocalReportRuntime } from "./LocalReportRuntime";
 import { defineAzureResourcesLocalReportRuntimeRestEndpoints } from "./resources/localReportRuntimeRest";
+import { parseRuntimeCollectionQueryOptions } from "./runtimeRestQuery";
 import { defineZeroTrustAssessmentLocalReportRuntimeRestEndpoints } from "./zta/localReportRuntimeRest";
 
 const restBasePath = "/api/data";
@@ -39,6 +40,20 @@ export function defineLocalReportRuntimeRestEndpoints(runtime: LocalReportRuntim
     {
       path: `${restBasePath}/remediationPackages`,
       handle: ({ url }) => runtime.readRemediationPackage(url.searchParams.get("id") ?? "")
+    },
+    {
+      method: "GET",
+      path: `${restBasePath}/remediationPackages/tasks`,
+      handle: ({ url }) => {
+        if (!isCsvRequest(url)) {
+          throw new RuntimeHttpError("Remediation package tasks only support CSV export.", 400);
+        }
+
+        return runtime.exportRemediationPackageTasksCsv(
+          readRequiredSearchParam(url, "id"),
+          parseRuntimeCollectionQueryOptions(url)
+        );
+      }
     },
     {
       method: "DELETE",
@@ -91,6 +106,19 @@ function parseDeleteRemediationTasksRequest(body: unknown): DeleteRuntimeRemedia
     packageId: body.packageId,
     taskIds: body.taskIds as string[]
   };
+}
+
+function readRequiredSearchParam(url: URL, name: string): string {
+  const value = url.searchParams.get(name)?.trim();
+  if (!value) {
+    throw new RuntimeHttpError(`Missing required query parameter: ${name}`, 400);
+  }
+
+  return value;
+}
+
+function isCsvRequest(url: URL): boolean {
+  return url.searchParams.get("format")?.trim().toLowerCase() === "csv";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

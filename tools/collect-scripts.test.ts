@@ -18,6 +18,7 @@ test("package exposes OwnerLens collect commands through the npm bin", () => {
   expect(cli).toContain('runViteSync(["build"])');
   expect(cli).toContain('"preview", "--host", "127.0.0.1"');
   expect(cli).toContain('require.resolve("vite/package.json")');
+  expect(cli).toContain("OWNERLENS_DATA_DIR");
   expect(cli).toContain('["collect:entra", "collect-entra.ps1"]');
   expect(cli).toContain('["collect:azure", "collect-azure.ps1"]');
 });

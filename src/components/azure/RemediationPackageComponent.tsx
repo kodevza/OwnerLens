@@ -8,12 +8,12 @@ import type { PermissionRiskLevel } from "../../core/risk/types";
 import { formatDate, formatValue } from "../../lib/utils";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
-import { SelectionActionBar } from "../../report/components/SelectionActionBar";
 import { Badge } from "../../report/components/ui/badge";
 import { Button } from "../../report/components/ui/button";
 import { Card } from "../../report/components/ui/card";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
-import { deleteRemediationTasks } from "./api";
+import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
+import { deleteRemediationTasks, exportRemediationPackageTasksCsv } from "./api";
 import {
   buildServicePrincipalFieldRenderers,
   type AzureRbacPrincipalSelection,
@@ -216,8 +216,15 @@ export function RemediationPackageComponent({
         rows={currentPackage.tasks}
         selectedRowKeys={selectedTaskIds}
         onSelectionChange={setSelectedTaskIds}
-        renderSelectionOverlay={({ selectedRowKeys }) => (
-          <SelectionActionBar errorMessage={deleteState.status === "error" ? deleteState.message : undefined}>
+        renderSelectionOverlay={({ filters, selectAllMatchingFilters, selectedRowKeys, sortRules }) => (
+          <CsvSelectionActionBar
+            filters={filters}
+            itemLabel="remediation tasks"
+            selectAllMatchingFilters={selectAllMatchingFilters}
+            selectedRowKeys={selectedRowKeys}
+            sortRules={sortRules}
+            onExportCsv={(selection) => exportRemediationPackageTasksCsv(currentPackage.id, selection)}
+          >
             <span className="text-sm text-muted-foreground">
               {selectedRowKeys.length} selected
             </span>
@@ -232,7 +239,8 @@ export function RemediationPackageComponent({
             >
               {deleteState.status === "deleting" ? "Deleting..." : "Delete"}
             </Button>
-          </SelectionActionBar>
+            {deleteState.status === "error" ? <span className="text-sm text-destructive">{deleteState.message}</span> : null}
+          </CsvSelectionActionBar>
         )}
       />
     </section>

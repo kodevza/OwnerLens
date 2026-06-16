@@ -21,7 +21,11 @@ import type {
   RemediationTask,
   RuntimeRemediationPackageFilter
 } from "../../../core/runtime/remediation";
-import type { RuntimeCollectionCsvExport } from "../../../core/runtime/collectionExport";
+import {
+  buildRuntimeCollectionCsvExport,
+  type RuntimeCollectionCsvExport
+} from "../../../core/runtime/collectionExport";
+import type { RuntimeCsvRow } from "../../../core/runtime/csv";
 import type { SnapshotImportStatus } from "../../../core/runtime/snapshotImportRegistry";
 import type { AzureIdentityEnrichmentStatus } from "./enrichment/azureIdentityEnrichment";
 import { EntraCollectionQueryService } from "./entra/EntraCollectionQueryService";
@@ -361,6 +365,25 @@ export class LocalReportRuntime {
     return this.enrichRemediationPackage(remediationPackage);
   }
 
+  async exportRemediationPackageTasksCsv(
+    packageId: string,
+    options: LocalReportCollectionQueryOptions
+  ): Promise<RuntimeCollectionCsvExport<"remediationPackage.tasks">> {
+    const remediationPackage = await this.readRemediationPackage(packageId);
+
+    return buildRuntimeCollectionCsvExport({
+      collectionId: "remediationPackage.tasks",
+      fileName: `ownerlens-remediation-package-${remediationPackage.id}.csv`,
+      rows: remediationPackage.tasks.map(toRemediationTaskCsvRow),
+      filters: options.filters,
+      sortRules: options.sortRules,
+      selectedRowKeys: options.selectedRowKeys,
+      getRowKey: (row) => String(row.id ?? ""),
+      columns: remediationTaskCsvColumns,
+      includeBom: true
+    });
+  }
+
   async deleteRemediationTasks(request: DeleteRuntimeRemediationTasksRequest): Promise<RemediationPackage> {
     const packageId = request.packageId.trim();
     const taskIds = validateRemediationTaskIds(request.taskIds);
@@ -543,6 +566,151 @@ function validateSelectedRowKeys(selectedRowKeys: unknown): string[] {
 
 function normalizeSelectAllMatchingFilters(value: unknown): boolean {
   return value === true;
+}
+
+const remediationTaskCsvColumns = [
+  { id: "id", header: "Task ID" },
+  { id: "packageId", header: "Package ID" },
+  { id: "createdAt", header: "Created" },
+  { id: "status", header: "Status" },
+  { id: "targetLabel", header: "Target label" },
+  { id: "RelatedObjects", header: "Related objects" },
+  { id: "potentialOwners", header: "Owner" },
+  { id: "ownerConfidence", header: "Owner confidence" },
+  { id: "oauthPermissionsCount", header: "OAuth permissions" },
+  { id: "appRolesPermissionCount", header: "App role permissions" },
+  { id: "entraPermissionRisk", header: "Entra permission risk" },
+  { id: "azureRbac", header: "Azure RBAC risk" },
+  { id: "rbacRoleAssignmentCount", header: "Azure RBAC assignments" },
+  { id: "rbacSubscriptionCount", header: "Azure RBAC subscriptions" },
+  { id: "title", header: "Title" },
+  { id: "risk", header: "Risk" },
+
+] as const;
+
+function toRemediationTaskCsvRow(task: RemediationTask): RuntimeCsvRow {
+  const enrichment = readAzureEnrichment(task.sourceEvidence);
+  const relatedObject = readRelatedObject(task.sourceEvidence);
+  const sourceContext = readZtaSourceContext(task.sourceEvidence);
+
+  return {
+    id: task.id,
+    packageId: task.packageId,
+    createdAt: task.createdAt,
+    status: task.status,
+    target: [task.targetLabel, task.targetId, task.targetKind],
+    targetKind: task.targetKind,
+    targetId: task.targetId,
+    targetLabel: task.targetLabel,
+    RelatedObjects: relatedObject,
+    potentialOwners: {
+      owner: enrichment?.potentialOwners ?? [],
+      confidence: enrichment?.ownerConfidence ?? "none"
+    },
+    ownerConfidence: enrichment?.ownerConfidence ?? "none",
+    oauthPermissionsCount: enrichment
+      ? [
+          enrichment.entraPermissionRisk,
+          String(enrichment.oauthPermissionsCount),
+          String(enrichment.appRolesPermissionCount)
+        ]
+      : ["none"],
+    appRolesPermissionCount: enrichment?.appRolesPermissionCount ?? 0,
+    entraPermissionRisk: enrichment?.entraPermissionRisk ?? "none",
+    azureRbac: enrichment
+      ? [
+          enrichment.rbacRoleLevel,
+          String(enrichment.rbacRoleAssignmentCount),
+          String(enrichment.rbacSubscriptionCount)
+        ]
+      : ["none"],
+    rbacRoleAssignmentCount: enrichment?.rbacRoleAssignmentCount ?? 0,
+    rbacSubscriptionCount: enrichment?.rbacSubscriptionCount ?? 0,
+    title: task.title,
+    risk: task.risk,
+    sourceContext: sourceContext ? [sourceContext.testId, sourceContext.testStatus] : task.sourceEvidence,
+    sourceEvidence: task.sourceEvidence
+  };
+}
+
+function readAzureEnrichment(sourceEvidence: JsonValue): {
+  appRolesPermissionCount: number;
+  entraPermissionRisk: string;
+  oauthPermissionsCount: number;
+  ownerConfidence: string;
+  potentialOwners: string[];
+  rbacRoleAssignmentCount: number;
+  rbacRoleLevel: string;
+  rbacSubscriptionCount: number;
+} | null {
+  if (!isRecord(sourceEvidence) || !isRecord(sourceEvidence.azureEnrichment)) {
+    return null;
+  }
+
+  const enrichment = sourceEvidence.azureEnrichment;
+
+  return {
+    appRolesPermissionCount: readNumber(enrichment.appRolesPermissionCount),
+    entraPermissionRisk: readString(enrichment.entraPermissionRisk) ?? "none",
+    oauthPermissionsCount: readNumber(enrichment.oauthPermissionsCount),
+    ownerConfidence: readString(enrichment.ownerConfidence) ?? "none",
+    potentialOwners: readStringArray(enrichment.potentialOwners),
+    rbacRoleAssignmentCount: readNumber(enrichment.rbacRoleAssignmentCount),
+    rbacRoleLevel: readString(enrichment.rbacRoleLevel) ?? "none",
+    rbacSubscriptionCount: readNumber(enrichment.rbacSubscriptionCount)
+  };
+}
+
+function readRelatedObject(sourceEvidence: JsonValue): Record<string, string | string[] | null> | null {
+  if (!isRecord(sourceEvidence) || !isRecord(sourceEvidence.relatedObject)) {
+    return null;
+  }
+
+  const relatedObject = sourceEvidence.relatedObject;
+
+  return {
+    id: readString(relatedObject.id),
+    object_id: readString(relatedObject.object_id),
+    servicePrincipalId: readString(relatedObject.servicePrincipalId),
+    applicationId: readString(relatedObject.applicationId),
+    displayName: readString(relatedObject.displayName),
+    servicePrincipalType: readString(relatedObject.servicePrincipalType),
+    userPrincipalName: readString(relatedObject.userPrincipalName),
+    tags: readStringArray(relatedObject.tags)
+  };
+}
+
+function readZtaSourceContext(sourceEvidence: JsonValue): { testId: string; testStatus: string } | null {
+  if (!isRecord(sourceEvidence) || sourceEvidence.sourceKind !== "zeroTrustAssessment" || !isRecord(sourceEvidence.test)) {
+    return null;
+  }
+
+  return {
+    testId: `ZTA test ${formatJsonScalar(sourceEvidence.test.TestId)}`,
+    testStatus: `Status: ${formatJsonScalar(sourceEvidence.test.TestStatus)}`
+  };
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
+function readNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function formatJsonScalar(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return "-";
 }
 
 function validateRemediationTaskIds(taskIds: unknown): string[] {
