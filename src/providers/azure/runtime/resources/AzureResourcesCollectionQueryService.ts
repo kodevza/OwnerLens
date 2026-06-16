@@ -1,6 +1,6 @@
 import { mapRoleAssignmentToAzureRbac } from "../../../../core/azure/azureRbac";
 import type { AzureRbac } from "../../../../core/azure/azureRbac";
-import type { ResourceGroupOwnershipRow } from "../../../../core/azure/resources";
+import type { AzureRoleAssignment, ResourceGroupOwnershipRow } from "../../../../core/azure/resources";
 
 import { evaluateAzureRoleAssignmentRisk } from "../enrichment/evaluateAzureRoleAssignmentRisk";
 import { buildAzureOwnershipReport } from "../../ownership/buildAzureOwnershipReport";
@@ -153,23 +153,57 @@ export class AzureResourcesCollectionQueryService {
 
   private async readAzureRbacRows(servicePrincipalId: string): Promise<AzureRbac[]> {
     const normalizedServicePrincipalId = servicePrincipalId.trim().toLowerCase();
-    const servicePrincipals = await this.entra.readServicePrincipals();
+    const [servicePrincipals, roleAssignments] = await Promise.all([
+      this.entra.readServicePrincipals(),
+      this.azureResources.readAzureRoleAssignments()
+    ]);
     const servicePrincipal = servicePrincipals.find(
       (candidate) => candidate.id.toLowerCase() === normalizedServicePrincipalId
     );
+    const rowsByAssignmentKey = new Map<string, AzureRbac>();
 
-    if (!servicePrincipal) {
-      return [];
+    for (const assignment of roleAssignments) {
+      if (assignment.principalId.toLowerCase() !== normalizedServicePrincipalId) {
+        continue;
+      }
+
+      addAzureRbacRow(rowsByAssignmentKey, assignment, servicePrincipalId);
     }
 
-    return servicePrincipal.roleAssignments.map((assignment) =>
-      mapRoleAssignmentToAzureRbac(
-        assignment,
-        evaluateAzureRoleAssignmentRisk(assignment).riskLevel,
-        servicePrincipal.id
-      )
-    );
+    for (const assignment of servicePrincipal?.roleAssignments ?? []) {
+      addAzureRbacRow(rowsByAssignmentKey, assignment, servicePrincipal?.id ?? servicePrincipalId);
+    }
+
+    return [...rowsByAssignmentKey.values()];
   }
+}
+
+function addAzureRbacRow(
+  rowsByAssignmentKey: Map<string, AzureRbac>,
+  assignment: AzureRoleAssignment,
+  servicePrincipalId: string
+): void {
+  rowsByAssignmentKey.set(
+    getAzureRbacAssignmentKey(assignment),
+    mapRoleAssignmentToAzureRbac(
+      assignment,
+      evaluateAzureRoleAssignmentRisk(assignment).riskLevel,
+      servicePrincipalId
+    )
+  );
+}
+
+function getAzureRbacAssignmentKey(assignment: AzureRoleAssignment): string {
+  if (assignment.roleAssignmentId) {
+    return assignment.roleAssignmentId.toLowerCase();
+  }
+
+  return [
+    assignment.principalId,
+    assignment.roleDefinitionId,
+    assignment.roleDefinitionName,
+    assignment.scope
+  ].join(":").toLowerCase();
 }
 
 function getResourceGroupOwnershipRowKey(row: Record<string, unknown>): string {

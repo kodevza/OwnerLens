@@ -1,6 +1,6 @@
 import type { PermissionRiskLevel } from "../../risk/types";
 
-export type ServicePrincipalType = "Application" | "ManagedIdentity" | "SocialIdp" | "Legacy";
+export type ServicePrincipalType = "Application" | "ManagedIdentity" | "ServiceIdentity" | "SocialIdp" | "Legacy";
 
 export type ServicePrincipalAppRole = {
   id: string;

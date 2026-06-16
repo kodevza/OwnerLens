@@ -22,6 +22,18 @@ describe("parseAndValidateSnapshot", () => {
     ).not.toThrow();
   });
 
+  it("accepts ServiceIdentity service principals from Microsoft Graph", () => {
+    const snapshot = validEntraSnapshot();
+    snapshot.servicePrincipals[0].servicePrincipalType = "ServiceIdentity";
+
+    expect(() =>
+      parseAndValidateSnapshot(JSON.stringify(snapshot), {
+        fileName: "entra-snapshot.json",
+        schema: entraSnapshotSchema
+      })
+    ).not.toThrow();
+  });
+
   it("rejects a wrong provider", () => {
     expect(() =>
       parseAndValidateSnapshot(JSON.stringify({ ...validAzureSnapshot(), meta: { ...validAzureSnapshot().meta, provider: "entra" } }), {

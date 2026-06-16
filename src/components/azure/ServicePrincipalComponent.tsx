@@ -25,6 +25,7 @@ const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "lo
 const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];
 const servicePrincipalTypeOptions: Array<Exclude<EntraServicePrincipalType, "ManagedIdentity">> = [
   "Application",
+  "ServiceIdentity",
   "SocialIdp",
   "Legacy"
 ];

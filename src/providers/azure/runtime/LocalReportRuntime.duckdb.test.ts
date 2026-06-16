@@ -1883,6 +1883,44 @@ test("enriches service principal Azure RBAC through Entra group membership", asy
   });
 });
 
+test("queries Azure RBAC from Azure role assignments when Entra projection has no matching service principal", async () => {
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot(),
+    roleAssignments: [
+      roleAssignment("external-sp-1", "Monitoring Metrics Publisher", "/subscriptions/sub-1/resourceGroups/rg-app/providers/Microsoft.Insights/components/app-a", "Resource")
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(minimalEntraSnapshot()), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await runtime.initialize();
+
+    const queriedAzureRbac = await runtime.queryAzureRbac("external-sp-1", {
+      page: 1,
+      pageSize: 10
+    });
+
+    expect(queriedAzureRbac).toMatchObject({
+      collectionId: "azureRbac",
+      rows: [
+        expect.objectContaining({
+          servicePrincipalId: "external-sp-1",
+          principalId: "external-sp-1",
+          roleDefinitionName: "Monitoring Metrics Publisher",
+          accessRisk: "medium",
+          accessScope: "/subscriptions/sub-1/resourceGroups/rg-app/providers/Microsoft.Insights/components/app-a",
+          accessScopeType: "Resource",
+          accessResourceId: "/subscriptions/sub-1/resourceGroups/rg-app/providers/Microsoft.Insights/components/app-a",
+          accessSubscriptionId: "sub-1",
+          accessDisplayName: "Monitoring Metrics Publisher on resource /subscriptions/sub-1/resourceGroups/rg-app/providers/Microsoft.Insights/components/app-a"
+        })
+      ],
+      count: 1
+    });
+  });
+});
+
 test("records snapshot registry metadata and skips unchanged snapshots on runtime restart", async () => {
   await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
     await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(minimalEntraSnapshot()), "utf8");
