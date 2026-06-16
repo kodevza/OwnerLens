@@ -1,5 +1,5 @@
-import type { AzureSnapshot } from "../../../core/azure/resources";
-import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
+import type { AzureSnapshot } from "../inputTransferObject/generated/AzureSnapshot";
+import type { EntraSnapshot } from "../inputTransferObject/generated/EntraSnapshot";
 import type { OwnerReport, OwnerReportRow } from "./azureOwnerReportTypes";
 import { azureOwnershipConfig } from "./azureOwnershipConfig";
 import { buildActivityIndex } from "./resolveAzureOwner";

@@ -1,6 +1,6 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
-import type { InputEntraGroupMember } from "../../inputTransferObject/entra/InputEntraGroupMember";
+import type { InputEntraGroupMember } from "../../inputTransferObject/generated/EntraSnapshot";
 
 export async function insertEntraGroupMemberRows(
   connection: DuckDBConnection,
@@ -56,7 +56,7 @@ export async function readEntraGroupMemberRows(
   );
 }
 
-async function readRows<Row extends Record<string, unknown>>(
+async function readRows<Row extends object>(
   connection: DuckDBConnection,
   sql: string
 ): Promise<Row[]> {

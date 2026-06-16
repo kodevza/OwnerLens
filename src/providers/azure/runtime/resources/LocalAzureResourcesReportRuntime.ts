@@ -3,16 +3,17 @@ import path from "node:path";
 
 import type { DuckDBConnection } from "@duckdb/node-api";
 
+import azureSnapshotSchema from "../../../../../contracts/azure/snapshot.v0.4.schema.json";
 import type {
   AzureActivityLog,
   AzureResource,
   AzureResourceGroup,
   AzureRoleAssignment,
-  AzureSnapshot,
   AzureSubscription,
   AzureUserAssignedManagedIdentity
 } from "../../../../core/azure/resources";
 import { pathExists, RuntimeHttpError, type LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
+import { parseAndValidateSnapshot } from "../../../../core/runtime/snapshotContractValidator";
 import {
   createEmptySnapshotImportStatus,
   prepareSnapshotImportDecision,
@@ -20,7 +21,8 @@ import {
   snapshotImportStatusFromRecord,
   type SnapshotImportStatus
 } from "../../../../core/runtime/snapshotImportRegistry";
-import type { AzureSnapshot as AzureSnapshotInput } from "../../inputTransferObject/resources/AzureSnapshot";
+import type { AzureSnapshot } from "../../inputTransferObject/generated/AzureSnapshot";
+import { normalizeAzureSnapshot } from "./normalizeAzureSnapshot";
 import {
   azureResourcesSnapshotFileName,
   importAzureResourcesSnapshotToDuckDb,
@@ -86,8 +88,14 @@ export class LocalAzureResourcesReportRuntime {
       return;
     }
 
-    const snapshot = JSON.parse(await readFile(snapshotPath, "utf8")) as AzureSnapshotInput & LocalSnapshotData;
-    await importAzureResourcesSnapshotToDuckDb(connection, snapshot);
+    const snapshot = parseAndValidateSnapshot<AzureSnapshot & LocalSnapshotData>(
+      await readFile(snapshotPath, "utf8"),
+      {
+        fileName: azureResourcesSnapshotFileName,
+        schema: azureSnapshotSchema
+      }
+    );
+    await importAzureResourcesSnapshotToDuckDb(connection, normalizeAzureSnapshot(snapshot));
     const registry = await recordSnapshotImport(connection, this.importSource, decision.metadata, false);
     this.status = snapshotImportStatusFromRecord(registry);
   }

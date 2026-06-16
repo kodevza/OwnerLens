@@ -4,10 +4,10 @@ import type {
   EntraServicePrincipal as CoreEntraServicePrincipal
 } from "../../../../core/azure/entra/types";
 import type {
-  EntraAppRole,
-  EntraOwner,
-  EntraServicePrincipal
-} from "../../inputTransferObject/entra/EntraServicePrincipal";
+  EntraServicePrincipal,
+  ServicePrincipalAppRole as EntraAppRole,
+  ServicePrincipalOwner as EntraOwner
+} from "../../inputTransferObject/generated/EntraSnapshot";
 
 export function mapEntraServicePrincipalToCore(
   servicePrincipal: EntraServicePrincipal

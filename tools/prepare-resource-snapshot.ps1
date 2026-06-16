@@ -178,6 +178,7 @@ foreach ($sub in $subs) {
     subscriptionName = $sub.Name
     tenantId = $sub.TenantId
     state = $sub.State
+    tags = $null
   }) | Out-Null
 
   Write-SnapshotProgress "[$($sub.Name)] Loading resource groups"

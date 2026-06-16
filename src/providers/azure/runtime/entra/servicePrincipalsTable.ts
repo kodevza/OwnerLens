@@ -1,6 +1,6 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
-import type { EntraServicePrincipal } from "../../inputTransferObject/entra/EntraServicePrincipal";
+import type { EntraServicePrincipal } from "../../inputTransferObject/generated/EntraSnapshot";
 
 export async function insertEntraServicePrincipalRows(
   connection: DuckDBConnection,

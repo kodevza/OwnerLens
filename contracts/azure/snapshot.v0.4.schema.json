@@ -1,0 +1,715 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ownerlens.dev/contracts/azure/snapshot.v0.4.schema.json",
+  "definitions": {
+    "AzureActivityLog": {
+      "additionalProperties": false,
+      "properties": {
+        "authorizationAction": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "authorizationScope": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "caller": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "callerAppId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "callerEmail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "callerIdentityType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "callerIpAddress": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "callerName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "callerObjectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "callerTenantId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "callerUserPrincipalName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "eventTimestamp": {
+          "type": "string"
+        },
+        "operationName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operationNameValue": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resourceGroupName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resourceId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resourceProviderName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resourceType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subStatus": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "submissionTimestamp": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subscriptionId": {
+          "type": "string"
+        },
+        "subscriptionName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "subscriptionName",
+        "eventTimestamp",
+        "submissionTimestamp",
+        "caller",
+        "operationName",
+        "operationNameValue",
+        "status",
+        "subStatus",
+        "category",
+        "resourceGroupName",
+        "resourceId",
+        "resourceProviderName",
+        "resourceType",
+        "authorizationAction",
+        "authorizationScope"
+      ],
+      "type": "object"
+    },
+    "AzureResource": {
+      "additionalProperties": false,
+      "properties": {
+        "identityPrincipalId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "identityTenantId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "identityType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "type": "string"
+        },
+        "resourceGroup": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "resourceName": {
+          "type": "string"
+        },
+        "resourceType": {
+          "type": "string"
+        },
+        "subscriptionId": {
+          "type": "string"
+        },
+        "subscriptionName": {
+          "type": "string"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AzureResourceTags"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "userAssignedIdentities": {},
+        "userAssignedIdentityResourceIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "subscriptionName",
+        "resourceId",
+        "resourceName",
+        "resourceGroup",
+        "resourceType",
+        "kind",
+        "location",
+        "tags",
+        "identityType",
+        "identityPrincipalId",
+        "identityTenantId",
+        "userAssignedIdentityResourceIds",
+        "userAssignedIdentities"
+      ],
+      "type": "object"
+    },
+    "AzureResourceGroup": {
+      "additionalProperties": false,
+      "properties": {
+        "location": {
+          "type": "string"
+        },
+        "resourceGroup": {
+          "type": "string"
+        },
+        "subscriptionId": {
+          "type": "string"
+        },
+        "subscriptionName": {
+          "type": "string"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AzureResourceTags"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "subscriptionName",
+        "resourceGroup",
+        "location",
+        "tags"
+      ],
+      "type": "object"
+    },
+    "AzureResourceTags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "AzureRoleAssignment": {
+      "additionalProperties": false,
+      "properties": {
+        "assignmentSource": {
+          "enum": [
+            "direct",
+            "group"
+          ],
+          "type": "string"
+        },
+        "canDelegate": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "conditionVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inheritedFromGroupDisplayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inheritedFromGroupId": {
+          "type": "string"
+        },
+        "principalDisplayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "principalType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "roleAssignmentId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "roleDefinitionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "roleDefinitionName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "type": "string"
+        },
+        "scopeManagementGroup": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scopeResourceGroup": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scopeResourceName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scopeResourceProvider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scopeResourceType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scopeSubscriptionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scopeType": {
+          "enum": [
+            "ManagementGroup",
+            "Subscription",
+            "ResourceGroup",
+            "Resource",
+            "Unknown",
+            null
+          ],
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signInName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subscriptionId": {
+          "type": "string"
+        },
+        "subscriptionName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "subscriptionName",
+        "roleAssignmentId",
+        "scope",
+        "principalId",
+        "principalType",
+        "principalDisplayName",
+        "signInName",
+        "roleDefinitionId",
+        "roleDefinitionName",
+        "canDelegate",
+        "condition",
+        "conditionVersion"
+      ],
+      "type": "object"
+    },
+    "AzureSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "activityLogs": {
+          "items": {
+            "$ref": "#/definitions/AzureActivityLog"
+          },
+          "type": "array"
+        },
+        "meta": {
+          "$ref": "#/definitions/AzureSnapshotMeta"
+        },
+        "resourceGroups": {
+          "items": {
+            "$ref": "#/definitions/AzureResourceGroup"
+          },
+          "type": "array"
+        },
+        "resources": {
+          "items": {
+            "$ref": "#/definitions/AzureResource"
+          },
+          "type": "array"
+        },
+        "roleAssignments": {
+          "items": {
+            "$ref": "#/definitions/AzureRoleAssignment"
+          },
+          "type": "array"
+        },
+        "subscriptions": {
+          "items": {
+            "$ref": "#/definitions/AzureSubscription"
+          },
+          "type": "array"
+        },
+        "userAssignedManagedIdentities": {
+          "items": {
+            "$ref": "#/definitions/AzureUserAssignedManagedIdentity"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "meta",
+        "subscriptions",
+        "resourceGroups",
+        "resources",
+        "userAssignedManagedIdentities",
+        "activityLogs"
+      ],
+      "type": "object"
+    },
+    "AzureSnapshotMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "activityDays": {
+          "type": "number"
+        },
+        "activityLogCount": {
+          "type": "number"
+        },
+        "activityStartTime": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "maxActivityRecords": {
+          "type": "number"
+        },
+        "provider": {
+          "const": "azure",
+          "type": "string"
+        },
+        "requestedSubscriptions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "resourceCount": {
+          "type": "number"
+        },
+        "resourceGroupCount": {
+          "type": "number"
+        },
+        "roleAssignmentCount": {
+          "type": "number"
+        },
+        "skipAuditLogsExport": {
+          "type": "boolean"
+        },
+        "snapshotVersion": {
+          "const": "0.4",
+          "type": "string"
+        },
+        "subscriptionCount": {
+          "type": "number"
+        },
+        "userAssignedManagedIdentityCount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "provider",
+        "snapshotVersion",
+        "createdAt",
+        "activityDays",
+        "activityStartTime",
+        "maxActivityRecords",
+        "requestedSubscriptions",
+        "subscriptionCount",
+        "resourceGroupCount",
+        "resourceCount",
+        "userAssignedManagedIdentityCount",
+        "activityLogCount"
+      ],
+      "type": "object"
+    },
+    "AzureSubscription": {
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "$ref": "#/definitions/AzureSubscriptionState"
+        },
+        "subscriptionId": {
+          "type": "string"
+        },
+        "subscriptionName": {
+          "type": "string"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AzureResourceTags"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tenantId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "subscriptionName",
+        "tenantId",
+        "state",
+        "tags"
+      ],
+      "type": "object"
+    },
+    "AzureSubscriptionState": {
+      "enum": [
+        "Enabled",
+        "Disabled",
+        "Warned",
+        "PastDue",
+        "Deleted"
+      ],
+      "type": "string"
+    },
+    "AzureUserAssignedManagedIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "resourceGroup": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "subscriptionId": {
+          "type": "string"
+        },
+        "subscriptionName": {
+          "type": "string"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AzureResourceTags"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tenantId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "subscriptionName",
+        "resourceId",
+        "name",
+        "resourceGroup",
+        "location",
+        "clientId",
+        "principalId",
+        "tenantId",
+        "tags"
+      ],
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "activityLogs": {
+      "items": {
+        "$ref": "#/definitions/AzureActivityLog"
+      },
+      "type": "array"
+    },
+    "meta": {
+      "$ref": "#/definitions/AzureSnapshotMeta"
+    },
+    "resourceGroups": {
+      "items": {
+        "$ref": "#/definitions/AzureResourceGroup"
+      },
+      "type": "array"
+    },
+    "resources": {
+      "items": {
+        "$ref": "#/definitions/AzureResource"
+      },
+      "type": "array"
+    },
+    "roleAssignments": {
+      "items": {
+        "$ref": "#/definitions/AzureRoleAssignment"
+      },
+      "type": "array"
+    },
+    "subscriptions": {
+      "items": {
+        "$ref": "#/definitions/AzureSubscription"
+      },
+      "type": "array"
+    },
+    "userAssignedManagedIdentities": {
+      "items": {
+        "$ref": "#/definitions/AzureUserAssignedManagedIdentity"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "meta",
+    "subscriptions",
+    "resourceGroups",
+    "resources",
+    "userAssignedManagedIdentities",
+    "activityLogs"
+  ],
+  "type": "object",
+  "title": "AzureSnapshot"
+}

@@ -9,3 +9,4 @@ data/
 src.zip
 dependency-graph.svg
 *.changes
+src/providers/azure/inputTransferObject/

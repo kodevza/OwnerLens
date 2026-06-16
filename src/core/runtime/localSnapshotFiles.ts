@@ -16,7 +16,6 @@ export type LocalSnapshotData = {
   meta?: {
     provider?: string;
     createdAt?: string;
-    [key: string]: unknown;
   };
   [key: string]: unknown;
 };
@@ -67,4 +66,3 @@ export async function pathExists(filePath: string): Promise<boolean> {
     return false;
   }
 }
-
