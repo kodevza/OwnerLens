@@ -12,14 +12,12 @@ The application is intended to:
 
 👉 export the resolved ownership results for Identity and Access Management (IAM) systems, 
 
-👉 support remediation ownership for Zero TrustAssessment (ZTA) findings. 
-
 OwnerLens helps split actionable remediations by the
 most likely accountable owners and provides traceable evidence for why each
 remediation was assigned.
 
-The app runs locally with Vite. Snapshot file (exported by ./tools/* scripts) stay on your machine and are read
-from the repository `data` directory by the development server.
+The app runs locally with Vite. Snapshot files exported by OwnerLens collector
+commands stay on your machine and are read from the local `data` directory.
 ```mermaid
 
 flowchart TD
@@ -29,11 +27,8 @@ flowchart TD
 
     C["3. Export to IAM / Recertification<br/><br/>CSV / JSON<br/>Owner mapping<br/>Gap report<br/>Input for SailPoint / Saviynt / Omada / Entra Governance"]
 
-    D["4. Information Enrichment with ZTA Report<br/>"]
-    E["5. Actionable remediations<br/>"]
 
     A --> B --> C
-    B --> D --> E
 ```    
 ## Features
 
@@ -49,10 +44,6 @@ flowchart TD
 
 ➡️ Export resolved ownership results to CSV and JSON files for resource groups, service principals, and managed identities.
 
-➡️ Enrich ZTA Assessment findings with ownership context, split actionable
-  remediations across accountable teams, and trace remediation assignments back
-  to ownership evidence.
-
 ➡️ Switch between snapshot files found in `./data`.
 
 ## Requirements
@@ -62,11 +53,16 @@ flowchart TD
 - PowerShell 7 or Windows PowerShell for snapshot export scripts
 - Azure PowerShell and Microsoft Graph PowerShell modules when exporting data
 
-## Install
+## Run With npx
 
 ```bash
 npx ownerlens start
 ```
+
+`npx ownerlens start` builds the app, starts Vite preview on `127.0.0.1`,
+creates `./data` in the directory where you run the command, and reads snapshot
+files from that directory. Open the Vite URL printed by the command, usually
+`http://127.0.0.1:4173`.
 
 ## Create Snapshot Files
 
@@ -90,43 +86,46 @@ Connect-MgGraph -TenantId "<tenant-id>" -Scopes "Application.Read.All","Group.Re
 
 Create the resource snapshot:
 
-```powershell
-.\tools\collect-azure.ps1
+```bash
+npx ownerlens collect:azure -SubscriptionIds "sub-id-1,sub-id-2"
 ```
 
 Create the Entra snapshot:
 
-```powershell
-.\tools\collect-entra.ps1
+```bash
+npx ownerlens collect:entra -TenantId "<tenant-id>"
 ```
 
 More script options are documented in [tools/README.md](tools/README.md).
-
-You can also run the collectors through npm, which is the same entrypoint that
-will be used after publishing the package:
-
-```bash
-npm run collect:azure -- -SubscriptionIds "sub-id-1,sub-id-2"
-npm run collect:entra -- -TenantId "<tenant-id>"
-```
 
 Snapshot files can contain tenant, subscription, resource, identity, group, and
 activity-log metadata. Review them before sharing. Files matching
 `data/*snapshot.json` are ignored by git.
 
-## Run The App
+## Local Development
+
+Clone the repository, install dependencies, then run the development server:
 
 ```bash
+npm install
 npm run dev
 ```
 
 Open the Vite URL printed by the command, usually `http://127.0.0.1:5173`.
 
+You can also exercise the published CLI entrypoint from a repository checkout:
+
+```bash
+npm run start
+npm run preview
+npm run collect:azure -- -SubscriptionIds "sub-id-1,sub-id-2"
+npm run collect:entra -- -TenantId "<tenant-id>"
+```
+
 For a production build:
 
 ```bash
 npm run build
-npm run preview
 ```
 
 ## Configure Ownership Rules
