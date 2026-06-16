@@ -10,6 +10,7 @@ import { readAzureRbac } from "./api";
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 const azureScopeTypeOptions = ["ManagementGroup", "Subscription", "ResourceGroup", "Resource", "Unknown"];
 const azurePrincipalTypeOptions = ["User", "Group", "ServicePrincipal", "ForeignGroup", "Device", "ManagedIdentity"];
+const assignmentSourceOptions = ["direct", "group"];
 
 const azureRbacFields: ReportFieldDescriptor<AzureRbac>[] = [
   {
@@ -25,6 +26,17 @@ const azureRbacFields: ReportFieldDescriptor<AzureRbac>[] = [
     valueType: "riskLevel",
     getValue: (assignment) => assignment.accessRisk,
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
+  },
+  {
+    id: "assignmentSource",
+    label: "Source",
+    valueType: "text",
+    getValue: (assignment) =>
+      assignment.assignmentSource === "group"
+        ? `Via group: ${assignment.inheritedFromGroupDisplayName ?? assignment.inheritedFromGroupId ?? "group"}`
+        : "Direct",
+    filterColumnId: "assignmentSource",
+    filter: { kind: "multiSelect", options: assignmentSourceOptions }
   },
   {
     id: "roleDefinitionName",

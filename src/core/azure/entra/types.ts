@@ -34,7 +34,6 @@ export type EntraServicePrincipal = {
   servicePrincipalNames: string[];
   tags: string[];
   appRoles?: ServicePrincipalAppRole[];
-  owners?: ServicePrincipalOwner[];
   appOwners?: ServicePrincipalOwner[];
   servicePrincipalOwners?: ServicePrincipalOwner[];
   applicationOwners?: ServicePrincipalOwner[];

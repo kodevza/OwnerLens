@@ -7,11 +7,12 @@ export async function importEntraSnapshotMetadata(
   connection: DuckDBConnection,
   snapshot: EntraSnapshot & LocalSnapshotData
 ): Promise<void> {
-  const { meta, servicePrincipals, applications, oauth2PermissionGrants, appRoleAssignments, ...extra } = snapshot;
+  const { meta, servicePrincipals, applications, oauth2PermissionGrants, appRoleAssignments, groupMembers, ...extra } = snapshot;
   void servicePrincipals;
   void applications;
   void oauth2PermissionGrants;
   void appRoleAssignments;
+  void groupMembers;
 
   await connection.run("insert into entra_snapshot_meta values ($data::json)", { data: JSON.stringify(meta) });
   await connection.run("insert into entra_snapshot_extra values ($data::json)", { data: JSON.stringify(extra) });

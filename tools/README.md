@@ -5,7 +5,7 @@ PowerShell scripts in this directory create the JSON snapshot files consumed by 
 ## Core Files
 
 - `prepare-resource-snapshot.ps1` creates the Azure resource snapshot used by the app. It exports subscriptions, resource groups, resources, managed identities, role assignments, and optional Azure Monitor activity logs.
-- `prepare-entra-snapshot.ps1` creates the Entra snapshot used by the app. It exports service principals, application registrations, and groups so ownership and identity relationships can be resolved.
+- `prepare-entra-snapshot.ps1` creates the Entra snapshot used by the app. It exports service principals, application registrations, groups, and raw group membership facts so ownership and identity relationships can be resolved.
 
 Run these commands from the repository root so the default output paths write into `.\data`.
 
@@ -98,11 +98,12 @@ npx ownerlens collect:entra -TenantId "<tenant-id>"
 - `collect-azure.ps1` signs in when needed, then calls `prepare-resource-snapshot.ps1`.
 - `collect-entra.ps1` signs in when needed, then calls `prepare-entra-snapshot.ps1`.
 - `prepare-resource-snapshot.ps1` exports Azure subscriptions, resource groups, resources, user-assigned managed identities, role assignments, and optional Azure Monitor activity logs.
-- `prepare-entra-snapshot.ps1` exports Entra service principals, application registrations, and groups.
+- `prepare-entra-snapshot.ps1` exports Entra service principals, application registrations, groups, and group memberships. Group memberships are collected as object IDs and member object types; Azure RBAC access inherited through a group is resolved later by the local runtime, not by the collector.
 - `azure-activity-check.ps1` is a helper loaded by `prepare-resource-snapshot.ps1`; it is not usually run directly.
 
 ## Notes
 
-- Snapshot files can contain tenant, subscription, resource, identity, application registration, group, credential metadata, and activity-log metadata. Review them before sharing.
+- Snapshot files can contain tenant, subscription, resource, identity, application registration, group, group membership, credential metadata, and activity-log metadata. Review them before sharing.
+- The Entra collector records group membership facts only. It does not evaluate those memberships as permissions; OwnerLens resolves Azure RBAC roles inherited through groups during local runtime enrichment.
 - The app discovers files in `.\data` whose names end with `snapshot.json`, such as `snapshot.json`, `entra-snapshot.json`, or `snapshot-prod.json`.
 - If scripts fail with a missing connection error, run the relevant sign-in command again and retry.

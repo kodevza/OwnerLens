@@ -207,8 +207,16 @@ export function formatAzureRbacSummary({
   }
 
   return roleAssignments
-    .map((assignment) => `${assignment.roleDefinitionName ?? "Role"} on ${assignment.scope}`)
+    .map((assignment) => `${assignment.roleDefinitionName ?? "Role"} on ${assignment.scope}${formatRoleAssignmentSource(assignment)}`)
     .join(", ");
+}
+
+function formatRoleAssignmentSource(assignment: AzureRoleAssignment): string {
+  if (assignment.assignmentSource !== "group") {
+    return "";
+  }
+
+  return ` via group ${assignment.inheritedFromGroupDisplayName ?? assignment.inheritedFromGroupId ?? "group"}`;
 }
 
 export function OwnerBadge({ confidence, owners }: { confidence: OwnerConfidence; owners: string[] }) {

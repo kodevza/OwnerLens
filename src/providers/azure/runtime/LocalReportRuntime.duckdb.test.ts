@@ -1428,7 +1428,8 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
             allowedMemberTypes: ["Application"]
           }
         ],
-        owners: [{ id: "owner-1", displayName: "Owner One" }],
+        owners: [{ id: "legacy-owner-1", displayName: "Legacy Owner One" }],
+        servicePrincipalOwners: [{ id: "owner-1", displayName: "Owner One" }],
         metadata: { source: "test" }
       },
       {
@@ -1447,6 +1448,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         tags: ["WindowsAzureActiveDirectoryManagedIdentity"],
         appRoles: [],
         owners: [],
+        servicePrincipalOwners: [],
         metadata: null
       }
     ],
@@ -1574,6 +1576,19 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         resourceDisplayName: null
       }
     ],
+    groupMembers: [
+      {
+        groupId: "group-1",
+        groupDisplayName: "Automation Owners",
+        memberId: "sp-1",
+        memberDisplayName: "Example app",
+        memberType: "servicePrincipal",
+        memberUserPrincipalName: null,
+        memberMail: null,
+        memberAppId: "app-1",
+        memberServicePrincipalType: "Application"
+      }
+    ],
     groups: [{ id: "group-1" }]
   };
 
@@ -1626,7 +1641,8 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
       id: "sp-1",
       appRoles: [{ id: "role-1" }],
       metadata: { source: "test" },
-      owners: [{ id: "owner-1" }]
+      owners: [{ id: "legacy-owner-1" }],
+      servicePrincipalOwners: [{ id: "owner-1" }]
     });
     expect(imported.applications).toHaveLength(1);
     expect(imported.applications?.[0]).toMatchObject({
@@ -1654,6 +1670,15 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
     expect(imported.oauth2PermissionGrants).toEqual(snapshot.oauth2PermissionGrants);
     expect(imported.oauth2PermissionGrants?.[0]).not.toHaveProperty("risk");
     expect(imported.appRoleAssignments).toEqual(snapshot.appRoleAssignments);
+    expect(imported.groupMembers).toEqual([
+      expect.objectContaining({
+        groupId: "group-1",
+        groupDisplayName: "Automation Owners",
+        memberId: "sp-1",
+        memberType: "servicePrincipal",
+        memberAppId: "app-1"
+      })
+    ]);
     expect(principalPermissions).toEqual({
       principalId: "SP-1",
       oauth2PermissionGrants: [
@@ -1780,6 +1805,81 @@ test("imports legacy Entra snapshots without applications as an empty applicatio
     const imported = await runtime.readSnapshot("entra-snapshot.json");
 
     expect((imported as EntraSnapshot).applications).toEqual([]);
+    expect((imported as EntraSnapshot).groupMembers).toEqual([]);
+  });
+});
+
+test("enriches service principal Azure RBAC through Entra group membership", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    servicePrincipals: [servicePrincipal("sp-1", "app-1", "Example app", "Application")],
+    groupMembers: [
+      {
+        groupId: "group-1",
+        groupDisplayName: "Privileged automation",
+        memberId: "sp-1",
+        memberDisplayName: "Example app",
+        memberType: "servicePrincipal",
+        memberUserPrincipalName: null,
+        memberMail: null,
+        memberAppId: "app-1",
+        memberServicePrincipalType: "Application"
+      }
+    ]
+  };
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot(),
+    roleAssignments: [
+      roleAssignment("group-1", "Owner", "/subscriptions/sub-1", "Subscription", "Group")
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await runtime.initialize();
+
+    const servicePrincipals = await runtime.readServicePrincipals();
+    const queriedAzureRbac = await runtime.queryAzureRbac("sp-1", {
+      page: 1,
+      pageSize: 10
+    });
+
+    expect(runtime.getStatus().enrichment).toMatchObject({
+      identityRoleAssignmentCount: 1,
+      accessRiskIdentityCount: 1
+    });
+    expect(servicePrincipals[0]).toMatchObject({
+      id: "sp-1",
+      permissionRisk: "high",
+      rbacRoleAssignmentCount: 1,
+      rbacRoleLevel: "high",
+      rbacSubscriptionCount: 1,
+      roleAssignments: [
+        expect.objectContaining({
+          principalId: "group-1",
+          principalType: "Group",
+          roleDefinitionName: "Owner",
+          assignmentSource: "group",
+          inheritedFromGroupId: "group-1",
+          inheritedFromGroupDisplayName: "Privileged automation"
+        })
+      ]
+    });
+    expect(queriedAzureRbac).toMatchObject({
+      collectionId: "azureRbac",
+      rows: [
+        expect.objectContaining({
+          servicePrincipalId: "sp-1",
+          principalId: "group-1",
+          assignmentSource: "group",
+          inheritedFromGroupDisplayName: "Privileged automation",
+          accessRisk: "high",
+          accessDisplayName: "Owner on subscription Subscription One"
+        })
+      ],
+      count: 1
+    });
   });
 });
 
@@ -2051,8 +2151,10 @@ test("enriches Entra runtime collections with latest ZTA remediation summaries",
     expect(servicePrincipalsCsv).toMatchObject({
       collectionId: "entra.servicePrincipals",
       fileName: "ownerlens-service-principals.csv",
+      columns: expect.arrayContaining(["servicePrincipalOwners"]),
       count: 1
     });
+    expect(servicePrincipalsCsv.columns).not.toContain("owners");
     expect(servicePrincipalsCsv.body).toContain("ztaRemediationCountAll");
     expect(servicePrincipalsCsv.body).toContain("sp-1");
     expect(servicePrincipalsCsv.body).toContain(remediationPackage.id);
@@ -2765,6 +2867,7 @@ function servicePrincipal(
     tags: typeof options === "string" ? [] : options.tags ?? [],
     appRoles: [],
     owners: [],
+    servicePrincipalOwners: [],
     metadata: null
   };
 }
@@ -2881,7 +2984,8 @@ function roleAssignment(
   principalId: string,
   roleDefinitionName: string,
   scope: string,
-  scopeType: NonNullable<AzureSnapshot["roleAssignments"]>[number]["scopeType"]
+  scopeType: NonNullable<AzureSnapshot["roleAssignments"]>[number]["scopeType"],
+  principalType = "ServicePrincipal"
 ): NonNullable<AzureSnapshot["roleAssignments"]>[number] {
   return {
     subscriptionId: "sub-1",
@@ -2896,7 +3000,7 @@ function roleAssignment(
     scopeResourceName: null,
     scopeManagementGroup: null,
     principalId,
-    principalType: "ServicePrincipal",
+    principalType,
     principalDisplayName: principalId,
     signInName: null,
     roleDefinitionId: `${roleDefinitionName}-id`,
