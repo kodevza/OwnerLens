@@ -8,7 +8,7 @@ import {
 } from "./src/providers/azure/runtime/localReportRuntimeRest";
 
 function localReportRuntimeApi(): Plugin {
-  const runtime = createDefaultLocalReportRuntime(process.cwd());
+  const runtime = createDefaultLocalReportRuntime(process.env.OWNERLENS_DATA_DIR ?? process.cwd());
 
   return {
     name: "ownerlens-local-report-runtime-api",

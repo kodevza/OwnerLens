@@ -139,6 +139,17 @@ export async function exportResourceGroupsCsv(selection: CsvExportSelection): Pr
   );
 }
 
+export async function exportRemediationPackageTasksCsv(
+  packageId: string,
+  selection: CsvExportSelection
+): Promise<void> {
+  await downloadRuntimeCsv(
+    `/api/data/remediationPackages/tasks?id=${encodeURIComponent(packageId)}`,
+    selection,
+    "Remediation package tasks CSV export failed"
+  );
+}
+
 export async function readAzureRbac({
   filters,
   page,

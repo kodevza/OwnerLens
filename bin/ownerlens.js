@@ -7,10 +7,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const invocationRoot = process.cwd();
 const require = createRequire(import.meta.url);
 const [, , command = "help", ...args] = process.argv;
 
-const dataDir = ensureDataDirectory();
+const dataDir = ensureDataDirectory(invocationRoot);
 printDataDirectorySummary(dataDir);
 
 const commands = new Map([
@@ -86,6 +87,7 @@ function runVite(args) {
 function runViteSync(args) {
   return spawnSync(process.execPath, [resolveViteScript(), ...args], {
     cwd: packageRoot,
+    env: viteEnv(),
     stdio: "inherit"
   });
 }
@@ -95,7 +97,7 @@ function resolveViteScript() {
 }
 
 function runNodeScript(args) {
-  const child = spawn(process.execPath, args, { cwd: packageRoot, stdio: "inherit" });
+  const child = spawn(process.execPath, args, { cwd: packageRoot, env: viteEnv(), stdio: "inherit" });
   child.on("exit", (code, signal) => {
     if (signal) {
       process.kill(process.pid, signal);
@@ -106,6 +108,10 @@ function runNodeScript(args) {
   });
 
   return child;
+}
+
+function viteEnv() {
+  return { ...process.env, OWNERLENS_DATA_DIR: dataDir };
 }
 
 function resolvePowerShell() {
@@ -129,8 +135,8 @@ function commandExists(name) {
   return result.status === 0;
 }
 
-function ensureDataDirectory() {
-  const dataDir = join(packageRoot, "data");
+function ensureDataDirectory(rootDir) {
+  const dataDir = join(rootDir, "data");
 
   try {
     if (statSync(dataDir, { throwIfNoEntry: false })?.isDirectory()) {

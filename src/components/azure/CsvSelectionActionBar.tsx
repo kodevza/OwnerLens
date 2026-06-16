@@ -1,15 +1,17 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 
 import type { CsvExportSelection } from "./api";
 import { SelectionActionBar } from "../../report/components/SelectionActionBar";
 import { Button } from "../../report/components/ui/button";
 
 type CsvSelectionActionBarProps = CsvExportSelection & {
+  children?: ReactNode;
   itemLabel: string;
   onExportCsv: (selection: CsvExportSelection) => Promise<void>;
 };
 
 export function CsvSelectionActionBar({
+  children,
   filters,
   itemLabel,
   selectAllMatchingFilters,
@@ -39,6 +41,7 @@ export function CsvSelectionActionBar({
 
   return (
     <SelectionActionBar errorMessage={exportState.status === "error" ? exportState.message : undefined}>
+      {children}
       <Button
         aria-label={`Export ${selectionLabel} to CSV`}
         disabled={isExporting}

@@ -4,8 +4,14 @@ import { createRuntimeRestMiddleware } from "../../../core/runtime/rest";
 import type { AzureSnapshot } from "../../../core/azure/resources";
 import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
 
-function getEndpoint(endpoints: ReturnType<typeof defineLocalReportRuntimeRestEndpoints>, path: string) {
-  const endpoint = endpoints.find((candidate) => candidate.path === path);
+function getEndpoint(
+  endpoints: ReturnType<typeof defineLocalReportRuntimeRestEndpoints>,
+  path: string,
+  method?: string
+) {
+  const endpoint = endpoints.find(
+    (candidate) => candidate.path === path && (!method || (candidate.method ?? "GET") === method)
+  );
 
   if (!endpoint) {
     throw new Error(`Missing endpoint: ${path}`);
@@ -339,6 +345,17 @@ test("defines local report runtime REST endpoints", async () => {
         ]
       })
     ),
+    exportRemediationPackageTasksCsv: jest.fn(() =>
+      Promise.resolve({
+        kind: "csv",
+        collectionId: "remediationPackage.tasks",
+        fileName: "ownerlens-remediation-package-package-1.csv",
+        contentType: "text/csv; charset=utf-8",
+        body: "Task ID,Title\ntask-1,Service principal exposure",
+        columns: ["id", "title"],
+        count: 1
+      })
+    ),
     deleteRemediationTasks: jest.fn((request: { packageId: string; taskIds: string[] }) =>
       Promise.resolve({
         id: request.packageId,
@@ -396,7 +413,8 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/zeroTrustAssessment/remediationPackages"
   );
   const remediationPackagesEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages");
-  const remediationTasksEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages/tasks");
+  const remediationTaskExportEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages/tasks", "GET");
+  const remediationTasksEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages/tasks", "DELETE");
   const enrichmentRecalculateEndpoint = getEndpoint(endpoints, "/api/data/runtime/enrichment/recalculate");
   const runtimeEndpoint = getEndpoint(endpoints, "/api/data/runtime");
 
@@ -422,6 +440,7 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/zeroTrustAssessment/report",
     "/api/data/zeroTrustAssessment/remediationPackages",
     "/api/data/remediationPackages",
+    "/api/data/remediationPackages/tasks",
     "/api/data/remediationPackages/tasks",
     "/api/data/runtime/enrichment/recalculate",
     "/api/data/runtime"
@@ -671,6 +690,18 @@ test("defines local report runtime REST endpoints", async () => {
     ]
   });
   await expect(
+    remediationTaskExportEndpoint.handle({
+      req: {},
+      url: new URL(
+        "http://localhost/api/data/remediationPackages/tasks?format=csv&id=package-1&selectedRowKey=task-1&sort[0][column]=title&sort[0][direction]=asc"
+      )
+    })
+  ).resolves.toMatchObject({
+    kind: "csv",
+    collectionId: "remediationPackage.tasks",
+    fileName: "ownerlens-remediation-package-package-1.csv"
+  });
+  await expect(
     remediationTasksEndpoint.handle({
       body: {
         packageId: "package-1",
@@ -833,6 +864,13 @@ test("defines local report runtime REST endpoints", async () => {
     selectedRowKeys: ["zta-1"]
   });
   expect(runtime.readRemediationPackage).toHaveBeenCalledWith("package-1");
+  expect(runtime.exportRemediationPackageTasksCsv).toHaveBeenCalledWith("package-1", {
+    filters: [],
+    sortRules: [{ columnId: "title", direction: "asc" }],
+    page: undefined,
+    pageSize: undefined,
+    selectedRowKeys: ["task-1"]
+  });
   expect(runtime.deleteRemediationTasks).toHaveBeenCalledWith({
     packageId: "package-1",
     taskIds: ["task-1"]

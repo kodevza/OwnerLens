@@ -12,7 +12,7 @@ export function SelectionActionBar({ children, className, errorMessage }: Select
   return (
     <div
       className={cn(
-        "fixed bottom-0 left-0 z-50 flex h-[120px] w-full items-center justify-end gap-4 border-t bg-background/95 px-6 shadow-lg backdrop-blur",
+        "fixed bottom-0 left-0 z-50 flex h-[120px] w-full items-center justify-end gap-4 border-t bg-background/95 py-6 pl-6 pr-[10%]  pl-[10%] shadow-lg backdrop-blur",
         className
       )}
     >
