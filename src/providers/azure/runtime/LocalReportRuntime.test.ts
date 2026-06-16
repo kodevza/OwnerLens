@@ -1,8 +1,8 @@
 import { defineLocalReportRuntimeRestEndpoints } from "./localReportRuntimeRest";
 import type { LocalReportRuntime } from "./LocalReportRuntime";
 import { createRuntimeRestMiddleware } from "../../../core/runtime/rest";
-import type { AzureSnapshot } from "../../../core/azure/resources";
-import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
+import type { AzureSnapshot } from "../inputTransferObject/generated/AzureSnapshot";
+import type { EntraSnapshot } from "../inputTransferObject/generated/EntraSnapshot";
 
 function getEndpoint(
   endpoints: ReturnType<typeof defineLocalReportRuntimeRestEndpoints>,
@@ -24,7 +24,7 @@ test("defines local report runtime REST endpoints", async () => {
   const azureSnapshot: AzureSnapshot = {
     meta: {
       provider: "azure",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       activityDays: 30,
       activityStartTime: "2026-05-06T00:00:00.000Z",
@@ -99,7 +99,7 @@ test("defines local report runtime REST endpoints", async () => {
   const entraSnapshot: EntraSnapshot = {
     meta: {
       provider: "entra",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
       account: "owner@example.test",

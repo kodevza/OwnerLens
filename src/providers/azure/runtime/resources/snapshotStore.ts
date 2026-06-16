@@ -1,8 +1,8 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
-import type { AzureSnapshot } from "../../../../core/azure/resources";
 import type { LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
-import type { AzureSnapshot as AzureSnapshotInput } from "../../inputTransferObject/resources/AzureSnapshot";
+import type { AzureSnapshot } from "../../inputTransferObject/generated/AzureSnapshot";
+import type { NormalizedAzureSnapshot } from "./normalizeAzureSnapshot";
 import { importAzureResourcesSnapshotMetadata } from "./snapshotMetadataTable";
 import {
   insertAzureActivityLogRows,
@@ -23,7 +23,7 @@ export const azureResourcesSnapshotFileName = "snapshot.json";
 
 export async function importAzureResourcesSnapshotToDuckDb(
   connection: DuckDBConnection,
-  snapshot: AzureSnapshotInput & LocalSnapshotData
+  snapshot: NormalizedAzureSnapshot & LocalSnapshotData
 ): Promise<void> {
   await connection.run("begin transaction");
   try {
@@ -68,7 +68,7 @@ export async function readAzureResourcesSnapshotFromDuckDb(
 
   return {
     ...parseJsonObject(extraRows[0]?.data),
-    meta: parseJsonObject(metaRows[0]?.data) as AzureSnapshot["meta"],
+    meta: parseJsonObject(metaRows[0]?.data) as unknown as AzureSnapshot["meta"],
     subscriptions: await readAzureSubscriptionRows(connection),
     resourceGroups: await readAzureResourceGroupRows(connection),
     resources: await readAzureResourceRows(connection),

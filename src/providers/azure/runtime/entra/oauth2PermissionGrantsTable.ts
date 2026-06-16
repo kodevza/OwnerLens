@@ -1,6 +1,6 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
-import type { EntraOAuth2PermissionGrant } from "../../inputTransferObject/entra/EntraOAuth2PermissionGrant";
+import type { EntraOAuth2PermissionGrant } from "../../inputTransferObject/generated/EntraSnapshot";
 
 export async function insertEntraOAuth2PermissionGrantRows(
   connection: DuckDBConnection,
@@ -39,7 +39,7 @@ export async function readEntraOAuth2PermissionGrantRows(
   );
 }
 
-async function readRows<Row extends Record<string, unknown>>(
+async function readRows<Row extends object>(
   connection: DuckDBConnection,
   sql: string
 ): Promise<Row[]> {

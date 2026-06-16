@@ -1,19 +1,20 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
-import type { EntraSnapshot } from "../../inputTransferObject/entra/EntraSnapshot";
 import type { LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
+import type { EntraSnapshot } from "../../inputTransferObject/generated/EntraSnapshot";
 import { insertEntraApplicationRows, readEntraApplicationRows } from "./applicationsTable";
 import { insertEntraAppRoleAssignmentRows, readEntraAppRoleAssignmentRows } from "./appRoleAssignmentsTable";
 import { insertEntraGroupMemberRows, readEntraGroupMemberRows } from "./groupMembersTable";
 import { insertEntraOAuth2PermissionGrantRows, readEntraOAuth2PermissionGrantRows } from "./oauth2PermissionGrantsTable";
 import { insertEntraServicePrincipalRows, readEntraServicePrincipalRows } from "./servicePrincipalsTable";
 import { importEntraSnapshotMetadata } from "./snapshotMetadataTable";
+import type { NormalizedEntraSnapshot } from "./normalizeEntraSnapshot";
 
 export const entraSnapshotFileName = "entra-snapshot.json";
 
 export async function importEntraSnapshotToDuckDb(
   connection: DuckDBConnection,
-  snapshot: EntraSnapshot & LocalSnapshotData
+  snapshot: NormalizedEntraSnapshot & LocalSnapshotData
 ): Promise<void> {
   await connection.run("begin transaction");
   try {
@@ -54,7 +55,7 @@ export async function readEntraSnapshotFromDuckDb(
 
   return {
     ...parseJsonObject(extraRows[0]?.data),
-    meta: parseJsonObject(metaRows[0]?.data) as EntraSnapshot["meta"],
+    meta: parseJsonObject(metaRows[0]?.data) as unknown as EntraSnapshot["meta"],
     servicePrincipals,
     applications,
     oauth2PermissionGrants,

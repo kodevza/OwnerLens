@@ -3,7 +3,9 @@ import path from "node:path";
 
 import type { DuckDBConnection } from "@duckdb/node-api";
 
+import entraSnapshotSchema from "../../../../../contracts/entra/snapshot.v0.4.schema.json";
 import { pathExists, RuntimeHttpError, type LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
+import { parseAndValidateSnapshot } from "../../../../core/runtime/snapshotContractValidator";
 import {
   createEmptySnapshotImportStatus,
   prepareSnapshotImportDecision,
@@ -15,9 +17,11 @@ import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdenti
 import type { EntraPrincipalPermissionSummary, ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
 import type { EntraAppRoleAssignment, EntraOAuth2PermissionGrant } from "../../../../core/azure/entra/types";
 import type { PermissionRiskLevel } from "../../../../core/risk/types";
-import type { EntraOAuth2PermissionGrant as InputEntraOAuth2PermissionGrant } from "../../inputTransferObject/entra/EntraOAuth2PermissionGrant";
-import type { EntraServicePrincipal } from "../../inputTransferObject/entra/EntraServicePrincipal";
-import type { EntraSnapshot } from "../../inputTransferObject/entra/EntraSnapshot";
+import type {
+  EntraOAuth2PermissionGrant as InputEntraOAuth2PermissionGrant,
+  EntraServicePrincipal,
+  EntraSnapshot
+} from "../../inputTransferObject/generated/EntraSnapshot";
 import { readEntraAppRoleAssignmentRows } from "./appRoleAssignmentsTable";
 import { readEntraOAuth2PermissionGrantRows } from "./oauth2PermissionGrantsTable";
 import { readLatestAzureIdentityEnrichment } from "../enrichment/azureIdentityEnrichment";
@@ -28,6 +32,7 @@ import {
   readEntraSnapshotFromDuckDb
 } from "./snapshotStore";
 import { mapEntraServicePrincipalsToCore } from "./entraServicePrincipalMapper";
+import { normalizeEntraSnapshot } from "./normalizeEntraSnapshot";
 import { toManagedIdentities, toServicePrincipals } from "./principalProjection";
 
 export type LocalEntraReportCollectionId =
@@ -85,8 +90,14 @@ export class LocalEntraReportRuntime {
       return;
     }
 
-    const snapshot = JSON.parse(await readFile(entraSnapshotPath, "utf8")) as EntraSnapshot & LocalSnapshotData;
-    await importEntraSnapshotToDuckDb(connection, snapshot);
+    const snapshot = parseAndValidateSnapshot<EntraSnapshot & LocalSnapshotData>(
+      await readFile(entraSnapshotPath, "utf8"),
+      {
+        fileName: entraSnapshotFileName,
+        schema: entraSnapshotSchema
+      }
+    );
+    await importEntraSnapshotToDuckDb(connection, normalizeEntraSnapshot(snapshot));
     const registry = await recordSnapshotImport(connection, this.importSource, decision.metadata, false);
     this.status = snapshotImportStatusFromRecord(registry);
   }

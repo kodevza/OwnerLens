@@ -1,42 +1,8 @@
 param(
-  [string]$OutputPath = ".\data\entra-snapshot.json"
+  [string]$OutputPath = ".\data\entra-snapshot.json",
+
+  [switch]$LoadFunctionsOnly
 )
-
-$requiredGraphModules = @(
-  "Microsoft.Graph.Authentication",
-  "Microsoft.Graph.Applications"
-)
-
-foreach ($moduleName in $requiredGraphModules) {
-  try {
-    Import-Module $moduleName -ErrorAction Stop
-  } catch {
-    throw "Microsoft Graph PowerShell module missing: $moduleName. Install: Install-Module Microsoft.Graph -Scope CurrentUser"
-  }
-}
-
-$context = Get-MgContext
-
-if (-not $context) {
-  throw 'Not connected. Run: Connect-MgGraph -TenantId "<tenant-id>" -Scopes "Application.Read.All","Group.Read.All","Directory.Read.All"'
-}
-
-$snapshot = [ordered]@{
-  meta = [ordered]@{
-    provider = "entra"
-    snapshotVersion = "0.4"
-    createdAt = (Get-Date).ToUniversalTime().ToString("o")
-    tenantId = $context.TenantId
-    account = $context.Account
-    scopes = $context.Scopes
-  }
-  servicePrincipals = @()
-  applications = @()
-  oauth2PermissionGrants = @()
-  appRoleAssignments = @()
-  groups = @()
-  groupMembers = @()
-}
 
 function Get-DirectoryObjectSnapshotValue {
   param(
@@ -74,6 +40,27 @@ function ConvertTo-OwnerSnapshot {
     mail = Get-DirectoryObjectSnapshotValue -DirectoryObject $Owner -Name "Mail"
     ownerType = if ($Owner.AdditionalProperties) { $Owner.AdditionalProperties["@odata.type"] } else { $null }
   }
+}
+
+function Get-ExpandedOwnerSnapshots {
+  param(
+    [Parameter(Mandatory = $true)]
+    $DirectoryObject
+  )
+
+  $owners = $DirectoryObject.Owners
+
+  if ($null -eq $owners -and $DirectoryObject.AdditionalProperties) {
+    $owners = $DirectoryObject.AdditionalProperties["owners"]
+  }
+
+  return @(
+    foreach ($owner in @($owners)) {
+      if ($owner) {
+        ConvertTo-OwnerSnapshot -Owner $owner
+      }
+    }
+  )
 }
 
 function ConvertTo-GroupMemberType {
@@ -216,6 +203,113 @@ function ConvertTo-ApplicationAppRoleSnapshot {
   }
 }
 
+function Merge-OwnerSnapshots {
+  param(
+    [array]$OwnerSets = @()
+  )
+
+  $seenOwnerIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+  $mergedOwners = @()
+
+  foreach ($ownerSet in $OwnerSets) {
+    foreach ($owner in @($ownerSet)) {
+      if (-not $owner) {
+        continue
+      }
+
+      $ownerId = [string]$owner.id
+
+      if (-not [string]::IsNullOrWhiteSpace($ownerId)) {
+        if (-not $seenOwnerIds.Add($ownerId)) {
+          continue
+        }
+      }
+
+      $mergedOwners += $owner
+    }
+  }
+
+  return $mergedOwners
+}
+
+function New-ApplicationOwnerIndex {
+  param(
+    [array]$Applications = @()
+  )
+
+  $ownersByAppId = @{}
+
+  foreach ($app in @($Applications)) {
+    if (-not $app.AppId) {
+      continue
+    }
+
+    $ownersByAppId[[string]$app.AppId] = Get-ExpandedOwnerSnapshots -DirectoryObject $app
+  }
+
+  return $ownersByAppId
+}
+
+function Get-ApplicationOwnersByAppId {
+  param(
+    [string]$AppId,
+
+    [hashtable]$ApplicationOwnersByAppId = @{}
+  )
+
+  if ([string]::IsNullOrWhiteSpace($AppId)) {
+    return @()
+  }
+
+  if (-not $ApplicationOwnersByAppId.ContainsKey($AppId)) {
+    return @()
+  }
+
+  return @($ApplicationOwnersByAppId[$AppId])
+}
+
+$ownerExpand = "owners(`$select=id,displayName,userPrincipalName,mail)"
+
+if ($LoadFunctionsOnly) {
+  return
+}
+
+$requiredGraphModules = @(
+  "Microsoft.Graph.Authentication",
+  "Microsoft.Graph.Applications"
+)
+
+foreach ($moduleName in $requiredGraphModules) {
+  try {
+    Import-Module $moduleName -ErrorAction Stop
+  } catch {
+    throw "Microsoft Graph PowerShell module missing: $moduleName. Install: Install-Module Microsoft.Graph -Scope CurrentUser"
+  }
+}
+
+$context = Get-MgContext
+
+if (-not $context) {
+  throw 'Not connected. Run: Connect-MgGraph -TenantId "<tenant-id>" -Scopes "Application.Read.All","Group.Read.All","Directory.Read.All"'
+}
+
+$snapshot = [ordered]@{
+  meta = [ordered]@{
+    provider = "entra"
+    snapshotVersion = "0.4"
+    createdAt = (Get-Date).ToUniversalTime().ToString("o")
+    tenantId = $context.TenantId
+    account = $context.Account
+    scopes = $context.Scopes
+  }
+  servicePrincipals = @()
+  applications = @()
+  oauth2PermissionGrants = @()
+  appRoleAssignments = @()
+  groups = @()
+  groupMembers = @()
+}
+
 $oauth2PermissionGrantIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
 function Add-OAuth2PermissionGrantSnapshot {
@@ -244,7 +338,8 @@ function Add-OAuth2PermissionGrantSnapshot {
 
 $servicePrincipals = Get-MgServicePrincipal `
   -All `
-  -Property Id,AppId,DisplayName,ServicePrincipalType,PublisherName,AccountEnabled,AppOwnerOrganizationId,AppDisplayName,Homepage,LoginUrl,ReplyUrls,ServicePrincipalNames,Tags,AppRoles
+  -Property Id,AppId,DisplayName,ServicePrincipalType,PublisherName,AccountEnabled,AppOwnerOrganizationId,AppDisplayName,Homepage,LoginUrl,ReplyUrls,ServicePrincipalNames,Tags,AppRoles `
+  -ExpandProperty $ownerExpand
 
 $servicePrincipalById = @{}
 
@@ -252,57 +347,15 @@ foreach ($sp in $servicePrincipals) {
   $servicePrincipalById[$sp.Id] = $sp
 }
 
-foreach ($sp in $servicePrincipals) {
-  $servicePrincipalOwners = @(
-    Get-MgServicePrincipalOwner `
-      -ServicePrincipalId $sp.Id `
-      -All `
-      -Property Id,DisplayName,UserPrincipalName,Mail |
-      ForEach-Object { ConvertTo-OwnerSnapshot -Owner $_ }
-  )
-
-  $snapshot.servicePrincipals += [pscustomobject]@{
-    id = $sp.Id
-    appId = $sp.AppId
-    displayName = $sp.DisplayName
-    appDisplayName = $sp.AppDisplayName
-    servicePrincipalType = $sp.ServicePrincipalType
-    publisherName = $sp.PublisherName
-    accountEnabled = $sp.AccountEnabled
-    appOwnerOrganizationId = $sp.AppOwnerOrganizationId
-    homepage = $sp.Homepage
-    loginUrl = $sp.LoginUrl
-    replyUrls = $sp.ReplyUrls
-    servicePrincipalNames = $sp.ServicePrincipalNames
-    tags = $sp.Tags
-    servicePrincipalOwners = $servicePrincipalOwners
-    appRoles = @(
-      $sp.AppRoles | ForEach-Object {
-        [pscustomobject]@{
-          id = $_.Id
-          value = $_.Value
-          displayName = $_.DisplayName
-          description = $_.Description
-          isEnabled = $_.IsEnabled
-          allowedMemberTypes = $_.AllowedMemberTypes
-        }
-      }
-    )
-  }
-}
-
 $applications = Get-MgApplication `
   -All `
-  -Property Id,AppId,DisplayName,SignInAudience,PublisherDomain,IdentifierUris,Tags,AppRoles,Api,RequiredResourceAccess,Web,Spa,PublicClient,PasswordCredentials,KeyCredentials,CreatedDateTime,DeletedDateTime,DisabledByMicrosoftStatus,Info,Notes
+  -Property Id,AppId,DisplayName,SignInAudience,PublisherDomain,IdentifierUris,Tags,AppRoles,Api,RequiredResourceAccess,Web,Spa,PublicClient,PasswordCredentials,KeyCredentials,CreatedDateTime,DeletedDateTime,DisabledByMicrosoftStatus,Info,Notes `
+  -ExpandProperty $ownerExpand
+
+$applicationOwnersByAppId = New-ApplicationOwnerIndex -Applications $applications
 
 foreach ($app in $applications) {
-  $applicationOwners = @(
-    Get-MgApplicationOwner `
-      -ApplicationId $app.Id `
-      -All `
-      -Property Id,DisplayName,UserPrincipalName,Mail |
-      ForEach-Object { ConvertTo-OwnerSnapshot -Owner $_ }
-  )
+  $applicationOwners = Get-ApplicationOwnersByAppId -AppId $app.AppId -ApplicationOwnersByAppId $applicationOwnersByAppId
 
   $snapshot.applications += [pscustomobject]@{
     id = $app.Id
@@ -326,6 +379,44 @@ foreach ($app in $applications) {
     info = ConvertTo-SafeSnapshotValue -Value $app.Info
     notes = $app.Notes
     owners = $applicationOwners
+  }
+}
+
+foreach ($sp in $servicePrincipals) {
+  $servicePrincipalOwners = Get-ExpandedOwnerSnapshots -DirectoryObject $sp
+  $applicationOwners = Get-ApplicationOwnersByAppId -AppId $sp.AppId -ApplicationOwnersByAppId $applicationOwnersByAppId
+  $owners = Merge-OwnerSnapshots -OwnerSets @($servicePrincipalOwners, $applicationOwners)
+
+  $snapshot.servicePrincipals += [pscustomobject]@{
+    id = $sp.Id
+    appId = $sp.AppId
+    displayName = $sp.DisplayName
+    appDisplayName = $sp.AppDisplayName
+    servicePrincipalType = $sp.ServicePrincipalType
+    publisherName = $sp.PublisherName
+    accountEnabled = $sp.AccountEnabled
+    appOwnerOrganizationId = $sp.AppOwnerOrganizationId
+    homepage = $sp.Homepage
+    loginUrl = $sp.LoginUrl
+    replyUrls = $sp.ReplyUrls
+    servicePrincipalNames = $sp.ServicePrincipalNames
+    tags = $sp.Tags
+    owners = $owners
+    appOwners = $owners
+    servicePrincipalOwners = $servicePrincipalOwners
+    applicationOwners = $applicationOwners
+    appRoles = @(
+      $sp.AppRoles | ForEach-Object {
+        [pscustomobject]@{
+          id = $_.Id
+          value = $_.Value
+          displayName = $_.DisplayName
+          description = $_.Description
+          isEnabled = $_.IsEnabled
+          allowedMemberTypes = $_.AllowedMemberTypes
+        }
+      }
+    )
   }
 }
 

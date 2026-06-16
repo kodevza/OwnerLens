@@ -6,8 +6,8 @@ import { DuckDBInstance } from "@duckdb/node-api";
 
 import { LocalReportRuntime } from "./LocalReportRuntime";
 import { defineLocalReportRuntimeRestEndpoints } from "./localReportRuntimeRest";
-import type { AzureSnapshot } from "../../../core/azure/resources";
-import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
+import type { AzureSnapshot } from "../inputTransferObject/generated/AzureSnapshot";
+import type { EntraSnapshot } from "../inputTransferObject/generated/EntraSnapshot";
 import {
   importZeroTrustAssessmentReportToDuckDb,
   readZeroTrustAssessmentReportFromDuckDb
@@ -245,7 +245,7 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
   const entraSnapshot: EntraSnapshot = {
     meta: {
       provider: "entra",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
       account: "owner@example.test",
@@ -571,7 +571,7 @@ test("fills Zero Trust Assessment related object application ids through the RES
   const entraSnapshot: EntraSnapshot = {
     meta: {
       provider: "entra",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
       account: "owner@example.test",
@@ -1393,7 +1393,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
   const snapshot: EntraSnapshot & { groups: Array<{ id: string }> } = {
     meta: {
       provider: "entra",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
       account: "owner@example.test",
@@ -1781,7 +1781,7 @@ test("imports legacy Entra snapshots without applications as an empty applicatio
   const snapshot: EntraSnapshot = {
     meta: {
       provider: "entra",
-      snapshotVersion: "0.3",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
       account: "owner@example.test",
@@ -2030,7 +2030,7 @@ test("enriches Entra runtime collections with latest ZTA remediation summaries",
   const entraSnapshot: EntraSnapshot = {
     meta: {
       provider: "entra",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
       account: "owner@example.test",
@@ -2172,7 +2172,7 @@ test("enriches service principals with ZTA remediations related to application o
   const entraSnapshot: EntraSnapshot = {
     meta: {
       provider: "entra",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
       account: "owner@example.test",
@@ -2419,7 +2419,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
   const azureSnapshot: AzureSnapshot = {
     meta: {
       provider: "azure",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       activityDays: 30,
       activityStartTime: "2026-05-06T00:00:00.000Z",
@@ -2487,7 +2487,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
   const entraSnapshot: EntraSnapshot = {
     meta: {
       provider: "entra",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
       account: "owner@example.test",
@@ -2648,7 +2648,7 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
   const entraSnapshot: EntraSnapshot = {
     meta: {
       provider: "entra",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
       account: "owner@example.test",
@@ -2876,7 +2876,7 @@ function minimalEntraSnapshot(): EntraSnapshot {
   return {
     meta: {
       provider: "entra",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
       account: "owner@example.test",
@@ -2897,7 +2897,7 @@ function minimalAzureSnapshot(resourceNames = ["app-a"]): AzureSnapshot {
   return {
     meta: {
       provider: "azure",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       activityDays: 30,
       activityStartTime: "2026-05-06T00:00:00.000Z",

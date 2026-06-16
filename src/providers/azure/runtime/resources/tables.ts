@@ -1,19 +1,21 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type {
-  AzureActivityLog,
-  AzureResource,
-  AzureResourceGroup,
-  AzureRoleAssignment,
-  AzureSubscription,
-  AzureUserAssignedManagedIdentity
+  AzureActivityLog as CoreAzureActivityLog,
+  AzureResource as CoreAzureResource,
+  AzureResourceGroup as CoreAzureResourceGroup,
+  AzureRoleAssignment as CoreAzureRoleAssignment,
+  AzureSubscription as CoreAzureSubscription,
+  AzureUserAssignedManagedIdentity as CoreAzureUserAssignedManagedIdentity
 } from "../../../../core/azure/resources";
-import type { AzureActivityLog as AzureActivityLogInput } from "../../inputTransferObject/resources/AzureActivityLog";
-import type { AzureResource as AzureResourceInput } from "../../inputTransferObject/resources/AzureResource";
-import type { AzureResourceGroup as AzureResourceGroupInput } from "../../inputTransferObject/resources/AzureResourceGroup";
-import type { AzureRoleAssignment as AzureRoleAssignmentInput } from "../../inputTransferObject/resources/AzureRoleAssignment";
-import type { AzureSubscription as AzureSubscriptionInput } from "../../inputTransferObject/resources/AzureSubscription";
-import type { AzureUserAssignedManagedIdentity as AzureUserAssignedManagedIdentityInput } from "../../inputTransferObject/resources/AzureUserAssignedManagedIdentity";
+import type {
+  AzureActivityLog as AzureActivityLogInput,
+  AzureResource as AzureResourceInput,
+  AzureResourceGroup as AzureResourceGroupInput,
+  AzureRoleAssignment as AzureRoleAssignmentInput,
+  AzureSubscription as AzureSubscriptionInput,
+  AzureUserAssignedManagedIdentity as AzureUserAssignedManagedIdentityInput
+} from "../../inputTransferObject/generated/AzureSnapshot";
 
 export async function insertAzureSubscriptionRows(
   connection: DuckDBConnection,
@@ -185,7 +187,7 @@ export async function insertAzureActivityLogRows(connection: DuckDBConnection, l
   }
 }
 
-export async function readAzureSubscriptionRows(connection: DuckDBConnection): Promise<AzureSubscription[]> {
+export async function readAzureSubscriptionRows(connection: DuckDBConnection): Promise<CoreAzureSubscription[]> {
   return (await readRows<AzureSubscriptionRow>(
     connection,
     "select subscription_id, subscription_name, tenant_id, state, tags from azure_subscriptions order by ordinal"
@@ -198,7 +200,7 @@ export async function readAzureSubscriptionRows(connection: DuckDBConnection): P
   }));
 }
 
-export async function readAzureResourceGroupRows(connection: DuckDBConnection): Promise<AzureResourceGroup[]> {
+export async function readAzureResourceGroupRows(connection: DuckDBConnection): Promise<CoreAzureResourceGroup[]> {
   return (await readRows<AzureResourceGroupRow>(
     connection,
     "select subscription_id, subscription_name, resource_group, location, tags from azure_resource_groups order by ordinal"
@@ -211,7 +213,7 @@ export async function readAzureResourceGroupRows(connection: DuckDBConnection): 
   }));
 }
 
-export async function readAzureResourceRows(connection: DuckDBConnection): Promise<AzureResource[]> {
+export async function readAzureResourceRows(connection: DuckDBConnection): Promise<CoreAzureResource[]> {
   return (await readRows<AzureResourceRow>(
     connection,
     `select subscription_id, subscription_name, resource_id, resource_name, resource_group, resource_type, kind, location,
@@ -237,7 +239,7 @@ export async function readAzureResourceRows(connection: DuckDBConnection): Promi
 
 export async function readAzureUserAssignedManagedIdentityRows(
   connection: DuckDBConnection
-): Promise<AzureUserAssignedManagedIdentity[]> {
+): Promise<CoreAzureUserAssignedManagedIdentity[]> {
   return (await readRows<AzureUserAssignedManagedIdentityRow>(
     connection,
     `select subscription_id, subscription_name, resource_id, name, resource_group, location, client_id, principal_id, tenant_id, tags
@@ -256,7 +258,7 @@ export async function readAzureUserAssignedManagedIdentityRows(
   }));
 }
 
-export async function readAzureRoleAssignmentRows(connection: DuckDBConnection): Promise<AzureRoleAssignment[]> {
+export async function readAzureRoleAssignmentRows(connection: DuckDBConnection): Promise<CoreAzureRoleAssignment[]> {
   return (await readRows<AzureRoleAssignmentRow>(
     connection,
     `select subscription_id, subscription_name, role_assignment_id, scope, scope_type, scope_subscription_id,
@@ -288,7 +290,7 @@ export async function readAzureRoleAssignmentRows(connection: DuckDBConnection):
   }));
 }
 
-export async function readAzureActivityLogRows(connection: DuckDBConnection): Promise<AzureActivityLog[]> {
+export async function readAzureActivityLogRows(connection: DuckDBConnection): Promise<CoreAzureActivityLog[]> {
   return (await readRows<AzureActivityLogRow>(
     connection,
     `select subscription_id, subscription_name, event_timestamp, submission_timestamp, caller, caller_user_principal_name,
@@ -328,7 +330,7 @@ type AzureSubscriptionRow = {
   subscription_id: string;
   subscription_name: string;
   tenant_id: string;
-  state: AzureSubscription["state"];
+  state: CoreAzureSubscription["state"];
   tags: string | null;
 };
 
@@ -375,7 +377,7 @@ type AzureRoleAssignmentRow = {
   subscription_name: string;
   role_assignment_id: string | null;
   scope: string;
-  scope_type: AzureRoleAssignment["scopeType"];
+  scope_type: CoreAzureRoleAssignment["scopeType"];
   scope_subscription_id: string | null;
   scope_resource_group: string | null;
   scope_resource_provider: string | null;

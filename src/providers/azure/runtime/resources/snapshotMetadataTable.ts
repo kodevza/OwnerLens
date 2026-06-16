@@ -1,7 +1,7 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type { LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
-import type { AzureSnapshot as AzureSnapshotInput } from "../../inputTransferObject/resources/AzureSnapshot";
+import type { AzureSnapshot as AzureSnapshotInput } from "../../inputTransferObject/generated/AzureSnapshot";
 
 export async function importAzureResourcesSnapshotMetadata(
   connection: DuckDBConnection,

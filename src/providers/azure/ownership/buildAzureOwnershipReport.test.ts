@@ -1,7 +1,7 @@
 import { buildAzureOwnershipReport } from "./buildAzureOwnershipReport";
 import { azureOwnerAdapter } from "./resolveAzureOwner";
-import type { EntraSnapshot } from "../inputTransferObject/entra/EntraSnapshot";
-import type { AzureSnapshot } from "../../../core/azure/resources";
+import type { EntraSnapshot } from "../inputTransferObject/generated/EntraSnapshot";
+import type { AzureSnapshot } from "../inputTransferObject/generated/AzureSnapshot";
 
 test("resolves owners from configurable tag names", () => {
   const report = buildAzureOwnershipReport(resourceSnapshot(), entraSnapshot(), {
@@ -43,7 +43,7 @@ function resourceSnapshot(): AzureSnapshot {
   return {
     meta: {
       provider: "azure",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-05-01T00:00:00.000Z",
       activityDays: 30,
       activityStartTime: "2026-04-01T00:00:00.000Z",
@@ -87,7 +87,7 @@ function entraSnapshot(): EntraSnapshot {
   return {
     meta: {
       provider: "entra",
-      snapshotVersion: "1",
+      snapshotVersion: "0.4",
       createdAt: "2026-05-01T00:00:00.000Z",
       tenantId: "tenant-1",
       account: "admin@example.com",

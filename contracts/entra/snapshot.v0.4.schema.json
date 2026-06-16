@@ -1,0 +1,714 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ownerlens.dev/contracts/entra/snapshot.v0.4.schema.json",
+  "definitions": {
+    "EntraAppRole": {
+      "$ref": "#/definitions/ServicePrincipalAppRole"
+    },
+    "EntraApplication": {
+      "additionalProperties": false,
+      "properties": {
+        "appId": {
+          "type": "string"
+        },
+        "appRoles": {
+          "items": {
+            "$ref": "#/definitions/EntraAppRole"
+          },
+          "type": "array"
+        },
+        "createdDateTime": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deletedDateTime": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "disabledByMicrosoftStatus": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "identifierUris": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "info": {
+          "anyOf": [
+            {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "keyCredentials": {
+          "items": {
+            "$ref": "#/definitions/EntraApplicationCredential"
+          },
+          "type": "array"
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "oauth2PermissionScopes": {
+          "items": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "owners": {
+          "items": {
+            "$ref": "#/definitions/EntraOwner"
+          },
+          "type": "array"
+        },
+        "passwordCredentials": {
+          "items": {
+            "$ref": "#/definitions/EntraApplicationCredential"
+          },
+          "type": "array"
+        },
+        "publicClient": {
+          "anyOf": [
+            {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publisherDomain": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "requiredResourceAccess": {
+          "items": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "signInAudience": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spa": {
+          "anyOf": [
+            {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "web": {
+          "anyOf": [
+            {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "appId",
+        "displayName",
+        "signInAudience",
+        "publisherDomain",
+        "identifierUris",
+        "tags",
+        "appRoles",
+        "oauth2PermissionScopes",
+        "requiredResourceAccess",
+        "web",
+        "spa",
+        "publicClient",
+        "passwordCredentials",
+        "keyCredentials",
+        "createdDateTime",
+        "deletedDateTime",
+        "disabledByMicrosoftStatus",
+        "info",
+        "notes",
+        "owners"
+      ],
+      "type": "object"
+    },
+    "EntraApplicationCredential": {
+      "additionalProperties": {},
+      "type": "object"
+    },
+    "EntraOAuth2PermissionGrant": {
+      "additionalProperties": false,
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "consentType": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "clientId",
+        "consentType",
+        "principalId",
+        "resourceId",
+        "scope"
+      ],
+      "type": "object"
+    },
+    "EntraOwner": {
+      "$ref": "#/definitions/ServicePrincipalOwner"
+    },
+    "EntraServicePrincipal": {
+      "additionalProperties": false,
+      "properties": {
+        "accountEnabled": {
+          "type": "boolean"
+        },
+        "appDisplayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "appId": {
+          "type": "string"
+        },
+        "appOwnerOrganizationId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "appOwners": {
+          "items": {
+            "$ref": "#/definitions/ServicePrincipalOwner"
+          },
+          "type": "array"
+        },
+        "appRoles": {
+          "items": {
+            "$ref": "#/definitions/ServicePrincipalAppRole"
+          },
+          "type": "array"
+        },
+        "applicationOwners": {
+          "items": {
+            "$ref": "#/definitions/ServicePrincipalOwner"
+          },
+          "type": "array"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "homepage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "loginUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "owners": {
+          "items": {
+            "$ref": "#/definitions/ServicePrincipalOwner"
+          },
+          "type": "array"
+        },
+        "publisherName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "replyUrls": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "servicePrincipalNames": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "servicePrincipalOwners": {
+          "items": {
+            "$ref": "#/definitions/ServicePrincipalOwner"
+          },
+          "type": "array"
+        },
+        "servicePrincipalType": {
+          "$ref": "#/definitions/ServicePrincipalType"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "appId",
+        "displayName",
+        "appDisplayName",
+        "servicePrincipalType",
+        "publisherName",
+        "accountEnabled",
+        "appOwnerOrganizationId",
+        "homepage",
+        "loginUrl",
+        "replyUrls",
+        "servicePrincipalNames",
+        "tags"
+      ],
+      "type": "object"
+    },
+    "EntraSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "appRoleAssignments": {
+          "items": {
+            "$ref": "#/definitions/InputEntraAppRoleAssignment"
+          },
+          "type": "array"
+        },
+        "applications": {
+          "items": {
+            "$ref": "#/definitions/EntraApplication"
+          },
+          "type": "array"
+        },
+        "groupMembers": {
+          "items": {
+            "$ref": "#/definitions/InputEntraGroupMember"
+          },
+          "type": "array"
+        },
+        "groups": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "meta": {
+          "$ref": "#/definitions/EntraSnapshotMeta"
+        },
+        "oauth2PermissionGrants": {
+          "items": {
+            "$ref": "#/definitions/EntraOAuth2PermissionGrant"
+          },
+          "type": "array"
+        },
+        "servicePrincipals": {
+          "items": {
+            "$ref": "#/definitions/EntraServicePrincipal"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "meta",
+        "servicePrincipals"
+      ],
+      "type": "object"
+    },
+    "EntraSnapshotMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "type": "string"
+        },
+        "appRoleAssignmentCount": {
+          "type": "number"
+        },
+        "applicationCount": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "groupCount": {
+          "type": "number"
+        },
+        "groupMemberCount": {
+          "type": "number"
+        },
+        "oauth2PermissionGrantCount": {
+          "type": "number"
+        },
+        "provider": {
+          "const": "entra",
+          "type": "string"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "servicePrincipalCount": {
+          "type": "number"
+        },
+        "snapshotVersion": {
+          "const": "0.4",
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "snapshotVersion",
+        "createdAt",
+        "tenantId",
+        "account",
+        "scopes",
+        "servicePrincipalCount"
+      ],
+      "type": "object"
+    },
+    "InputEntraAppRoleAssignment": {
+      "additionalProperties": false,
+      "properties": {
+        "appRoleDisplayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "appRoleId": {
+          "type": "string"
+        },
+        "appRoleValue": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "principalDisplayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "resourceDisplayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resourceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "appRoleId",
+        "appRoleDisplayName",
+        "appRoleValue",
+        "principalId",
+        "principalDisplayName",
+        "resourceId",
+        "resourceDisplayName"
+      ],
+      "type": "object"
+    },
+    "InputEntraGroupMember": {
+      "additionalProperties": false,
+      "properties": {
+        "groupDisplayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "groupId": {
+          "type": "string"
+        },
+        "memberAppId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "memberDisplayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "memberId": {
+          "type": "string"
+        },
+        "memberMail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "memberServicePrincipalType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "memberType": {
+          "$ref": "#/definitions/InputEntraGroupMemberType"
+        },
+        "memberUserPrincipalName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "groupId",
+        "groupDisplayName",
+        "memberId",
+        "memberDisplayName",
+        "memberType",
+        "memberUserPrincipalName",
+        "memberMail",
+        "memberAppId"
+      ],
+      "type": "object"
+    },
+    "InputEntraGroupMemberType": {
+      "enum": [
+        "servicePrincipal",
+        "user",
+        "group",
+        "device",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "ServicePrincipalAppRole": {
+      "additionalProperties": false,
+      "properties": {
+        "allowedMemberTypes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "displayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "isEnabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "value",
+        "displayName",
+        "description",
+        "isEnabled",
+        "allowedMemberTypes"
+      ],
+      "type": "object"
+    },
+    "ServicePrincipalOwner": {
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ownerType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "userPrincipalName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ServicePrincipalType": {
+      "enum": [
+        "Application",
+        "ManagedIdentity",
+        "SocialIdp",
+        "Legacy"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "appRoleAssignments": {
+      "items": {
+        "$ref": "#/definitions/InputEntraAppRoleAssignment"
+      },
+      "type": "array"
+    },
+    "applications": {
+      "items": {
+        "$ref": "#/definitions/EntraApplication"
+      },
+      "type": "array"
+    },
+    "groupMembers": {
+      "items": {
+        "$ref": "#/definitions/InputEntraGroupMember"
+      },
+      "type": "array"
+    },
+    "groups": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "meta": {
+      "$ref": "#/definitions/EntraSnapshotMeta"
+    },
+    "oauth2PermissionGrants": {
+      "items": {
+        "$ref": "#/definitions/EntraOAuth2PermissionGrant"
+      },
+      "type": "array"
+    },
+    "servicePrincipals": {
+      "items": {
+        "$ref": "#/definitions/EntraServicePrincipal"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "meta",
+    "servicePrincipals"
+  ],
+  "type": "object",
+  "title": "EntraSnapshot"
+}
