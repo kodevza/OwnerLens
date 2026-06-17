@@ -5,21 +5,6 @@ import path from "node:path";
 
 import type { DuckDBConnection, DuckDBValue } from "@duckdb/node-api";
 
-export const snapshotImportRegistrySql = [
-  `
-    create table if not exists runtime_snapshot_imports (
-      source varchar not null,
-      file_name varchar not null,
-      name varchar not null,
-      last_modified_date varchar not null,
-      size_bytes bigint not null,
-      content_hash varchar,
-      imported_at varchar not null,
-      skipped boolean not null
-    )
-  `
-];
-
 export type SnapshotImportSource = string;
 
 export type SnapshotImportFingerprint = {
