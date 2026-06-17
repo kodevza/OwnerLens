@@ -37,13 +37,6 @@ import {
   readAzureUserAssignedManagedIdentityRows
 } from "./tables";
 
-export type LocalAzureResourcesReportCollectionId =
-  | "azureResources.subscriptions"
-  | "azureResources.resourceGroups"
-  | "azureResources.resources"
-  | "azureResources.userAssignedManagedIdentities"
-  | "azureResources.roleAssignments";
-
 export type LocalAzureResourcesReportRuntimeOptions = {
   dataDir: string;
   getConnection: () => DuckDBConnection;

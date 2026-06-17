@@ -32,7 +32,7 @@ export function compareLogsNewestFirst(left: AzureActivityLog, right: AzureActiv
   return getTime(right.eventTimestamp) - getTime(left.eventTimestamp);
 }
 
-export function getTime(value: string): number {
+function getTime(value: string): number {
   const parsed = new Date(value).getTime();
   return Number.isNaN(parsed) ? 0 : parsed;
 }

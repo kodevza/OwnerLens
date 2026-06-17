@@ -155,8 +155,6 @@ export function buildServicePrincipalFieldRenderers<TRow>({
   };
 }
 
-export const servicePrincipalFieldRenderers = buildServicePrincipalFieldRenderers();
-
 function PrincipalDisplayName({
   disabled,
   displayName,

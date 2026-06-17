@@ -24,8 +24,6 @@ import { readAzureResourceRows, readAzureRoleAssignmentRows } from "../resources
 
 export type {
   AzureIdentityEnrichmentStatus,
-  AzureManagedIdentityAssignmentEnrichment,
-  AzureRoleAssignmentEnrichment,
   LatestAzureIdentityEnrichment
 } from "../../../../core/azure/identityEnrichment";
 

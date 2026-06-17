@@ -6,7 +6,7 @@ test("resource groups view renders at least one resource group", async ({ page }
   await page.getByRole("tab", { name: "Resource groups" }).click();
   await expect(page.getByText("Loading resource groups...")).toBeHidden({ timeout: 120_000 });
   await expect(page.getByText("No resource groups match the filter.")).toBeHidden();
-  await expect(page.getByRole("columnheader", { name: /Resource group/i })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /Tags/i })).toBeVisible();
 
   const firstResourceGroupCell = page.getByRole("table").locator("tbody tr td").first();
 

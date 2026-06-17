@@ -28,7 +28,7 @@ export type OwnerResolverContext = {
 
 export type OwnerResolverAdapter = OwnerResolver<AzureScopeOwnershipTarget, OwnerResolverContext>;
 
-export type AzureOwnerTargetConfig = {
+type AzureOwnerTargetConfig = {
   kind: AzureScopeOwnershipTarget["kind"];
   adapter: OwnerResolverAdapter;
 };
@@ -40,6 +40,6 @@ export type AzureReportConfig = {
 
 export type ActivityLogIndex = Map<string, AzureActivityLog[]>;
 
-export type AzureOwnerTagConfig = Pick<OwnerResolution, "confidence">;
+type AzureOwnerTagConfig = Pick<OwnerResolution, "confidence">;
 
 export type AzureOwnerTagConfigMap = Record<string, AzureOwnerTagConfig>;

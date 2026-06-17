@@ -2,7 +2,7 @@ import { hasSearchExpression, matchesSearchExpression } from "../core/searchFilt
 import type { ColumnFilter, ColumnFilterOptions, ColumnFilters, SortRule } from "../core/collectionControls";
 import type { ReportDetailsValue, ReportFieldDescriptor } from "./reportTypes";
 
-export type { ColumnFilter, ColumnFilterOptions, ColumnFilters, SortRule } from "../core/collectionControls";
+export type { ColumnFilterOptions, ColumnFilters, SortRule } from "../core/collectionControls";
 
 type ActiveFieldFilter<TRow> = {
   field: ReportFieldDescriptor<TRow>;
@@ -48,7 +48,7 @@ export function getConfiguredFilterOptions<TRow>(fields: ReportFieldDescriptor<T
   );
 }
 
-export function applyCollectionSearch<TRow>(
+function applyCollectionSearch<TRow>(
   rows: TRow[],
   fields: ReportFieldDescriptor<TRow>[],
   query: string
@@ -222,7 +222,7 @@ function compareValues(left: unknown, right: unknown): number {
   return collator.compare(leftText, rightText);
 }
 
-export function formatControlValue(value: unknown): string {
+function formatControlValue(value: unknown): string {
   if (value === null || value === undefined || value === "") {
     return "";
   }
@@ -238,7 +238,7 @@ export function formatControlValue(value: unknown): string {
   return String(value);
 }
 
-export function formatReportSearchValue(value: unknown): string {
+function formatReportSearchValue(value: unknown): string {
   if (value === null || value === undefined) {
     return "";
   }

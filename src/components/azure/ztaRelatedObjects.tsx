@@ -2,7 +2,7 @@ import type { ZtaRelatedObject, ZtaReportTest } from "../../core/azure/ztaReport
 import { Badge } from "../../report/components/ui/badge";
 import type { ReportFilterDescriptor, ReportObjectFieldFilterDescriptor } from "../../report/reportTypes";
 
-export const ztaRelatedObjectFilterFields: ReportObjectFieldFilterDescriptor[] = [
+const ztaRelatedObjectFilterFields: ReportObjectFieldFilterDescriptor[] = [
   { id: "id", label: "ID" },
   { id: "object_id", label: "Object ID" },
   { id: "displayName", label: "Display name" },
@@ -91,7 +91,7 @@ export function getRelatedObjectLabel(object: ZtaRelatedObject): string {
   return (object.displayName ?? object.userPrincipalName ?? object.servicePrincipalId ?? getRelatedObjectId(object)) || "-";
 }
 
-export function getRelatedObjectTooltipTitle(object: ZtaRelatedObject): string {
+function getRelatedObjectTooltipTitle(object: ZtaRelatedObject): string {
   return [
     ["id", object.id],
     ["object_id", object.object_id],

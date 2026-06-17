@@ -1,4 +1,4 @@
-export type { OwnerConfidence, OwnerEvidence, OwnerResolution } from "../core/ownership/types";
+export type { OwnerConfidence, OwnerEvidence } from "../core/ownership/types";
 import type { OwnerResolution } from "../core/ownership/types";
 
 export type OwnerReportRow = OwnerResolution & {

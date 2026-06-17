@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ZtaRelatedObject } from "../../core/azure/ztaReport";
+import { appConfig } from "../../core/config";
 import { createViewHistoryState, getHistoryStateView } from "../../lib/historyState";
 import type { RemediationPackage } from "../../core/runtime/remediation";
 import type { ColumnFilters } from "../../core/collectionControls";
@@ -40,6 +41,11 @@ const viewValues: AzureView[] = [
   "ownershipEvidence",
   "remediationPackage"
 ];
+
+const zeroTrustAssessmentEnabled = appConfig.features.zeroTrustAssessment;
+const enabledViewValues = zeroTrustAssessmentEnabled
+  ? viewValues
+  : viewValues.filter((view) => view !== "zeroTrustAssessment");
 
 type PrincipalObjectFilter = {
   objectId: string;
@@ -83,6 +89,10 @@ export function AzureComponent() {
   }, [activeView]);
 
   const activateView = useCallback((nextView: AzureView) => {
+    if (!enabledViewValues.includes(nextView)) {
+      return;
+    }
+
     const currentView = activeViewRef.current;
     if (nextView === currentView) {
       return;
@@ -109,7 +119,7 @@ export function AzureComponent() {
     window.history.replaceState(createViewHistoryState(activeViewRef.current), "", window.location.href);
 
     function handlePopState(event: PopStateEvent) {
-      const previousView = getHistoryStateView(event.state, viewValues);
+      const previousView = getHistoryStateView(event.state, enabledViewValues);
       if (!previousView) {
         return;
       }
@@ -161,6 +171,10 @@ export function AzureComponent() {
   }
 
   function openZtaRelatedObject(objectId: string) {
+    if (!zeroTrustAssessmentEnabled) {
+      return;
+    }
+
     setZtaRelatedObjectFilter(objectId);
     activateView("zeroTrustAssessment");
   }
@@ -227,7 +241,7 @@ export function AzureComponent() {
   }
 
   function closeRemediationPackage() {
-    const nextView = remediationPackageTab?.returnView ?? "zeroTrustAssessment";
+    const nextView = remediationPackageTab?.returnView ?? (zeroTrustAssessmentEnabled ? "zeroTrustAssessment" : "servicePrincipals");
     setRemediationPackageTab(null);
     if (activeView === "remediationPackage") {
       activateView(nextView);
@@ -247,6 +261,11 @@ export function AzureComponent() {
           <TabsTrigger className={azureTabTriggerClassName} value="managedIdentities">
             Managed identities
           </TabsTrigger>
+          {zeroTrustAssessmentEnabled ? (
+            <TabsTrigger className={azureTabTriggerClassName} value="zeroTrustAssessment">
+              Zero Trust Assessment
+            </TabsTrigger>
+          ) : null}
           {azureRbacTab ? (
             <ClosableAzureTab
               active={activeView === "azureRbac"}
@@ -325,7 +344,22 @@ export function AzureComponent() {
             target={ownershipEvidenceTab.target}
           />
         ) : null}
-
+        {zeroTrustAssessmentEnabled && activeView === "zeroTrustAssessment" ? (
+          <ZtaComponent
+            initialFilters={getZtaRelatedObjectFilters(ztaRelatedObjectFilter)}
+            onRelatedObjectClick={openRelatedPrincipal}
+            onRemediationPackageClick={(remediationPackage) => openRemediationPackage(remediationPackage, "zeroTrustAssessment")}
+            onRemediationPackageCreated={(remediationPackage) => openRemediationPackage(remediationPackage, "zeroTrustAssessment")}
+          />
+        ) : null}
+        {activeView === "remediationPackage" && remediationPackageTab ? (
+          <RemediationPackageComponent
+            key={remediationPackageTab.remediationPackage.id}
+            remediationPackage={remediationPackageTab.remediationPackage}
+            onAzureRbacClick={(principal) => openAzureRbac(principal, "remediationPackage")}
+            onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "remediationPackage")}
+          />
+        ) : null}
       </div>
     </section>
   );

@@ -4,7 +4,7 @@ import path from "node:path";
 
 import type { DuckDBType, DuckDBValue } from "@duckdb/node-api";
 
-export type DuckMigrationReader = {
+type DuckMigrationReader = {
   getRowObjects?(): Record<string, unknown>[];
   getRowObjectsJson?(): Record<string, unknown>[];
 };
@@ -22,7 +22,7 @@ export type DuckMigrationConnection = {
   ): Promise<DuckMigrationReader>;
 };
 
-export type AppliedMigration = {
+type AppliedMigration = {
   version: string;
   checksum: string;
 };

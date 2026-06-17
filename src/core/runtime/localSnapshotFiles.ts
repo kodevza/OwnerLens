@@ -20,7 +20,7 @@ export type LocalSnapshotData = {
   [key: string]: unknown;
 };
 
-export const snapshotNamePattern = /^[\w.-]*snapshot\.json$/i;
+const snapshotNamePattern = /^[\w.-]*snapshot\.json$/i;
 
 export async function listLocalSnapshotFiles(dataDir: string): Promise<LocalSnapshotFile[]> {
   const entries = await readdir(dataDir);

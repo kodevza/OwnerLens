@@ -23,6 +23,26 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+test("hides the Zero Trust Assessment tab by default", () => {
+  globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
+    jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 0,
+      page: 1,
+      pageSize: 20,
+      rows: []
+    })
+  );
+
+  const { root } = renderComponent(<AzureComponent />);
+
+  expect(getButton("Service principals")).toBeDefined();
+  expect(queryButton("Zero Trust Assessment")).toBeNull();
+
+  act(() => root.unmount());
+});
+
 test.skip("opens related managed identity from Zero Trust Assessment with an Object ID filter", async () => {
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);
