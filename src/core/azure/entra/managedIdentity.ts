@@ -1,5 +1,5 @@
 import type { AzureManagedIdentityResourceAssignment } from "../identityEnrichment";
-import type { OwnerConfidence } from "../../ownership/types";
+import type { OwnerCandidate, OwnerConfidence } from "../../ownership/types";
 import type {
   AzureIdentityRuntimeEnrichment,
   EntraPrincipalPermissionSummary,
@@ -12,6 +12,7 @@ export type ManagedIdentity = EntraServicePrincipal & AzureIdentityRuntimeEnrich
   servicePrincipalType: "ManagedIdentity";
   managedIdentityAssignments: AzureManagedIdentityResourceAssignment[];
   assignedResourceGroups: string[];
+  ownerCandidates?: OwnerCandidate[];
   potentialOwners?: string[];
   ownerConfidence?: OwnerConfidence;
 } & EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & ZtaRemediationSummary;

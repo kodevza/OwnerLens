@@ -14,7 +14,8 @@ import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
 import {
   buildServicePrincipalFieldRenderers,
   type AzureRbacPrincipalSelection,
-  type EntraPermissionsPrincipalSelection
+  type EntraPermissionsPrincipalSelection,
+  type OwnershipEvidenceSelection
 } from "./ServicePrincipalFieldRenderers";
 import {
   getRemediationPackageSearchValues,
@@ -57,7 +58,7 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
   },
   {
     id: "potentialOwners",
-    label: "Owner",
+    label: "Owner candidates",
     valueType: "text",
     getValue: (sp) => sp.potentialOwners?.join(", ") ?? "",
     getFilterValue: (sp) => ({
@@ -67,7 +68,7 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     filter: {
       kind: "objectFields",
       fields: [
-        { id: "owner", label: "Owner", filterColumnId: "potentialOwners" },
+        { id: "owner", label: "Owner candidates", filterColumnId: "potentialOwners" },
         { id: "confidence", label: "Confidence", filterColumnId: "ownerConfidence", options: ownerConfidenceOptions }
       ]
     }
@@ -127,12 +128,14 @@ export function ServicePrincipalComponent({
   initialFilters,
   onAzureRbacClick,
   onEntraPermissionsClick,
+  onOwnershipEvidenceClick,
   onRemediationPackageClick,
   onZtaRemediationsClick
 }: {
   initialFilters?: ColumnFilters;
   onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
   onEntraPermissionsClick?: (principal: EntraPermissionsPrincipalSelection) => void;
+  onOwnershipEvidenceClick?: (selection: OwnershipEvidenceSelection) => void;
   onRemediationPackageClick?: (remediationPackage: RemediationPackage) => void;
   onZtaRemediationsClick?: (objectId: string) => void;
 }) {
@@ -161,6 +164,7 @@ export function ServicePrincipalComponent({
       ...buildServicePrincipalFieldRenderers<ServicePrincipal>({
         onAzureRbacClick,
         onEntraPermissionsClick,
+        onOwnershipEvidenceClick,
         onZtaRemediationsClick
       }),
       RemediationPackages: (servicePrincipal: ServicePrincipal) => (
@@ -170,7 +174,14 @@ export function ServicePrincipalComponent({
         />
       )
     }),
-    [onAzureRbacClick, onEntraPermissionsClick, onRemediationPackageClick, onZtaRemediationsClick, openRemediationPackage]
+    [
+      onAzureRbacClick,
+      onEntraPermissionsClick,
+      onOwnershipEvidenceClick,
+      onRemediationPackageClick,
+      onZtaRemediationsClick,
+      openRemediationPackage
+    ]
   );
 
   return (

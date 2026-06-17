@@ -9,10 +9,15 @@ import { AzureRbacComponent } from "./AzureRbacComponent";
 import { ClosableAzureTab } from "./ClosableAzureTab";
 import { EntraPermissionsComponent } from "./EntraPermissionsComponent";
 import { ManagedIdentityComponent } from "./ManagedIdentityComponent";
+import { OwnershipEvidenceComponent } from "./OwnershipEvidenceComponent";
 import { RemediationPackageComponent } from "./RemediationPackageComponent";
 import { ResourceGroupComponent } from "./ResourceGroupComponent";
 import { ServicePrincipalComponent } from "./ServicePrincipalComponent";
-import type { AzureRbacPrincipalSelection, EntraPermissionsPrincipalSelection } from "./ServicePrincipalFieldRenderers";
+import type {
+  AzureRbacPrincipalSelection,
+  EntraPermissionsPrincipalSelection,
+  OwnershipEvidenceSelection
+} from "./ServicePrincipalFieldRenderers";
 import { ZtaComponent } from "./ZtaComponent";
 
 type AzureView =
@@ -22,6 +27,7 @@ type AzureView =
   | "zeroTrustAssessment"
   | "azureRbac"
   | "entraPermissions"
+  | "ownershipEvidence"
   | "remediationPackage";
 
 const viewValues: AzureView[] = [
@@ -31,6 +37,7 @@ const viewValues: AzureView[] = [
   "zeroTrustAssessment",
   "azureRbac",
   "entraPermissions",
+  "ownershipEvidence",
   "remediationPackage"
 ];
 
@@ -47,6 +54,10 @@ type EntraPermissionsTab = EntraPermissionsPrincipalSelection & {
   returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities" | "remediationPackage">;
 };
 
+type OwnershipEvidenceTab = OwnershipEvidenceSelection & {
+  returnView: Extract<AzureView, "resourceGroups" | "servicePrincipals" | "managedIdentities" | "remediationPackage">;
+};
+
 type RemediationPackageTab = {
   remediationPackage: RemediationPackage;
   returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities" | "zeroTrustAssessment">;
@@ -56,6 +67,7 @@ export function AzureComponent() {
   const [activeView, setActiveView] = useState<AzureView>("servicePrincipals");
   const [azureRbacTab, setAzureRbacTab] = useState<AzureRbacTab | null>(null);
   const [entraPermissionsTab, setEntraPermissionsTab] = useState<EntraPermissionsTab | null>(null);
+  const [ownershipEvidenceTab, setOwnershipEvidenceTab] = useState<OwnershipEvidenceTab | null>(null);
   const [remediationPackageTab, setRemediationPackageTab] = useState<RemediationPackageTab | null>(null);
   const [principalObjectFilter, setPrincipalObjectFilter] = useState<PrincipalObjectFilter | null>(null);
   const [ztaRelatedObjectFilter, setZtaRelatedObjectFilter] = useState<string | null>(null);
@@ -165,6 +177,14 @@ export function AzureComponent() {
     activateView("entraPermissions");
   }
 
+  function openOwnershipEvidence(
+    selection: OwnershipEvidenceSelection,
+    returnView: OwnershipEvidenceTab["returnView"]
+  ) {
+    setOwnershipEvidenceTab({ ...selection, returnView });
+    activateView("ownershipEvidence");
+  }
+
   function openRemediationPackage(
     remediationPackage: RemediationPackage,
     returnView: RemediationPackageTab["returnView"]
@@ -185,6 +205,14 @@ export function AzureComponent() {
     const nextView = entraPermissionsTab?.returnView ?? "servicePrincipals";
     setEntraPermissionsTab(null);
     if (activeView === "entraPermissions") {
+      activateView(nextView);
+    }
+  }
+
+  function closeOwnershipEvidence() {
+    const nextView = ownershipEvidenceTab?.returnView ?? "servicePrincipals";
+    setOwnershipEvidenceTab(null);
+    if (activeView === "ownershipEvidence") {
       activateView(nextView);
     }
   }
@@ -228,6 +256,15 @@ export function AzureComponent() {
               value="entraPermissions"
             />
           ) : null}
+          {ownershipEvidenceTab ? (
+            <ClosableAzureTab
+              active={activeView === "ownershipEvidence"}
+              closeLabel={`Close ${ownershipEvidenceTab.displayName} ownership evidence tab`}
+              label={`${ownershipEvidenceTab.displayName} owners`}
+              onClose={closeOwnershipEvidence}
+              value="ownershipEvidence"
+            />
+          ) : null}
           {remediationPackageTab ? (
             <ClosableAzureTab
               active={activeView === "remediationPackage"}
@@ -240,12 +277,15 @@ export function AzureComponent() {
         </TabsList>
       </Tabs>
       <div className="relative z-0">
-        {activeView === "resourceGroups" ? <ResourceGroupComponent /> : null}
+        {activeView === "resourceGroups" ? (
+          <ResourceGroupComponent onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, "resourceGroups")} />
+        ) : null}
         {activeView === "servicePrincipals" ? (
           <ServicePrincipalComponent
             initialFilters={getPrincipalObjectFilters(principalObjectFilter, "servicePrincipals")}
             onAzureRbacClick={(principal) => openAzureRbac(principal, "servicePrincipals")}
             onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "servicePrincipals")}
+            onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, "servicePrincipals")}
             onRemediationPackageClick={(remediationPackage) => openRemediationPackage(remediationPackage, "servicePrincipals")}
             onZtaRemediationsClick={openZtaRelatedObject}
           />
@@ -255,6 +295,7 @@ export function AzureComponent() {
             initialFilters={getPrincipalObjectFilters(principalObjectFilter, "managedIdentities")}
             onAzureRbacClick={(principal) => openAzureRbac(principal, "managedIdentities")}
             onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "managedIdentities")}
+            onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, "managedIdentities")}
             onRemediationPackageClick={(remediationPackage) => openRemediationPackage(remediationPackage, "managedIdentities")}
             onZtaRemediationsClick={openZtaRelatedObject}
           />
@@ -264,6 +305,13 @@ export function AzureComponent() {
         ) : null}
         {activeView === "entraPermissions" && entraPermissionsTab ? (
           <EntraPermissionsComponent key={entraPermissionsTab.objectId} principalId={entraPermissionsTab.objectId} />
+        ) : null}
+        {activeView === "ownershipEvidence" && ownershipEvidenceTab ? (
+          <OwnershipEvidenceComponent
+            key={getOwnershipEvidenceTabKey(ownershipEvidenceTab)}
+            displayName={ownershipEvidenceTab.displayName}
+            target={ownershipEvidenceTab.target}
+          />
         ) : null}
 
       </div>
@@ -311,6 +359,14 @@ function getRelatedPrincipalObjectId(relatedObject: ZtaRelatedObject): string {
   }
 
   return "";
+}
+
+function getOwnershipEvidenceTabKey(tab: OwnershipEvidenceTab): string {
+  if (tab.target.kind === "resourceGroup") {
+    return `${tab.target.subscriptionId}:${tab.target.resourceGroup}`;
+  }
+
+  return `${tab.target.kind}:${tab.target.principalId}`;
 }
 
 function getRelatedPrincipalView(relatedObject: ZtaRelatedObject): PrincipalObjectFilter["view"] | null {

@@ -1,7 +1,7 @@
 import type { ManagedIdentityPermissionRiskLevel } from "../identityEnrichment";
 import type { AzureRoleAssignment } from "../resources";
 import type { ZtaRemediationSummary } from "../ztaReport";
-import type { OwnerConfidence } from "../../ownership/types";
+import type { OwnerCandidate, OwnerConfidence } from "../../ownership/types";
 import type { PermissionRiskLevel } from "../../risk/types";
 import type { EntraServicePrincipal, EntraServicePrincipalType } from "./types";
 
@@ -23,11 +23,18 @@ export type EntraPrincipalRbacSummary = {
 };
 
 export type EntraPrincipalOwnerSummary = {
+  ownerCandidates: OwnerCandidate[];
   potentialOwners: string[];
   ownerConfidence: OwnerConfidence;
 };
 
-export type EntraPrincipalAzureRemediationSummary = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & EntraPrincipalOwnerSummary & {
+export type EntraPrincipalRemediationOwnerSummary = {
+  ownerCandidates?: OwnerCandidate[];
+  potentialOwners?: string[];
+  ownerConfidence?: OwnerConfidence;
+};
+
+export type EntraPrincipalAzureRemediationSummary = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & EntraPrincipalRemediationOwnerSummary & {
   displayName: string;
   id: string;
   roleAssignments: AzureRoleAssignment[];
@@ -35,6 +42,7 @@ export type EntraPrincipalAzureRemediationSummary = EntraPrincipalPermissionSumm
 
 export type ServicePrincipal = EntraServicePrincipal & AzureIdentityRuntimeEnrichment & {
   servicePrincipalType: Exclude<EntraServicePrincipalType, "ManagedIdentity">;
+  ownerCandidates?: OwnerCandidate[];
   potentialOwners?: string[];
   ownerConfidence?: OwnerConfidence;
 } & EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & ZtaRemediationSummary;

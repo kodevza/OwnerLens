@@ -5,6 +5,7 @@ import type { DeleteRuntimeRemediationTasksRequest } from "../../../core/runtime
 import { createRuntimeRestMiddleware, type RuntimeRestEndpoint } from "../../../core/runtime/rest";
 import { defineEntraLocalReportRuntimeRestEndpoints } from "./entra/localReportRuntimeRest";
 import { LocalReportRuntime } from "./LocalReportRuntime";
+import { defineOwnershipLocalReportRuntimeRestEndpoints } from "./ownership/localReportRuntimeRest";
 import { defineAzureResourcesLocalReportRuntimeRestEndpoints } from "./resources/localReportRuntimeRest";
 import { parseRuntimeCollectionQueryOptions } from "./runtimeRestQuery";
 import { defineZeroTrustAssessmentLocalReportRuntimeRestEndpoints } from "./zta/localReportRuntimeRest";
@@ -36,6 +37,7 @@ export function defineLocalReportRuntimeRestEndpoints(runtime: LocalReportRuntim
     },
     ...defineEntraLocalReportRuntimeRestEndpoints(runtime, restBasePath),
     ...defineAzureResourcesLocalReportRuntimeRestEndpoints(runtime, restBasePath),
+    ...defineOwnershipLocalReportRuntimeRestEndpoints(runtime, restBasePath),
     ...defineZeroTrustAssessmentLocalReportRuntimeRestEndpoints(runtime, restBasePath),
     {
       path: `${restBasePath}/remediationPackages`,

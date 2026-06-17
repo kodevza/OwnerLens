@@ -127,16 +127,6 @@ export class AzureResourcesCollectionQueryService {
     );
   }
 
-  async queryActivityLogs(
-    options: LocalReportCollectionQueryOptions
-  ): Promise<LocalReportPaginatedCollection<"azureResources.activityLogs">> {
-    return buildPaginatedCollection(
-      "azureResources.activityLogs",
-      (await this.azureResources.readAzureActivityLogs()) as unknown as Record<string, unknown>[],
-      options
-    );
-  }
-
   async readResourceGroupOwnershipRows(): Promise<ResourceGroupOwnershipRow[]> {
     const [resourceSnapshot, entraSnapshot, disabledKeys] = await Promise.all([
       this.azureResources.readSnapshot(),

@@ -43,15 +43,8 @@ const entraPermissionFields: ReportFieldDescriptor<EntraPermissionRow>[] = [
     filter: { kind: "multiSelect", options: permissionTypeOptions }
   },
   {
-    id: "permissionDisplayName",
-    label: "Permission",
-    valueType: "text",
-    getValue: (permission) => permission.permissionDisplayName,
-    filter: { kind: "text" }
-  },
-  {
     id: "permissionValue",
-    label: "Value",
+    label: "Permission",
     valueType: "text",
     getValue: (permission) => permission.permissionValue,
     filter: { kind: "text" }

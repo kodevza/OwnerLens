@@ -1,4 +1,11 @@
-import type { OwnerEvidence } from "../../../../core/ownership/types";
+import { appConfig } from "../../../../core/config";
+import { rankOwnerCandidates } from "../../../../core/ownership/ownerCandidateRanking";
+import type {
+  OwnerCandidate,
+  OwnerCandidateSource,
+  OwnerEvidence,
+  OwnerType
+} from "../../../../core/ownership/types";
 import type { AzureResourceGroup, ResourceGroupOwnershipRow } from "../../../../core/azure/resources";
 import type { OwnerReportRow } from "../../ownership/azureOwnerReportTypes";
 
@@ -14,12 +21,43 @@ export function buildResourceGroupOwnershipRows(
     return {
       ...group,
       targetKey: ownerRow?.targetKey ?? getResourceGroupTargetKey(group.subscriptionId, group.resourceGroup),
+      ownerCandidates: ownerRow ? buildResourceGroupOwnerCandidates(group, ownerRow) : [],
       owner: ownerRow?.owner ?? null,
       confidence: ownerRow?.confidence ?? "none",
       source: ownerRow?.source ?? "none",
       evidence: ownerRow?.evidence ?? []
     };
   });
+}
+
+function buildResourceGroupOwnerCandidates(
+  group: AzureResourceGroup,
+  ownerRow: OwnerReportRow
+): OwnerCandidate[] {
+  const owner = ownerRow.owner?.trim();
+
+  if (!owner) {
+    return [];
+  }
+
+  return rankOwnerCandidates([
+    {
+      key: getOwnerCandidateKey(owner, inferOwnerType(owner, ownerRow.source)),
+      displayName: owner,
+      type: inferOwnerType(owner, ownerRow.source),
+      confidence: ownerRow.confidence,
+      source: inferOwnerCandidateSource(ownerRow.source),
+      rank: 0,
+      evidence: [...ownerRow.evidence],
+      relatedScopes: [
+        {
+          subscriptionId: group.subscriptionId,
+          subscriptionName: group.subscriptionName,
+          resourceGroup: group.resourceGroup
+        }
+      ]
+    }
+  ]);
 }
 
 export function applyResourceGroupOwnerDisabledEvidence(
@@ -76,6 +114,54 @@ function getResourceGroupOwnerIndexKey(subscriptionId: string, resourceGroup: st
 
 function getResourceGroupTargetKey(subscriptionId: string, resourceGroup: string): string {
   return ["resourceGroup", subscriptionId.toLowerCase(), resourceGroup.toLowerCase()].join(":");
+}
+
+function getOwnerCandidateKey(owner: string, type: OwnerType): string {
+  return `${type}:${owner.trim().toLowerCase()}`;
+}
+
+function inferOwnerType(owner: string, source: string): OwnerType {
+  const tagName = getOwnerTagSourceName(source);
+
+  if (tagName === "ownerGroup") {
+    return "ownerGroup";
+  }
+
+  if (tagName === "ownerUser") {
+    return "ownerUser";
+  }
+
+  if (tagName) {
+    return "ownerTag";
+  }
+
+  if (owner.includes("@")) {
+    return "ownerUser";
+  }
+
+  return "unknown";
+}
+
+function getOwnerTagSourceName(source: string): string | null {
+  const tagName = source.match(/^tag\.(.+)$/)?.[1];
+
+  if (!tagName) {
+    return null;
+  }
+
+  return appConfig.azure.ownership.ownerTags.some((tag) => tag.name === tagName) ? tagName : null;
+}
+
+function inferOwnerCandidateSource(source: string): OwnerCandidateSource {
+  if (source.startsWith("activity.")) {
+    return "activity";
+  }
+
+  if (source.startsWith("tag.")) {
+    return "tag";
+  }
+
+  return "resourceGroupOwner";
 }
 
 function getResourceGroupOwnerEvidenceKey(

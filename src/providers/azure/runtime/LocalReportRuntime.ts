@@ -27,6 +27,7 @@ import {
 } from "../../../core/runtime/collectionExport";
 import type { RuntimeCsvRow } from "../../../core/runtime/csv";
 import type { SnapshotImportStatus } from "../../../core/runtime/snapshotImportRegistry";
+import type { OwnershipEvidenceResponse } from "../../../core/ownership/types";
 import type { AzureIdentityEnrichmentStatus } from "./enrichment/azureIdentityEnrichment";
 import { EntraCollectionQueryService } from "./entra/EntraCollectionQueryService";
 import {
@@ -54,6 +55,10 @@ import { SnapshotImporter } from "./SnapshotImporter";
 import { EnrichmentService } from "./EnrichmentService";
 import { ExportService } from "./ExportService";
 import { DisabledEvidenceStore, type DisabledOwnerKey } from "./DisabledEvidenceStore";
+import {
+  OwnershipEvidenceQueryService,
+  type OwnershipEvidenceRequest
+} from "./ownership/OwnershipEvidenceQueryService";
 import { prepareRuntimeSqlSchema } from "./runtimeSqlSchema";
 
 export type LocalReportRuntimeOptions = {
@@ -84,6 +89,7 @@ export class LocalReportRuntime {
   private readonly zeroTrustAssessmentQueries: ZeroTrustAssessmentQueryService;
   private readonly azureResourcesQueries: AzureResourcesCollectionQueryService;
   private readonly entraQueries: EntraCollectionQueryService;
+  private readonly ownershipEvidenceQueries: OwnershipEvidenceQueryService;
   private readonly snapshotImporter: SnapshotImporter;
   private readonly enrichmentService: EnrichmentService;
   private readonly exportService: ExportService;
@@ -130,6 +136,10 @@ export class LocalReportRuntime {
       azureResourcesQueries: this.azureResourcesQueries,
       zeroTrustAssessmentQueries: this.zeroTrustAssessmentQueries,
       exportService: this.exportService
+    });
+    this.ownershipEvidenceQueries = new OwnershipEvidenceQueryService({
+      entraQueries: this.entraQueries,
+      azureResourcesQueries: this.azureResourcesQueries
     });
   }
 
@@ -273,6 +283,11 @@ export class LocalReportRuntime {
     return this.azureResourcesQueries.queryResourceGroupOwnership(options);
   }
 
+  async readOwnershipEvidence(request: OwnershipEvidenceRequest): Promise<OwnershipEvidenceResponse> {
+    await this.initialize();
+    return this.ownershipEvidenceQueries.readOwnershipEvidence(request);
+  }
+
   async exportAzureResourceGroupOwnershipCsv(
     options: LocalReportCollectionQueryOptions
   ): Promise<RuntimeCollectionCsvExport<"azureResources.resourceGroupOwnership">> {
@@ -307,13 +322,6 @@ export class LocalReportRuntime {
   ): Promise<LocalReportPaginatedCollection<"azureRbac">> {
     await this.initialize();
     return this.azureResourcesQueries.queryAzureRbac(servicePrincipalId, options);
-  }
-
-  async queryAzureActivityLogs(
-    options: LocalReportCollectionQueryOptions
-  ): Promise<LocalReportPaginatedCollection<"azureResources.activityLogs">> {
-    await this.initialize();
-    return this.azureResourcesQueries.queryActivityLogs(options);
   }
 
   async queryZeroTrustAssessmentReport(

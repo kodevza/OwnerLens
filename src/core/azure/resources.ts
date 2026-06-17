@@ -1,4 +1,4 @@
-import type { OwnerConfidence, OwnerEvidence } from "../ownership/types";
+import type { OwnerCandidate, OwnerConfidence, OwnerEvidence } from "../ownership/types";
 
 export type AzureResourceTags = Record<string, string>;
 
@@ -105,6 +105,7 @@ export type AzureSnapshot = {
 
 export type ResourceGroupOwnershipRow = AzureResourceGroup & {
   targetKey: string;
+  ownerCandidates: OwnerCandidate[];
   owner: string | null;
   confidence: OwnerConfidence;
   source: string;

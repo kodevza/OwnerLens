@@ -248,9 +248,6 @@ test("defines local report runtime REST endpoints", async () => {
       })
     ),
     queryAzureResources: jest.fn((options) => Promise.resolve(emptyCollection("azureResources.resources", options))),
-    queryAzureUserAssignedManagedIdentities: jest.fn((options) =>
-      Promise.resolve(emptyCollection("azureResources.userAssignedManagedIdentities", options))
-    ),
     queryAzureRoleAssignments: jest.fn((options) =>
       Promise.resolve(emptyCollection("azureResources.roleAssignments", options))
     ),
@@ -270,8 +267,22 @@ test("defines local report runtime REST endpoints", async () => {
         count: 1
       })
     ),
-    queryAzureActivityLogs: jest.fn((options) =>
-      Promise.resolve(emptyCollection("azureResources.activityLogs", options))
+    readOwnershipEvidence: jest.fn(
+      (request: { kind: string; principalId?: string; subscriptionId?: string; resourceGroup?: string }) => {
+        if (request.kind === "servicePrincipal" && request.principalId === "missing") {
+          return Promise.reject(new Error("Ownership evidence target was not found."));
+        }
+
+        return Promise.resolve({
+          target: {
+            kind: request.kind,
+            id: request.kind === "resourceGroup" ? "resourceGroup:sub-1:rg-1" : request.principalId,
+            subscriptionId: request.subscriptionId,
+            resourceGroup: request.resourceGroup
+          },
+          evidence: []
+        });
+      }
     ),
     queryZeroTrustAssessmentReport: jest.fn((options) =>
       Promise.resolve(emptyCollection("zeroTrustAssessment.report", options))
@@ -392,21 +403,12 @@ test("defines local report runtime REST endpoints", async () => {
   const entraPermissionsEndpoint = getEndpoint(endpoints, "/api/data/entra/permissions");
   const oauth2PermissionGrantsEndpoint = getEndpoint(endpoints, "/api/data/entra/oauth2PermissionGrants");
   const appRoleAssignmentsEndpoint = getEndpoint(endpoints, "/api/data/entra/appRoleAssignments");
-  const subscriptionsEndpoint = getEndpoint(endpoints, "/api/data/azureResources/subscriptions");
-  const resourceGroupsEndpoint = getEndpoint(endpoints, "/api/data/azureResources/resourceGroups");
   const resourceGroupOwnershipEndpoint = getEndpoint(endpoints, "/api/data/azureResources/resourceGroupOwnership");
-  const disabledEvidenceEndpoint = getEndpoint(
-    endpoints,
-    "/api/data/azureResources/resourceGroupOwnership/disabledEvidence"
-  );
+  const evidenceStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/evidence/status");
   const resourcesEndpoint = getEndpoint(endpoints, "/api/data/azureResources/resources");
-  const userAssignedManagedIdentitiesEndpoint = getEndpoint(
-    endpoints,
-    "/api/data/azureResources/userAssignedManagedIdentities"
-  );
   const roleAssignmentsEndpoint = getEndpoint(endpoints, "/api/data/azureResources/roleAssignments");
   const azureRbacEndpoint = getEndpoint(endpoints, "/api/data/azureRbac");
-  const activityLogsEndpoint = getEndpoint(endpoints, "/api/data/azureResources/activityLogs");
+  const ownershipEvidenceEndpoint = getEndpoint(endpoints, "/api/data/ownership/evidence");
   const zeroTrustAssessmentReportEndpoint = getEndpoint(endpoints, "/api/data/zeroTrustAssessment/report");
   const zeroTrustAssessmentRemediationPackagesEndpoint = getEndpoint(
     endpoints,
@@ -428,15 +430,12 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/entra/permissions",
     "/api/data/entra/oauth2PermissionGrants",
     "/api/data/entra/appRoleAssignments",
-    "/api/data/azureResources/subscriptions",
-    "/api/data/azureResources/resourceGroups",
     "/api/data/azureResources/resourceGroupOwnership",
-    "/api/data/azureResources/resourceGroupOwnership/disabledEvidence",
     "/api/data/azureResources/resources",
-    "/api/data/azureResources/userAssignedManagedIdentities",
     "/api/data/azureResources/roleAssignments",
     "/api/data/azureRbac",
-    "/api/data/azureResources/activityLogs",
+    "/api/data/ownership/evidence",
+    "/api/data/ownership/evidence/status",
     "/api/data/zeroTrustAssessment/report",
     "/api/data/zeroTrustAssessment/remediationPackages",
     "/api/data/remediationPackages",
@@ -523,14 +522,6 @@ test("defines local report runtime REST endpoints", async () => {
     req: {},
     url: new URL("http://localhost/api/data/entra/appRoleAssignments?page=1&count=10")
   });
-  await subscriptionsEndpoint.handle({
-    req: {},
-    url: new URL("http://localhost/api/data/azureResources/subscriptions?page=1&count=10")
-  });
-  await resourceGroupsEndpoint.handle({
-    req: {},
-    url: new URL("http://localhost/api/data/azureResources/resourceGroups?page=1&count=10")
-  });
   await expect(
     resourceGroupOwnershipEndpoint.handle({
       req: {},
@@ -563,14 +554,15 @@ test("defines local report runtime REST endpoints", async () => {
     count: 2
   });
   await expect(
-    disabledEvidenceEndpoint.handle({
+    evidenceStatusEndpoint.handle({
       req: {},
       url: new URL(
-        "http://localhost/api/data/azureResources/resourceGroupOwnership/disabledEvidence?key=resourceGroup%3Asub-1%3Arg-activity%3Aalice%40example.test%3A2026-06-05T10%3A00%3A00.000Z&disabled=true"
+        "http://localhost/api/data/ownership/evidence/status?key=resourceGroup%3Asub-1%3Arg-activity%3Aalice%40example.test%3A2026-06-05T10%3A00%3A00.000Z&status=unactive"
       )
     })
   ).resolves.toEqual({
     key: "resourceGroup:sub-1:rg-activity:alice@example.test:2026-06-05T10:00:00.000Z",
+    status: "unactive",
     disabled: true,
     disabledCount: 1
   });
@@ -602,10 +594,6 @@ test("defines local report runtime REST endpoints", async () => {
     req: {},
     url: new URL("http://localhost/api/data/azureResources/resources?page=1&count=10")
   });
-  await userAssignedManagedIdentitiesEndpoint.handle({
-    req: {},
-    url: new URL("http://localhost/api/data/azureResources/userAssignedManagedIdentities?page=1&count=10")
-  });
   await roleAssignmentsEndpoint.handle({
     req: {},
     url: new URL("http://localhost/api/data/azureResources/roleAssignments?page=1&count=10")
@@ -634,10 +622,66 @@ test("defines local report runtime REST endpoints", async () => {
       url: new URL("http://localhost/api/data/azureRbac?page=1&count=10")
     })
   ).toThrow("Missing required query parameter: servicePrincipalId");
-  await activityLogsEndpoint.handle({
-    req: {},
-    url: new URL("http://localhost/api/data/azureResources/activityLogs?page=1&count=10")
+  await expect(
+    ownershipEvidenceEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/ownership/evidence?kind=servicePrincipal&principalId=sp-1")
+    })
+  ).resolves.toEqual({
+    target: {
+      kind: "servicePrincipal",
+      id: "sp-1",
+      subscriptionId: undefined,
+      resourceGroup: undefined
+    },
+    evidence: []
   });
+  await ownershipEvidenceEndpoint.handle({
+    req: {},
+    url: new URL("http://localhost/api/data/ownership/evidence?kind=managedIdentity&principalId=mi-1")
+  });
+  await ownershipEvidenceEndpoint.handle({
+    req: {},
+    url: new URL(
+      "http://localhost/api/data/ownership/evidence?kind=resourceGroup&subscriptionId=sub-1&resourceGroup=rg-1"
+    )
+  });
+  expect(() =>
+    ownershipEvidenceEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/ownership/evidence")
+    })
+  ).toThrow("Missing required query parameter: kind");
+  expect(() =>
+    ownershipEvidenceEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/ownership/evidence?kind=unknown")
+    })
+  ).toThrow("Invalid ownership evidence target kind.");
+  expect(() =>
+    ownershipEvidenceEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/ownership/evidence?kind=servicePrincipal")
+    })
+  ).toThrow("Missing required query parameter: principalId");
+  expect(() =>
+    ownershipEvidenceEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/ownership/evidence?kind=managedIdentity")
+    })
+  ).toThrow("Missing required query parameter: principalId");
+  expect(() =>
+    ownershipEvidenceEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/ownership/evidence?kind=resourceGroup&subscriptionId=sub-1")
+    })
+  ).toThrow("Missing required query parameter: resourceGroup");
+  await expect(
+    ownershipEvidenceEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/ownership/evidence?kind=servicePrincipal&principalId=missing")
+    })
+  ).rejects.toThrow("Ownership evidence target was not found.");
   await expect(
     zeroTrustAssessmentReportEndpoint.handle({
       req: {},
@@ -780,18 +824,6 @@ test("defines local report runtime REST endpoints", async () => {
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryAzureSubscriptions).toHaveBeenCalledWith({
-    filters: [],
-    sortRules: [],
-    page: 1,
-    pageSize: 10
-  });
-  expect(runtime.queryAzureResourceGroups).toHaveBeenCalledWith({
-    filters: [],
-    sortRules: [],
-    page: 1,
-    pageSize: 10
-  });
   expect(runtime.queryAzureResourceGroupOwnership).toHaveBeenNthCalledWith(1, {
     filters: [],
     sortRules: [],
@@ -817,12 +849,6 @@ test("defines local report runtime REST endpoints", async () => {
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryAzureUserAssignedManagedIdentities).toHaveBeenCalledWith({
-    filters: [],
-    sortRules: [],
-    page: 1,
-    pageSize: 10
-  });
   expect(runtime.queryAzureRoleAssignments).toHaveBeenCalledWith({
     filters: [],
     sortRules: [],
@@ -835,11 +861,18 @@ test("defines local report runtime REST endpoints", async () => {
     page: 1,
     pageSize: 10
   });
-  expect(runtime.queryAzureActivityLogs).toHaveBeenCalledWith({
-    filters: [],
-    sortRules: [],
-    page: 1,
-    pageSize: 10
+  expect(runtime.readOwnershipEvidence).toHaveBeenCalledWith({
+    kind: "servicePrincipal",
+    principalId: "sp-1"
+  });
+  expect(runtime.readOwnershipEvidence).toHaveBeenCalledWith({
+    kind: "managedIdentity",
+    principalId: "mi-1"
+  });
+  expect(runtime.readOwnershipEvidence).toHaveBeenCalledWith({
+    kind: "resourceGroup",
+    subscriptionId: "sub-1",
+    resourceGroup: "rg-1"
   });
   expect(runtime.queryZeroTrustAssessmentReport).toHaveBeenCalledWith({
     filters: [],
