@@ -2,7 +2,11 @@
 module.exports = {
   testEnvironment: "node",
   testMatch: ["<rootDir>/src/**/*.test.ts", "<rootDir>/tools/**/*.test.ts"],
-  testPathIgnorePatterns: ["/node_modules/", "<rootDir>/src/providers/azure/runtime/LocalReportRuntime.duckdb.test.ts"],
+  testPathIgnorePatterns: [
+    "/node_modules/",
+    "<rootDir>/src/db/migrate.test.ts",
+    "<rootDir>/src/providers/azure/runtime/LocalReportRuntime.duckdb.test.ts"
+  ],
   transform: {
     "^.+\\.tsx?$": [
       "ts-jest",

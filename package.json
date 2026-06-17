@@ -18,6 +18,7 @@
     "bin",
     "dist",
     "index.html",
+    "migrations",
     "src",
     "tools",
     "contracts",
