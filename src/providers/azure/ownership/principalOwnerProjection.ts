@@ -3,9 +3,16 @@ import type {
   AzureUserAssignedManagedIdentity,
   ResourceGroupOwnershipRow
 } from "../../../core/azure/resources";
-import type { OwnerConfidence } from "../../../core/ownership/types";
+import { rankOwnerCandidates } from "../../../core/ownership/ownerCandidateRanking";
+import type {
+  OwnerCandidate,
+  OwnerCandidateScope,
+  OwnerConfidence,
+  OwnerEvidence
+} from "../../../core/ownership/types";
 
 export type PrincipalOwnerProjection = {
+  ownerCandidates: OwnerCandidate[];
   potentialOwners: string[];
   ownerConfidence: OwnerConfidence;
 };
@@ -26,18 +33,26 @@ export function projectManagedIdentityOwners(
   const identity = locationsByPrincipal.get(principalId.toLowerCase()) ?? locationsByPrincipal.get(clientId.toLowerCase());
 
   if (!identity) {
-    return {
-      potentialOwners: [],
-      ownerConfidence: "none"
-    };
+    return emptyPrincipalOwnerProjection();
   }
 
   const ownership = ownershipByResourceGroup.get(getResourceGroupKey(identity.subscriptionId, identity.resourceGroup));
+  const ownerCandidates = ownership && ownership.ownerCandidates.length > 0
+    ? buildOwnerCandidatesFromResourceGroupRows([
+        {
+          row: ownership,
+          scope: {
+            subscriptionId: identity.subscriptionId,
+            subscriptionName: identity.subscriptionName,
+            resourceGroup: identity.resourceGroup,
+            scope: identity.resourceId,
+            roleDefinitionName: null
+          }
+        }
+      ])
+    : [];
 
-  return {
-    potentialOwners: ownership?.owner ? [ownership.owner] : [],
-    ownerConfidence: ownership?.confidence ?? "none"
-  };
+  return buildPrincipalOwnerProjection(ownerCandidates);
 }
 
 export function projectServicePrincipalOwners(
@@ -45,23 +60,80 @@ export function projectServicePrincipalOwners(
   resourceGroupOwnershipRows: ResourceGroupOwnershipRow[]
 ): PrincipalOwnerProjection {
   const ownershipIndex = buildResourceGroupOwnershipIndex(resourceGroupOwnershipRows);
-  const resourceGroups = new Map<string, ResourceGroupOwnershipRow>();
+  const ownerRows: ResourceGroupOwnerCandidateInput[] = [];
 
   for (const assignment of roleAssignments) {
     for (const row of getRoleAssignmentResourceGroupOwners(assignment, ownershipIndex)) {
-      resourceGroups.set(getResourceGroupKey(row.subscriptionId, row.resourceGroup), row);
+      if (row.ownerCandidates.length === 0) {
+        continue;
+      }
+
+      ownerRows.push({
+        row,
+        scope: {
+          subscriptionId: row.subscriptionId,
+          subscriptionName: row.subscriptionName,
+          resourceGroup: row.resourceGroup,
+          scope: assignment.scope,
+          roleDefinitionName: assignment.roleDefinitionName
+        }
+      });
     }
   }
 
-  const ownerRows = [...resourceGroups.values()].filter((row) => row.owner);
+  return buildPrincipalOwnerProjection(buildOwnerCandidatesFromResourceGroupRows(ownerRows));
+}
 
+function emptyPrincipalOwnerProjection(): PrincipalOwnerProjection {
   return {
-    potentialOwners: uniqueSorted(ownerRows.map((row) => row.owner).filter(isString)),
-    ownerConfidence: ownerRows.reduce<OwnerConfidence>(
-      (confidence, row) => maxOwnerConfidence(confidence, row.confidence),
+    ownerCandidates: [],
+    potentialOwners: [],
+    ownerConfidence: "none"
+  };
+}
+
+function buildPrincipalOwnerProjection(ownerCandidates: OwnerCandidate[]): PrincipalOwnerProjection {
+  return {
+    ownerCandidates,
+    potentialOwners: ownerCandidates.map((candidate) => candidate.displayName),
+    ownerConfidence: ownerCandidates.reduce<OwnerConfidence>(
+      (confidence, candidate) => maxOwnerConfidence(confidence, candidate.confidence),
       "none"
     )
   };
+}
+
+type ResourceGroupOwnerCandidateInput = {
+  row: ResourceGroupOwnershipRow;
+  scope: OwnerCandidateScope;
+};
+
+function buildOwnerCandidatesFromResourceGroupRows(inputs: ResourceGroupOwnerCandidateInput[]): OwnerCandidate[] {
+  const candidates = new Map<string, OwnerCandidate>();
+
+  for (const input of inputs) {
+    for (const resourceGroupCandidate of input.row.ownerCandidates) {
+      const key = resourceGroupCandidate.key;
+      const existing = candidates.get(key);
+
+      if (existing) {
+        existing.confidence = maxOwnerConfidence(existing.confidence, resourceGroupCandidate.confidence);
+        existing.evidence = mergeOwnerEvidence(existing.evidence, resourceGroupCandidate.evidence);
+        existing.relatedScopes = mergeOwnerCandidateScopes(existing.relatedScopes, [input.scope]);
+        continue;
+      }
+
+      candidates.set(key, {
+        ...resourceGroupCandidate,
+        source: "resourceGroupOwner",
+        rank: 0,
+        evidence: [...resourceGroupCandidate.evidence],
+        relatedScopes: [input.scope]
+      });
+    }
+  }
+
+  return rankOwnerCandidates([...candidates.values()]);
 }
 
 function buildResourceGroupOwnershipIndex(rows: ResourceGroupOwnershipRow[]): ResourceGroupOwnershipIndex {
@@ -142,16 +214,42 @@ function getResourceGroupKey(subscriptionId: string, resourceGroup: string): str
   return `${subscriptionId.toLowerCase()}:${resourceGroup.toLowerCase()}`;
 }
 
-function uniqueSorted(values: string[]): string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
-}
-
-function isString(value: string | null): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
 function maxOwnerConfidence(left: OwnerConfidence, right: OwnerConfidence): OwnerConfidence {
   return OWNER_CONFIDENCE_RANK[left] >= OWNER_CONFIDENCE_RANK[right] ? left : right;
+}
+
+function mergeOwnerEvidence(left: OwnerEvidence[], right: OwnerEvidence[]): OwnerEvidence[] {
+  const merged = new Map<string, OwnerEvidence>();
+
+  for (const evidence of [...left, ...right]) {
+    merged.set(getOwnerEvidenceKey(evidence), evidence);
+  }
+
+  return [...merged.values()];
+}
+
+function getOwnerEvidenceKey(evidence: OwnerEvidence): string {
+  return `${evidence.user}:${evidence.date ?? ""}:${evidence.disabled ? "disabled" : "enabled"}`;
+}
+
+function mergeOwnerCandidateScopes(left: OwnerCandidateScope[], right: OwnerCandidateScope[]): OwnerCandidateScope[] {
+  const merged = new Map<string, OwnerCandidateScope>();
+
+  for (const scope of [...left, ...right]) {
+    merged.set(getOwnerCandidateScopeKey(scope), scope);
+  }
+
+  return [...merged.values()];
+}
+
+function getOwnerCandidateScopeKey(scope: OwnerCandidateScope): string {
+  return [
+    scope.subscriptionId ?? "",
+    scope.subscriptionName ?? "",
+    scope.resourceGroup ?? "",
+    scope.scope ?? "",
+    scope.roleDefinitionName ?? ""
+  ].join(":");
 }
 
 const OWNER_CONFIDENCE_RANK: Record<OwnerConfidence, number> = {

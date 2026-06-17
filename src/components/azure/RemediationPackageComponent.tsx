@@ -56,7 +56,7 @@ const remediationTaskFields: ReportFieldDescriptor<RemediationTask>[] = [
     id: "potentialOwners",
     label: "Owner",
     valueType: "text",
-    getValue: (task) => getTaskAzureEnrichment(task)?.potentialOwners.join(", ") ?? "",
+    getValue: (task) => getTaskAzureEnrichment(task)?.potentialOwners?.join(", ") ?? "",
     getFilterValue: (task) => {
       const enrichment = getTaskAzureEnrichment(task);
 
@@ -350,9 +350,11 @@ function getTaskAzureEnrichment(task: RemediationTask): EntraPrincipalAzureRemed
     !isPermissionRiskLevel(enrichment.rbacRoleLevel) ||
     typeof enrichment.rbacSubscriptionCount !== "number" ||
     !Array.isArray(enrichment.roleAssignments) ||
-    !Array.isArray(enrichment.potentialOwners) ||
-    !enrichment.potentialOwners.every((owner) => typeof owner === "string") ||
-    !isOwnerConfidence(enrichment.ownerConfidence)
+    !Array.isArray(enrichment.ownerCandidates) ||
+    (enrichment.potentialOwners !== undefined &&
+      (!Array.isArray(enrichment.potentialOwners) ||
+        !enrichment.potentialOwners.every((owner) => typeof owner === "string"))) ||
+    (enrichment.ownerConfidence !== undefined && !isOwnerConfidence(enrichment.ownerConfidence))
   ) {
     return null;
   }

@@ -5,7 +5,7 @@ import { appConfig } from "../../core/config";
 import type { OwnerConfidence } from "../../core/ownership/types";
 import type { OwnerEvidence } from "../../report/types";
 import { azureOwnerColumnHelp } from "./azureReportConfig";
-import { exportResourceGroupsCsv, readResourceGroups, updateDisabledOwnerEvidence } from "./api";
+import { exportResourceGroupsCsv, readResourceGroups, updateEvidenceStatus } from "./api";
 import { EvidenceList } from "../../report/components/EvidenceList";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
 import type { ColumnFilters, SortRule } from "../../core/collectionControls";
@@ -13,7 +13,7 @@ import { Card } from "../../report/components/ui/card";
 import { getOwnerEvidenceKey, isActivityOwnerRow } from "../../report/ownerManualPrecheck";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
-import { OwnerBadge } from "./ServicePrincipalFieldRenderers";
+import { OwnerBadge, type OwnershipEvidenceSelection } from "./ServicePrincipalFieldRenderers";
 import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
 
 const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];
@@ -47,15 +47,15 @@ const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = 
     id: "owner",
     label: "Owner",
     valueType: "text",
-    getValue: (group) => group.owner,
+    getValue: (group) => group.ownerCandidates.map((candidate) => candidate.displayName).join(", "),
     getFilterValue: (group) => ({
-      owner: group.owner,
+      owner: group.ownerCandidates.map((candidate) => candidate.displayName),
       confidence: group.confidence
     }),
     filter: {
       kind: "objectFields",
       fields: [
-        { id: "owner", label: "Owner", filterColumnId: "owner" },
+        { id: "owner", label: "Owner", filterColumnId: "ownerCandidates.displayName" },
         { id: "confidence", label: "Confidence", filterColumnId: "confidence", options: ownerConfidenceOptions }
       ]
     }
@@ -90,7 +90,11 @@ const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = 
   }
 ];
 
-export function ResourceGroupComponent() {
+export function ResourceGroupComponent({
+  onOwnershipEvidenceClick
+}: {
+  onOwnershipEvidenceClick?: (selection: OwnershipEvidenceSelection) => void;
+}) {
   const [refreshToken, setRefreshToken] = useState(0);
   const [toggleError, setToggleError] = useState<string | null>(null);
   const handleOwnerEvidenceDisabledChange = useCallback(
@@ -98,9 +102,9 @@ export function ResourceGroupComponent() {
       setToggleError(null);
 
       try {
-        await updateDisabledOwnerEvidence({
-          disabled,
-          key: getOwnerEvidenceKey(row, entry)
+        await updateEvidenceStatus({
+          key: getOwnerEvidenceKey(row, entry),
+          status: disabled ? "unactive" : "active"
         });
         setRefreshToken((current) => current + 1);
       } catch (error) {
@@ -117,7 +121,25 @@ export function ResourceGroupComponent() {
           <div className="mt-0.5 text-xs text-muted-foreground">{group.subscriptionName}</div>
         </div>
       ),
-      owner: (group) => <OwnerBadge confidence={group.confidence} owners={group.owner ? [group.owner] : []} />,
+      owner: (group) => (
+        <OwnerBadge
+          confidence={group.confidence}
+          ownerCandidates={group.ownerCandidates}
+          onClick={
+            onOwnershipEvidenceClick
+              ? () =>
+                  onOwnershipEvidenceClick({
+                    displayName: group.resourceGroup,
+                    target: {
+                      kind: "resourceGroup",
+                      subscriptionId: group.subscriptionId,
+                      resourceGroup: group.resourceGroup
+                    }
+                  })
+              : undefined
+          }
+        />
+      ),
       evidence: (group) => (
         <EvidenceList
           canDisable={isActivityOwnerRow(group)}
@@ -128,7 +150,7 @@ export function ResourceGroupComponent() {
         />
       )
     }),
-    [handleOwnerEvidenceDisabledChange]
+    [handleOwnerEvidenceDisabledChange, onOwnershipEvidenceClick]
   );
   const loadResourceGroups = useCallback(
     (input: { filters: ColumnFilters; page: number; signal: AbortSignal; sortRules: SortRule[] }) =>

@@ -1,14 +1,17 @@
+import type { ReactElement } from "react";
+
 import type {
   EntraPrincipalOwnerSummary,
   EntraPrincipalPermissionSummary,
   EntraPrincipalRbacSummary
 } from "../../core/azure/entra/servicePrincipal";
 import type { AzureRoleAssignment } from "../../core/azure/resources";
-import type { OwnerConfidence } from "../../core/ownership/types";
+import type { OwnerCandidate, OwnerConfidence } from "../../core/ownership/types";
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import type { ZtaRemediationSummary } from "../../core/azure/ztaReport";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import { Badge, type BadgeProps } from "../../report/components/ui/badge";
+import type { OwnershipEvidenceTarget } from "./api";
 import { ZtaRemediationBadge } from "./ZtaRemediationBadge";
 
 type EntraPrincipalSummaryRow = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & ZtaRemediationSummary & {
@@ -23,6 +26,7 @@ type EntraPrincipalIdentitySummary = EntraPrincipalPermissionSummary & EntraPrin
   displayName: string;
   id: string;
   roleAssignments?: AzureRoleAssignment[];
+  servicePrincipalType?: string;
 };
 
 export type AzureRbacPrincipalSelection = {
@@ -32,9 +36,15 @@ export type AzureRbacPrincipalSelection = {
 
 export type EntraPermissionsPrincipalSelection = AzureRbacPrincipalSelection;
 
+export type OwnershipEvidenceSelection = {
+  displayName: string;
+  target: OwnershipEvidenceTarget;
+};
+
 type ServicePrincipalFieldRendererOptions = {
   onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
   onEntraPermissionsClick?: (principal: EntraPermissionsPrincipalSelection) => void;
+  onOwnershipEvidenceClick?: (selection: OwnershipEvidenceSelection) => void;
   onZtaRemediationsClick?: (objectId: string) => void;
 };
 
@@ -52,6 +62,7 @@ export function buildServicePrincipalFieldRenderers<TRow>({
   getPrincipalSummary,
   onAzureRbacClick,
   onEntraPermissionsClick,
+  onOwnershipEvidenceClick,
   onZtaRemediationsClick
 }: ServicePrincipalFieldRendererOptions & {
   getPrincipalSummary?: (row: TRow) => EntraPrincipalIdentitySummary | null;
@@ -106,7 +117,19 @@ export function buildServicePrincipalFieldRenderers<TRow>({
       return sp ? (
         <OwnerBadge
           confidence={sp.ownerConfidence ?? "none"}
-          owners={sp.potentialOwners ?? []}
+          ownerCandidates={sp.ownerCandidates ?? []}
+          onClick={
+            onOwnershipEvidenceClick
+              ? () =>
+                  onOwnershipEvidenceClick({
+                    displayName: sp.displayName,
+                    target: {
+                      kind: sp.servicePrincipalType === "ManagedIdentity" ? "managedIdentity" : "servicePrincipal",
+                      principalId: sp.id
+                    }
+                  })
+              : undefined
+          }
         />
       ) : (
         <EmptyValue />
@@ -219,23 +242,61 @@ function formatRoleAssignmentSource(assignment: AzureRoleAssignment): string {
   return ` via group ${assignment.inheritedFromGroupDisplayName ?? assignment.inheritedFromGroupId ?? "group"}`;
 }
 
-export function OwnerBadge({ confidence, owners }: { confidence: OwnerConfidence; owners: string[] }) {
-  if (owners.length === 0) {
-    return (
-      <Badge className={`max-w-72 justify-center truncate ${summaryBadgeTypographyClassName}`} title={`No owner (${confidence} confidence)`} variant={confidence}>
-        -
+export function OwnerBadge({
+  confidence,
+  onClick,
+  ownerCandidates = []
+}: {
+  confidence: OwnerConfidence;
+  onClick?: () => void;
+  ownerCandidates?: OwnerCandidate[];
+}) {
+  const clickLabel = ownerCandidates.length > 0
+    ? `Open ownership evidence for ${ownerCandidates[0].displayName}`
+    : "Open ownership evidence";
+
+  if (ownerCandidates.length > 0) {
+    const topCandidate = ownerCandidates[0];
+    const remainingCount = ownerCandidates.length - 1;
+    const label = `${topCandidate.displayName} · ${topCandidate.type}${remainingCount > 0 ? ` (+${remainingCount})` : ""}`;
+
+    const badge = (
+      <Badge
+        className={`max-w-72 justify-center truncate ${summaryBadgeTypographyClassName}`}
+        title={`${topCandidate.displayName} (${topCandidate.type}, ${topCandidate.confidence} confidence)${remainingCount > 0 ? ` plus ${remainingCount} more` : ""}`}
+        variant={topCandidate.confidence}
+      >
+        {label}
       </Badge>
     );
+
+    return wrapOwnerBadgeButton(badge, clickLabel, onClick);
+  }
+
+  const badge = (
+    <Badge className={`max-w-72 justify-center truncate ${summaryBadgeTypographyClassName}`} title={`No owner (${confidence} confidence)`} variant={confidence}>
+      -
+    </Badge>
+  );
+
+  return wrapOwnerBadgeButton(badge, clickLabel, onClick);
+}
+
+function wrapOwnerBadgeButton(badge: ReactElement, label: string, onClick?: () => void) {
+  if (!onClick) {
+    return badge;
   }
 
   return (
-    <div className="flex max-w-72 flex-wrap gap-1">
-      {owners.map((owner) => (
-        <Badge key={owner} className={`max-w-full justify-center truncate ${summaryBadgeTypographyClassName}`} title={`${owner} (${confidence} confidence)`} variant={confidence}>
-          {owner}
-        </Badge>
-      ))}
-    </div>
+    <button
+      aria-label={label}
+      className={summaryBadgeButtonClassName}
+      title={label}
+      type="button"
+      onClick={onClick}
+    >
+      {badge}
+    </button>
   );
 }
 

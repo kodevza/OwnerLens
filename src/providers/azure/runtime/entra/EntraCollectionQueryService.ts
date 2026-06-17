@@ -128,7 +128,7 @@ export class EntraCollectionQueryService {
     );
   }
 
-  private async readManagedIdentityRows(): Promise<Record<string, unknown>[]> {
+  async readManagedIdentityRows(): Promise<Record<string, unknown>[]> {
     const managedIdentities = await this.enrichWithZtaRemediationSummaries(await this.entra.readManagedIdentities());
 
     try {
@@ -151,7 +151,7 @@ export class EntraCollectionQueryService {
     }
   }
 
-  private async readServicePrincipalRows(): Promise<Record<string, unknown>[]> {
+  async readServicePrincipalRows(): Promise<Record<string, unknown>[]> {
     const servicePrincipals = await this.enrichWithZtaRemediationSummaries(await this.entra.readServicePrincipals());
 
     try {

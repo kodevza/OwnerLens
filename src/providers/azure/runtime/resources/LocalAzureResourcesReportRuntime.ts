@@ -42,8 +42,7 @@ export type LocalAzureResourcesReportCollectionId =
   | "azureResources.resourceGroups"
   | "azureResources.resources"
   | "azureResources.userAssignedManagedIdentities"
-  | "azureResources.roleAssignments"
-  | "azureResources.activityLogs";
+  | "azureResources.roleAssignments";
 
 export type LocalAzureResourcesReportRuntimeOptions = {
   dataDir: string;

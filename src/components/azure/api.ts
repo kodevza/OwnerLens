@@ -4,6 +4,7 @@ import type { EntraAppRoleAssignment, EntraOAuth2PermissionGrant } from "../../c
 import type { AzureRbac } from "../../core/azure/azureRbac";
 import type { ResourceGroupOwnershipRow } from "../../core/azure/resources";
 import type { ZtaReport } from "../../core/azure/ztaReport";
+import type { OwnershipEvidenceResponse } from "../../core/ownership/types";
 import type {
   CreateRuntimeRemediationPackageRequest,
   CreateRuntimeRemediationPackageResponse,
@@ -35,6 +36,21 @@ export type EntraPrincipalPermissionsResponse = {
   oauth2PermissionGrants: EntraOAuth2PermissionGrant[];
   appRoleAssignments: EntraAppRoleAssignment[];
 };
+
+export type OwnershipEvidenceTarget =
+  | {
+      kind: "servicePrincipal";
+      principalId: string;
+    }
+  | {
+      kind: "managedIdentity";
+      principalId: string;
+    }
+  | {
+      kind: "resourceGroup";
+      subscriptionId: string;
+      resourceGroup: string;
+    };
 
 type ZeroTrustAssessmentRuntimeResponse = ZtaReport &
   PaginatedCollection<"zeroTrustAssessment.report", ZtaReport["Tests"]>;
@@ -196,6 +212,35 @@ export async function readEntraPermissions({
   return (await response.json()) as EntraPrincipalPermissionsResponse;
 }
 
+export async function readOwnershipEvidence({
+  signal,
+  target
+}: {
+  signal: AbortSignal;
+  target: OwnershipEvidenceTarget;
+}): Promise<OwnershipEvidenceResponse> {
+  const url = new URL("/api/data/ownership/evidence", window.location.origin);
+  url.searchParams.set("kind", target.kind);
+
+  if (target.kind === "servicePrincipal" || target.kind === "managedIdentity") {
+    url.searchParams.set("principalId", target.principalId);
+  } else {
+    url.searchParams.set("subscriptionId", target.subscriptionId);
+    url.searchParams.set("resourceGroup", target.resourceGroup);
+  }
+
+  const response = await fetch(`${url.pathname}${url.search}`, { signal });
+  if (!response.ok) {
+    throw new Error(`Ownership evidence read failed: ${response.status}`);
+  }
+
+  return readJsonResponse<OwnershipEvidenceResponse>(
+    response,
+    `${url.pathname}${url.search}`,
+    "Ownership evidence read failed"
+  );
+}
+
 export async function readZeroTrustAssessmentReport({
   filters = {},
   page,
@@ -283,20 +328,22 @@ export async function deleteRemediationTasks(
   );
 }
 
-export async function updateDisabledOwnerEvidence({
+export type EvidenceStatus = "active" | "unactive";
+
+export async function updateEvidenceStatus({
   key,
-  disabled
+  status
 }: {
   key: string;
-  disabled: boolean;
+  status: EvidenceStatus;
 }): Promise<void> {
-  const url = new URL("/api/data/azureResources/resourceGroupOwnership/disabledEvidence", window.location.origin);
+  const url = new URL("/api/data/ownership/evidence/status", window.location.origin);
   url.searchParams.set("key", key);
-  url.searchParams.set("disabled", String(disabled));
+  url.searchParams.set("status", status);
 
   const response = await fetch(`${url.pathname}${url.search}`);
   if (!response.ok) {
-    throw new Error(`Owner candidate update failed: ${response.status}`);
+    throw new Error(`Ownership evidence status update failed: ${response.status}`);
   }
 }
 

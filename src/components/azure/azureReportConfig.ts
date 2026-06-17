@@ -93,8 +93,8 @@ export const azureManagedIdentityColumnHelp = {
     source: "Computed by app from the Owner Report resource group rows.",
     logic: [
       "Looks up the resource group shown for the managed identity in the resolved owner report.",
-      "Projects each resource group's owner onto the managed identity.",
-      "Shows the distinct resolved owner email addresses separated by commas."
+      "Projects each resource group's owner as an owner candidate for the managed identity.",
+      "Shows the top candidate with type and confidence, plus a count of additional candidates."
     ]
   },
   ownerConfidence: {
@@ -227,7 +227,7 @@ export const azureServicePrincipalColumnHelp = {
       "Finds Azure RBAC assignments for this Service Principal.",
       "Collects resource groups targeted by those RBAC scopes.",
       "Subscription-scoped RBAC expands to every resource group in the assigned subscription.",
-      "Projects the resolved owner list from those resource group owner rows."
+      "Projects distinct owner candidates from those resource group owner rows with related scope context."
     ]
   },
   ownerConfidence: {

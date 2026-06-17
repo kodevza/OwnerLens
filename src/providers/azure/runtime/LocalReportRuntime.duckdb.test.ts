@@ -2542,10 +2542,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
     await firstRuntime.initialize();
     let endpoints = defineLocalReportRuntimeRestEndpoints(firstRuntime);
     let ownershipEndpoint = getEndpoint(endpoints, "/api/data/azureResources/resourceGroupOwnership");
-    let disabledEvidenceEndpoint = getEndpoint(
-      endpoints,
-      "/api/data/azureResources/resourceGroupOwnership/disabledEvidence"
-    );
+    let evidenceStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/evidence/status");
 
     await expect(
       ownershipEndpoint.handle({
@@ -2567,13 +2564,13 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
       ]
     });
     await expect(
-      disabledEvidenceEndpoint.handle({
+      evidenceStatusEndpoint.handle({
         req: {},
         url: new URL(
-          `http://localhost/api/data/azureResources/resourceGroupOwnership/disabledEvidence?key=${encodeURIComponent(disabledKey)}&disabled=true`
+          `http://localhost/api/data/ownership/evidence/status?key=${encodeURIComponent(disabledKey)}&status=unactive`
         )
       })
-    ).resolves.toEqual({ key: disabledKey, disabled: true, disabledCount: 1 });
+    ).resolves.toEqual({ key: disabledKey, status: "unactive", disabled: true, disabledCount: 1 });
     await expect(
       ownershipEndpoint.handle({
         req: {},
@@ -2601,10 +2598,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
       await secondRuntime.initialize();
       endpoints = defineLocalReportRuntimeRestEndpoints(secondRuntime);
       ownershipEndpoint = getEndpoint(endpoints, "/api/data/azureResources/resourceGroupOwnership");
-      disabledEvidenceEndpoint = getEndpoint(
-        endpoints,
-        "/api/data/azureResources/resourceGroupOwnership/disabledEvidence"
-      );
+      evidenceStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/evidence/status");
       await expect(
         ownershipEndpoint.handle({
           req: {},
@@ -2624,13 +2618,13 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
         ]
       });
       await expect(
-        disabledEvidenceEndpoint.handle({
+        evidenceStatusEndpoint.handle({
           req: {},
           url: new URL(
-            `http://localhost/api/data/azureResources/resourceGroupOwnership/disabledEvidence?key=${encodeURIComponent(disabledKey)}&disabled=false`
+            `http://localhost/api/data/ownership/evidence/status?key=${encodeURIComponent(disabledKey)}&status=active`
           )
         })
-      ).resolves.toEqual({ key: disabledKey, disabled: false, disabledCount: 0 });
+      ).resolves.toEqual({ key: disabledKey, status: "active", disabled: false, disabledCount: 0 });
       await expect(
         ownershipEndpoint.handle({
           req: {},

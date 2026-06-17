@@ -13,7 +13,8 @@ import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
 import {
   buildServicePrincipalFieldRenderers,
   type AzureRbacPrincipalSelection,
-  type EntraPermissionsPrincipalSelection
+  type EntraPermissionsPrincipalSelection,
+  type OwnershipEvidenceSelection
 } from "./ServicePrincipalFieldRenderers";
 import {
   getRemediationPackageSearchValues,
@@ -50,7 +51,7 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
   },
   {
     id: "potentialOwners",
-    label: "Owner",
+    label: "Owner candidates",
     valueType: "text",
     getValue: (identity) => identity.potentialOwners?.join(", ") ?? "",
     getFilterValue: (identity) => ({
@@ -60,7 +61,7 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
     filter: {
       kind: "objectFields",
       fields: [
-        { id: "owner", label: "Owner", filterColumnId: "potentialOwners" },
+        { id: "owner", label: "Owner candidates", filterColumnId: "potentialOwners" },
         { id: "confidence", label: "Confidence", filterColumnId: "ownerConfidence", options: ownerConfidenceOptions }
       ]
     }
@@ -105,12 +106,14 @@ export function ManagedIdentityComponent({
   initialFilters,
   onAzureRbacClick,
   onEntraPermissionsClick,
+  onOwnershipEvidenceClick,
   onRemediationPackageClick,
   onZtaRemediationsClick
 }: {
   initialFilters?: ColumnFilters;
   onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
   onEntraPermissionsClick?: (principal: EntraPermissionsPrincipalSelection) => void;
+  onOwnershipEvidenceClick?: (selection: OwnershipEvidenceSelection) => void;
   onRemediationPackageClick?: (remediationPackage: RemediationPackage) => void;
   onZtaRemediationsClick?: (objectId: string) => void;
 }) {
@@ -139,6 +142,7 @@ export function ManagedIdentityComponent({
       ...buildServicePrincipalFieldRenderers<ManagedIdentity>({
         onAzureRbacClick,
         onEntraPermissionsClick,
+        onOwnershipEvidenceClick,
         onZtaRemediationsClick
       }),
       RemediationPackages: (identity: ManagedIdentity) => (
@@ -148,7 +152,14 @@ export function ManagedIdentityComponent({
         />
       )
     }),
-    [onAzureRbacClick, onEntraPermissionsClick, onRemediationPackageClick, onZtaRemediationsClick, openRemediationPackage]
+    [
+      onAzureRbacClick,
+      onEntraPermissionsClick,
+      onOwnershipEvidenceClick,
+      onRemediationPackageClick,
+      onZtaRemediationsClick,
+      openRemediationPackage
+    ]
   );
 
   return (

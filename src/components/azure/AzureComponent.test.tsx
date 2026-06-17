@@ -820,6 +820,116 @@ test("opens Azure RBAC tab for the selected service principal from its RBAC badg
   act(() => root.unmount());
 });
 
+test("opens selectable ownership evidence table from a service principal owner badge", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      return jsonResponse({
+        target: {
+          kind: "servicePrincipal",
+          id: "sp-object-id",
+          displayName: "Service principal app"
+        },
+        evidence: [
+          {
+            key: "owner-1:alice@example.test:2026-06-05T00:00:00.000Z",
+            ownerCandidateKey: "owner-1",
+            ownerDisplayName: "alice@example.test",
+            ownerType: "ownerUser",
+            confidence: "high",
+            source: "entraApplicationOwner",
+            path: "direct",
+            discoverySource: "applicationOwner",
+            rank: 1,
+            evidence: "alice@example.test",
+            date: "2026-06-05T00:00:00.000Z",
+            relatedScopes: []
+          }
+        ]
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 1,
+      page: 1,
+      pageSize: 20,
+      rows: [
+        {
+          accountEnabled: true,
+          appDisplayName: "Service principal app",
+          appId: "sp-client-id",
+          appOwnerOrganizationId: null,
+          azureRbac: "No Azure RBAC assignments",
+          displayName: "Service principal app",
+          homepage: null,
+          id: "sp-object-id",
+          loginUrl: null,
+          permissionRisk: "none",
+          rbacRoleAssignmentCount: 0,
+          rbacRoleLevel: "none",
+          rbacSubscriptionCount: 0,
+          publisherName: null,
+          replyUrls: [],
+          roleAssignments: [],
+          oauthPermissionsCount: 0,
+          appRolesPermissionCount: 0,
+          entraPermissionRisk: "none",
+          servicePrincipalNames: [],
+          servicePrincipalType: "Application",
+          potentialOwners: ["alice@example.test"],
+          ownerCandidates: [
+            {
+              key: "owner-1",
+              displayName: "alice@example.test",
+              type: "ownerUser",
+              confidence: "high",
+              source: "entraApplicationOwner",
+              rank: 1,
+              evidence: [{ user: "alice@example.test", date: "2026-06-05T00:00:00.000Z" }],
+              relatedScopes: []
+            }
+          ],
+          ownerConfidence: "high",
+          tags: [],
+          ztaMaxRisk: "none",
+          ztaRemediationCountAll: 0,
+          ztaRemediationFailedCount: 0
+        }
+      ]
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await waitForText(container, "Service principal app");
+  await clickButton("Open ownership evidence for alice@example.test");
+  await waitForText(container, "Application owner");
+
+  expect(getButton("Service principal app owners")).toBeDefined();
+  expect(getCheckbox("Select ownership evidence alice@example.test alice@example.test").checked).toBe(false);
+
+  const evidenceRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .find((requestUrl) => requestUrl.startsWith("/api/data/ownership/evidence"));
+  expect(evidenceRequest).toBeDefined();
+
+  const url = new URL(evidenceRequest ?? "", window.location.origin);
+  expect(url.searchParams.get("kind")).toBe("servicePrincipal");
+  expect(url.searchParams.get("principalId")).toBe("sp-object-id");
+
+  await clickButton("Close Service principal app ownership evidence tab");
+  await waitFor(() => {
+    expect(queryButton("Close Service principal app ownership evidence tab")).toBeNull();
+    expect(container.textContent).not.toContain("Application owner");
+  });
+
+  act(() => root.unmount());
+});
+
 test("opens Entra API permissions tab for the selected service principal from its permissions badge", async () => {
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);
@@ -899,7 +1009,8 @@ test("opens Entra API permissions tab for the selected service principal from it
   await waitForText(container, "Service principal app");
   await clickButton("Open Entra API permissions 2/1");
   await waitForText(container, "User.Read Directory.Read.All");
-  await waitForText(container, "Read directory data");
+  await waitForText(container, "Directory.Read.All");
+  await waitForText(container, "Microsoft Graph");
   await waitForText(container, "Risk");
   await waitForText(container, "high");
 
