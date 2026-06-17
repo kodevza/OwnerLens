@@ -31,6 +31,17 @@ type ResourceGroupRuntimeResponse = LocalReportPaginatedCollection<
 
 type AzureRbacRuntimeResponse = LocalReportPaginatedCollection<"azureRbac", AzureRbac>;
 
+export type AzureRbacTarget =
+  | {
+      kind: "servicePrincipal";
+      servicePrincipalId: string;
+    }
+  | {
+      kind: "resourceGroup";
+      subscriptionId: string;
+      resourceGroup: string;
+    };
+
 export type EntraPrincipalPermissionsResponse = {
   principalId: string;
   oauth2PermissionGrants: EntraOAuth2PermissionGrant[];
@@ -169,18 +180,23 @@ export async function exportRemediationPackageTasksCsv(
 export async function readAzureRbac({
   filters,
   page,
-  servicePrincipalId,
   signal,
-  sortRules
+  sortRules,
+  target
 }: {
   filters: ColumnFilters;
   page: number;
-  servicePrincipalId: string;
   signal: AbortSignal;
   sortRules: SortRule[];
+  target: AzureRbacTarget;
 }): Promise<AzureRbacRuntimeResponse> {
   const url = new URL("/api/data/azureRbac", window.location.origin);
-  url.searchParams.set("servicePrincipalId", servicePrincipalId);
+  if (target.kind === "servicePrincipal") {
+    url.searchParams.set("servicePrincipalId", target.servicePrincipalId);
+  } else {
+    url.searchParams.set("subscriptionId", target.subscriptionId);
+    url.searchParams.set("resourceGroup", target.resourceGroup);
+  }
   url.searchParams.set("page", String(page));
   url.searchParams.set("count", String(remotePageSize));
   appendRuntimeCollectionFilters(url, filters);

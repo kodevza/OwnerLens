@@ -61,6 +61,14 @@ export const azureOwnerColumnHelp = {
       "For activity fallback, shows recent distinct callers and event timestamps.",
       "Service principal callers are displayed by Entra display name when known."
     ]
+  },
+  azureRbac: {
+    source: "Computed by app from Azure role assignments and Entra service principals.",
+    logic: [
+      "Counts Azure RBAC assignments scoped to the resource group or resources inside it.",
+      "Includes only assignments for service principals and managed identities.",
+      "Badge color uses the highest role risk across the matching assignments."
+    ]
   }
 } satisfies Record<string, ReportColumnHelp>;
 

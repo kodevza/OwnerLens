@@ -267,6 +267,25 @@ test("defines local report runtime REST endpoints", async () => {
         count: 1
       })
     ),
+    queryAzureRbacForResourceGroup: jest.fn((
+      target: { subscriptionId: string; resourceGroup: string },
+      options: { page?: number; pageSize?: number }
+    ) =>
+      Promise.resolve({
+        collectionId: "azureRbac",
+        rows: [
+          {
+            servicePrincipalId: "sp-1",
+            accessScope: `/subscriptions/${target.subscriptionId}/resourceGroups/${target.resourceGroup}`,
+            accessScopeType: "ResourceGroup"
+          }
+        ],
+        columns: ["servicePrincipalId", "accessScope", "accessScopeType"],
+        page: options.page ?? 1,
+        pageSize: options.pageSize ?? 10,
+        count: 1
+      })
+    ),
     readOwnershipEvidence: jest.fn(
       (request: { kind: string; principalId?: string; subscriptionId?: string; resourceGroup?: string }) => {
         if (request.kind === "servicePrincipal" && request.principalId === "missing") {
@@ -616,12 +635,30 @@ test("defines local report runtime REST endpoints", async () => {
     pageSize: 10,
     count: 1
   });
+  await expect(
+    azureRbacEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/azureRbac?subscriptionId=sub-1&resourceGroup=rg-1&page=1&count=10")
+    })
+  ).resolves.toMatchObject({
+    collectionId: "azureRbac",
+    rows: [
+      {
+        servicePrincipalId: "sp-1",
+        accessScope: "/subscriptions/sub-1/resourceGroups/rg-1",
+        accessScopeType: "ResourceGroup"
+      }
+    ],
+    page: 1,
+    pageSize: 10,
+    count: 1
+  });
   expect(() =>
     azureRbacEndpoint.handle({
       req: {},
       url: new URL("http://localhost/api/data/azureRbac?page=1&count=10")
     })
-  ).toThrow("Missing required query parameter: servicePrincipalId");
+  ).toThrow("Missing required query parameter: subscriptionId");
   await expect(
     ownershipEvidenceEndpoint.handle({
       req: {},
@@ -861,6 +898,15 @@ test("defines local report runtime REST endpoints", async () => {
     page: 1,
     pageSize: 10
   });
+  expect(runtime.queryAzureRbacForResourceGroup).toHaveBeenCalledWith(
+    { subscriptionId: "sub-1", resourceGroup: "rg-1" },
+    {
+      filters: [],
+      sortRules: [],
+      page: 1,
+      pageSize: 10
+    }
+  );
   expect(runtime.readOwnershipEvidence).toHaveBeenCalledWith({
     kind: "servicePrincipal",
     principalId: "sp-1"

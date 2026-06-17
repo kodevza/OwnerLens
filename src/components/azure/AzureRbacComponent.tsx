@@ -5,7 +5,7 @@ import { GenericTable } from "../../report/components/GenericTable";
 import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import type { PermissionRiskLevel } from "../../core/risk/types";
-import { readAzureRbac } from "./api";
+import { readAzureRbac, type AzureRbacTarget } from "./api";
 
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 const azureScopeTypeOptions = ["ManagementGroup", "Subscription", "ResourceGroup", "Resource", "Unknown"];
@@ -96,7 +96,7 @@ const azureRbacFields: ReportFieldDescriptor<AzureRbac>[] = [
   }
 ];
 
-export function AzureRbacComponent({ servicePrincipalId }: { servicePrincipalId: string }) {
+export function AzureRbacComponent({ target }: { target: AzureRbacTarget }) {
   const loadPage = useCallback(
     ({
       filters,
@@ -109,8 +109,8 @@ export function AzureRbacComponent({ servicePrincipalId }: { servicePrincipalId:
       signal: AbortSignal;
       sortRules: SortRule[];
     }) =>
-      readAzureRbac({ filters, page, servicePrincipalId, signal, sortRules }),
-    [servicePrincipalId]
+      readAzureRbac({ filters, page, signal, sortRules, target }),
+    [target]
   );
 
   return (

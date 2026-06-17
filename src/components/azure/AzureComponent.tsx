@@ -11,7 +11,7 @@ import { EntraPermissionsComponent } from "./EntraPermissionsComponent";
 import { ManagedIdentityComponent } from "./ManagedIdentityComponent";
 import { OwnershipEvidenceComponent } from "./OwnershipEvidenceComponent";
 import { RemediationPackageComponent } from "./RemediationPackageComponent";
-import { ResourceGroupComponent } from "./ResourceGroupComponent";
+import { ResourceGroupComponent, type AzureRbacResourceGroupSelection } from "./ResourceGroupComponent";
 import { ServicePrincipalComponent } from "./ServicePrincipalComponent";
 import type {
   AzureRbacPrincipalSelection,
@@ -47,7 +47,11 @@ type PrincipalObjectFilter = {
 };
 
 type AzureRbacTab = AzureRbacPrincipalSelection & {
+  kind: "servicePrincipal";
   returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities" | "remediationPackage">;
+} | AzureRbacResourceGroupSelection & {
+  kind: "resourceGroup";
+  returnView: Extract<AzureView, "resourceGroups">;
 };
 
 type EntraPermissionsTab = EntraPermissionsPrincipalSelection & {
@@ -163,9 +167,14 @@ export function AzureComponent() {
 
   function openAzureRbac(
     principal: AzureRbacPrincipalSelection,
-    returnView: AzureRbacTab["returnView"]
+    returnView: Extract<AzureRbacTab["returnView"], "servicePrincipals" | "managedIdentities" | "remediationPackage">
   ) {
-    setAzureRbacTab({ ...principal, returnView });
+    setAzureRbacTab({ ...principal, kind: "servicePrincipal", returnView });
+    activateView("azureRbac");
+  }
+
+  function openResourceGroupAzureRbac(selection: AzureRbacResourceGroupSelection) {
+    setAzureRbacTab({ ...selection, kind: "resourceGroup", returnView: "resourceGroups" });
     activateView("azureRbac");
   }
 
@@ -278,7 +287,10 @@ export function AzureComponent() {
       </Tabs>
       <div className="relative z-0">
         {activeView === "resourceGroups" ? (
-          <ResourceGroupComponent onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, "resourceGroups")} />
+          <ResourceGroupComponent
+            onAzureRbacClick={openResourceGroupAzureRbac}
+            onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, "resourceGroups")}
+          />
         ) : null}
         {activeView === "servicePrincipals" ? (
           <ServicePrincipalComponent
@@ -301,7 +313,7 @@ export function AzureComponent() {
           />
         ) : null}
         {activeView === "azureRbac" && azureRbacTab ? (
-          <AzureRbacComponent key={azureRbacTab.objectId} servicePrincipalId={azureRbacTab.objectId} />
+          <AzureRbacComponent key={getAzureRbacTabKey(azureRbacTab)} target={getAzureRbacTabTarget(azureRbacTab)} />
         ) : null}
         {activeView === "entraPermissions" && entraPermissionsTab ? (
           <EntraPermissionsComponent key={entraPermissionsTab.objectId} principalId={entraPermissionsTab.objectId} />
@@ -367,6 +379,22 @@ function getOwnershipEvidenceTabKey(tab: OwnershipEvidenceTab): string {
   }
 
   return `${tab.target.kind}:${tab.target.principalId}`;
+}
+
+function getAzureRbacTabKey(tab: AzureRbacTab): string {
+  return tab.kind === "servicePrincipal"
+    ? tab.objectId
+    : `${tab.subscriptionId}:${tab.resourceGroup}`;
+}
+
+function getAzureRbacTabTarget(tab: AzureRbacTab) {
+  return tab.kind === "servicePrincipal"
+    ? { kind: "servicePrincipal" as const, servicePrincipalId: tab.objectId }
+    : {
+        kind: "resourceGroup" as const,
+        subscriptionId: tab.subscriptionId,
+        resourceGroup: tab.resourceGroup
+      };
 }
 
 function getRelatedPrincipalView(relatedObject: ZtaRelatedObject): PrincipalObjectFilter["view"] | null {

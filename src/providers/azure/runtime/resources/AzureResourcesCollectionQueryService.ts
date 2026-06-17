@@ -127,6 +127,17 @@ export class AzureResourcesCollectionQueryService {
     );
   }
 
+  async queryAzureRbacForResourceGroup(
+    target: { subscriptionId: string; resourceGroup: string },
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureRbac">> {
+    return buildPaginatedCollection(
+      "azureRbac",
+      (await this.readAzureRbacRowsForResourceGroup(target)) as unknown as Record<string, unknown>[],
+      options
+    );
+  }
+
   async readResourceGroupOwnershipRows(): Promise<ResourceGroupOwnershipRow[]> {
     const [resourceSnapshot, entraSnapshot, disabledKeys] = await Promise.all([
       this.azureResources.readSnapshot(),
@@ -136,7 +147,12 @@ export class AzureResourcesCollectionQueryService {
     const ownerReport = buildAzureOwnershipReport(resourceSnapshot, entraSnapshot);
     const ownerRows = applyResourceGroupOwnerDisabledEvidence(ownerReport.owners, disabledKeys);
 
-    return buildResourceGroupOwnershipRows(resourceSnapshot.resourceGroups, ownerRows);
+    return buildResourceGroupOwnershipRows(
+      resourceSnapshot.resourceGroups,
+      ownerRows,
+      resourceSnapshot.roleAssignments ?? [],
+      entraSnapshot.servicePrincipals
+    );
   }
 
   private async readAzureRbacRows(servicePrincipalId: string): Promise<AzureRbac[]> {
@@ -164,6 +180,55 @@ export class AzureResourcesCollectionQueryService {
 
     return [...rowsByAssignmentKey.values()];
   }
+
+  private async readAzureRbacRowsForResourceGroup(target: {
+    subscriptionId: string;
+    resourceGroup: string;
+  }): Promise<AzureRbac[]> {
+    const normalizedSubscriptionId = target.subscriptionId.trim().toLowerCase();
+    const normalizedResourceGroup = target.resourceGroup.trim().toLowerCase();
+    const [servicePrincipals, roleAssignments] = await Promise.all([
+      this.entra.readServicePrincipals(),
+      this.azureResources.readAzureRoleAssignments()
+    ]);
+    const servicePrincipalIds = new Set(servicePrincipals.map((principal) => principal.id.toLowerCase()));
+    const rowsByAssignmentKey = new Map<string, AzureRbac>();
+
+    for (const assignment of roleAssignments) {
+      if (!isServicePrincipalRoleAssignment(assignment, servicePrincipalIds)) {
+        continue;
+      }
+
+      const scopeSubscriptionId = assignment.scopeSubscriptionId ?? getScopeSubscriptionId(assignment.scope);
+      const scopeResourceGroup = assignment.scopeResourceGroup ?? getScopeResourceGroup(assignment.scope);
+      if (
+        scopeSubscriptionId?.toLowerCase() !== normalizedSubscriptionId ||
+        scopeResourceGroup?.toLowerCase() !== normalizedResourceGroup
+      ) {
+        continue;
+      }
+
+      addAzureRbacRow(rowsByAssignmentKey, assignment, assignment.principalId);
+    }
+
+    return [...rowsByAssignmentKey.values()];
+  }
+}
+
+function isServicePrincipalRoleAssignment(
+  assignment: AzureRoleAssignment,
+  servicePrincipalIds: ReadonlySet<string>
+): boolean {
+  return assignment.principalType?.toLowerCase() === "serviceprincipal" ||
+    servicePrincipalIds.has(assignment.principalId.toLowerCase());
+}
+
+function getScopeSubscriptionId(scope: string): string | null {
+  return scope.match(/\/subscriptions\/([^/]+)/i)?.[1] ?? null;
+}
+
+function getScopeResourceGroup(scope: string): string | null {
+  return scope.match(/\/resourceGroups\/([^/]+)/i)?.[1] ?? null;
 }
 
 function addAzureRbacRow(

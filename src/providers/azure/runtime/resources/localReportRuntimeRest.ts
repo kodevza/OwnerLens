@@ -26,7 +26,18 @@ export function defineAzureResourcesLocalReportRuntimeRestEndpoints(
     {
       path: `${restBasePath}/azureRbac`,
       handle: ({ url }) =>
-        runtime.queryAzureRbac(readRequiredSearchParam(url, "servicePrincipalId"), parseRuntimeCollectionQueryOptions(url))
+        readAzureRbacRestTarget(url).kind === "servicePrincipal"
+          ? runtime.queryAzureRbac(
+              readRequiredSearchParam(url, "servicePrincipalId"),
+              parseRuntimeCollectionQueryOptions(url)
+            )
+          : runtime.queryAzureRbacForResourceGroup(
+              {
+                subscriptionId: readRequiredSearchParam(url, "subscriptionId"),
+                resourceGroup: readRequiredSearchParam(url, "resourceGroup")
+              },
+              parseRuntimeCollectionQueryOptions(url)
+            )
     }
   ];
 }
@@ -42,4 +53,10 @@ function readRequiredSearchParam(url: URL, name: string): string {
   }
 
   return value;
+}
+
+function readAzureRbacRestTarget(url: URL): { kind: "servicePrincipal" } | { kind: "resourceGroup" } {
+  return url.searchParams.get("servicePrincipalId")?.trim()
+    ? { kind: "servicePrincipal" }
+    : { kind: "resourceGroup" };
 }
