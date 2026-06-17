@@ -27,7 +27,6 @@ export function mapEntraServicePrincipalToCore(
     servicePrincipalNames: [...servicePrincipal.servicePrincipalNames],
     tags: [...servicePrincipal.tags],
     appRoles: servicePrincipal.appRoles?.map(mapEntraAppRoleToCore),
-    appOwners: servicePrincipal.appOwners?.map(mapEntraOwnerToCore),
     servicePrincipalOwners: servicePrincipal.servicePrincipalOwners?.map(mapEntraOwnerToCore),
     applicationOwners: servicePrincipal.applicationOwners?.map(mapEntraOwnerToCore),
     metadata: servicePrincipal.metadata ? { ...servicePrincipal.metadata } : servicePrincipal.metadata

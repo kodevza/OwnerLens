@@ -233,35 +233,6 @@ function ConvertTo-ApplicationAppRoleSnapshot {
   }
 }
 
-function Merge-OwnerSnapshots {
-  param(
-    [array]$OwnerSets = @()
-  )
-
-  $seenOwnerIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-  $mergedOwners = @()
-
-  foreach ($ownerSet in $OwnerSets) {
-    foreach ($owner in @($ownerSet)) {
-      if (-not $owner) {
-        continue
-      }
-
-      $ownerId = [string]$owner.id
-
-      if (-not [string]::IsNullOrWhiteSpace($ownerId)) {
-        if (-not $seenOwnerIds.Add($ownerId)) {
-          continue
-        }
-      }
-
-      $mergedOwners += $owner
-    }
-  }
-
-  return $mergedOwners
-}
-
 function New-ApplicationOwnerIndex {
   param(
     [array]$Applications = @()
