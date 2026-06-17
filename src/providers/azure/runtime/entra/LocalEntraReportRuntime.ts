@@ -35,12 +35,6 @@ import { mapEntraServicePrincipalsToCore } from "./entraServicePrincipalMapper";
 import { normalizeEntraSnapshot } from "./normalizeEntraSnapshot";
 import { toManagedIdentities, toServicePrincipals } from "./principalProjection";
 
-export type LocalEntraReportCollectionId =
-  | "entra.servicePrincipals"
-  | "entra.managedIdentities"
-  | "entra.oauth2PermissionGrants"
-  | "entra.appRoleAssignments";
-
 export type EntraPrincipalPermissions = {
   principalId: string;
   oauth2PermissionGrants: EntraOAuth2PermissionGrant[];

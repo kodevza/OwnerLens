@@ -32,19 +32,14 @@ import type { AzureIdentityEnrichmentStatus } from "./enrichment/azureIdentityEn
 import { EntraCollectionQueryService } from "./entra/EntraCollectionQueryService";
 import {
   LocalEntraReportRuntime,
-  type EntraPrincipalPermissions,
-  type LocalEntraReportCollectionId
+  type EntraPrincipalPermissions
 } from "./entra/LocalEntraReportRuntime";
 import {
-  AzureResourcesCollectionQueryService,
-  type LocalAzureResourcesExtendedCollectionId
+  AzureResourcesCollectionQueryService
 } from "./resources/AzureResourcesCollectionQueryService";
 import { LocalAzureResourcesReportRuntime } from "./resources/LocalAzureResourcesReportRuntime";
 import { LocalZeroTrustAssessmentReportRuntime } from "./zta/LocalZeroTrustAssessmentReportRuntime";
-import {
-  ZeroTrustAssessmentQueryService,
-  type LocalZeroTrustAssessmentReportCollectionId
-} from "./zta/ZeroTrustAssessmentQueryService";
+import { ZeroTrustAssessmentQueryService } from "./zta/ZeroTrustAssessmentQueryService";
 import {
   type LocalReportCollectionFilter,
   type LocalReportCollectionQueryOptions,
@@ -74,11 +69,6 @@ export type LocalReportRuntimeStatus = {
   zeroTrustAssessment: SnapshotImportStatus;
   enrichment: AzureIdentityEnrichmentStatus;
 };
-
-export type LocalReportCollectionId =
-  | LocalEntraReportCollectionId
-  | LocalAzureResourcesExtendedCollectionId
-  | LocalZeroTrustAssessmentReportCollectionId;
 
 export class LocalReportRuntime {
   private readonly dataDir: string;

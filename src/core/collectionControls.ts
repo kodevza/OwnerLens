@@ -1,4 +1,4 @@
-export type SortDirection = "asc" | "desc";
+type SortDirection = "asc" | "desc";
 
 export type SortRule = {
   columnId: string;

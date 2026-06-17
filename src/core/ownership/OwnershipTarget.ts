@@ -1,8 +1,8 @@
 import type { OwnerResolution } from "./types";
 
-export type OwnershipSourceProvider = "azure" | "entra" | "zeroTrustAssessment";
+type OwnershipSourceProvider = "azure" | "entra" | "zeroTrustAssessment";
 
-export type OwnershipTargetRiskLevel = "none" | "low" | "medium" | "high" | "critical";
+type OwnershipTargetRiskLevel = "none" | "low" | "medium" | "high" | "critical";
 
 export type OwnershipTargetRef = {
   type: string;

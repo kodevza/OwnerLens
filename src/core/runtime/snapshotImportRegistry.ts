@@ -148,7 +148,7 @@ export function snapshotImportStatusFromRecord(record: SnapshotImportRecord): Sn
   };
 }
 
-export async function readLatestSnapshotImport(
+async function readLatestSnapshotImport(
   connection: DuckDBConnection,
   source: SnapshotImportSource
 ): Promise<SnapshotImportRecord | null> {

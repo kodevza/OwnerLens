@@ -13,19 +13,11 @@ import type { RuntimeCollectionCsvExport } from "../../../../core/runtime/collec
 import type { DisabledEvidenceStore } from "../DisabledEvidenceStore";
 import type { ExportService } from "../ExportService";
 import type { LocalEntraReportRuntime } from "../entra/LocalEntraReportRuntime";
-import {
-  type LocalAzureResourcesReportCollectionId,
-  type LocalAzureResourcesReportRuntime
-} from "./LocalAzureResourcesReportRuntime";
+import type { LocalAzureResourcesReportRuntime } from "./LocalAzureResourcesReportRuntime";
 import {
   applyResourceGroupOwnerDisabledEvidence,
   buildResourceGroupOwnershipRows
 } from "./resourceGroupOwnership";
-
-export type LocalAzureResourcesExtendedCollectionId =
-  | LocalAzureResourcesReportCollectionId
-  | "azureResources.resourceGroupOwnership"
-  | "azureRbac";
 
 export type AzureResourcesCollectionQueryServiceOptions = {
   entra: LocalEntraReportRuntime;

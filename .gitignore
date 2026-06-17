@@ -10,3 +10,5 @@ src.zip
 dependency-graph.svg
 *.changes
 src/providers/azure/inputTransferObject/
+playwright-report/
+test-results/

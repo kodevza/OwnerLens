@@ -28,7 +28,7 @@ export type EntraPrincipalOwnerSummary = {
   ownerConfidence: OwnerConfidence;
 };
 
-export type EntraPrincipalRemediationOwnerSummary = {
+type EntraPrincipalRemediationOwnerSummary = {
   ownerCandidates?: OwnerCandidate[];
   potentialOwners?: string[];
   ownerConfidence?: OwnerConfidence;

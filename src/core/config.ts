@@ -1,11 +1,14 @@
 import type { OwnerConfidence } from "./ownership/types";
 
-export type OwnerTagConfig = {
+type OwnerTagConfig = {
   name: string;
   confidence: Exclude<OwnerConfidence, "none">;
 };
 
 export type AppConfig = {
+  features: {
+    zeroTrustAssessment: boolean;
+  };
   azure: {
     ownership: {
       /**
@@ -18,6 +21,9 @@ export type AppConfig = {
 };
 
 export const appConfig: AppConfig = {
+  features: {
+    zeroTrustAssessment: false
+  },
   azure: {
     ownership: {
       ownerTags: [

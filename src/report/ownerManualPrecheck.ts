@@ -3,7 +3,7 @@ import type { OwnerEvidence, OwnerReport, OwnerReportRow } from "./types";
 
 export type DisabledOwnerKey = string;
 
-export function getOwnerRowKey(row: Pick<OwnerReportRow, "targetKey">): string {
+function getOwnerRowKey(row: Pick<OwnerReportRow, "targetKey">): string {
   return row.targetKey;
 }
 
@@ -14,7 +14,7 @@ export function getOwnerEvidenceKey(
   return [getOwnerRowKey(row), normalizeEvidencePart(evidence.user), evidence.date ?? ""].join(":");
 }
 
-export function isActivityOwnerRow(row: Pick<OwnerReportRow, "source">): boolean {
+function isActivityOwnerRow(row: Pick<OwnerReportRow, "source">): boolean {
   return row.source.startsWith("activity.");
 }
 

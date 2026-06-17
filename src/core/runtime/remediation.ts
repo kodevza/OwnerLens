@@ -1,8 +1,8 @@
-export type JsonPrimitive = string | number | boolean | null;
+type JsonPrimitive = string | number | boolean | null;
 
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
-export type RemediationTaskStatus = "open";
+type RemediationTaskStatus = "open";
 
 export type RemediationTask = {
   id: string;

@@ -21,13 +21,7 @@ import {
   applyCollectionControls
 } from "../applyCollectionControls";
 
-export type { ColumnFilter, ColumnFilterOptions, ColumnFilters, SortRule } from "../../core/collectionControls";
-export {
-  applyColumnFilterValueToggle,
-  applyColumnObjectFieldFilter,
-  applyColumnValueToggle,
-  applyColumnValuesFilter
-} from "../../core/collectionControls";
+export type { ColumnFilterOptions, ColumnFilters, SortRule } from "../../core/collectionControls";
 
 export type ReportTableColumn<TRow> = {
   id: string;

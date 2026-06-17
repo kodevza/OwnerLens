@@ -19,8 +19,6 @@ import { buildRuntimeCollectionCsvExport, type RuntimeCollectionCsvExport } from
 import type { LocalZeroTrustAssessmentReportRuntime } from "./LocalZeroTrustAssessmentReportRuntime";
 import { buildZtaRemediationPackageInput } from "./ztaRemediationPackageAdapter";
 
-export type LocalZeroTrustAssessmentReportCollectionId = "zeroTrustAssessment.report";
-
 export type ZeroTrustAssessmentQueryServiceOptions = {
   zeroTrustAssessment: LocalZeroTrustAssessmentReportRuntime;
 };

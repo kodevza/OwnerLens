@@ -28,7 +28,7 @@ export type AzureResource = {
   userAssignedIdentities: unknown;
 };
 
-export type AzureSubscriptionState = "Enabled" | "Disabled" | "Warned" | "PastDue" | "Deleted";
+type AzureSubscriptionState = "Enabled" | "Disabled" | "Warned" | "PastDue" | "Deleted";
 
 export type AzureSubscription = {
   subscriptionId: string;
@@ -76,32 +76,6 @@ export type AzureActivityLog = {
   resourceType: string | null;
   authorizationAction: string | null;
   authorizationScope: string | null;
-};
-
-export type AzureSnapshotMeta = {
-  provider: "azure";
-  snapshotVersion: string;
-  createdAt: string;
-  activityDays: number;
-  activityStartTime: string;
-  maxActivityRecords: number;
-  requestedSubscriptions: string[];
-  subscriptionCount: number;
-  resourceGroupCount: number;
-  resourceCount: number;
-  userAssignedManagedIdentityCount: number;
-  roleAssignmentCount?: number;
-  activityLogCount: number;
-};
-
-export type AzureSnapshot = {
-  meta: AzureSnapshotMeta;
-  subscriptions: AzureSubscription[];
-  resourceGroups: AzureResourceGroup[];
-  resources: AzureResource[];
-  userAssignedManagedIdentities: AzureUserAssignedManagedIdentity[];
-  roleAssignments?: AzureRoleAssignment[];
-  activityLogs: AzureActivityLog[];
 };
 
 export type ResourceGroupOwnershipRow = AzureResourceGroup & {

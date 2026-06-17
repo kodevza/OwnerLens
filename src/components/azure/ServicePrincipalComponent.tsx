@@ -17,10 +17,7 @@ import {
   type EntraPermissionsPrincipalSelection,
   type OwnershipEvidenceSelection
 } from "./ServicePrincipalFieldRenderers";
-import {
-  getRemediationPackageSearchValues,
-  ZtaRemediationPackageBadges
-} from "./ZtaRemediationPackageBadges";
+import { ZtaRemediationPackageBadges } from "./ZtaRemediationPackageBadges";
 
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];

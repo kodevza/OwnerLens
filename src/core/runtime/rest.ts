@@ -100,7 +100,7 @@ function parseJson(rawBody: string): unknown {
   }
 }
 
-export function sendJson(res: RuntimeResponse, value: unknown, statusCode = 200): void {
+function sendJson(res: RuntimeResponse, value: unknown, statusCode = 200): void {
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify(value));

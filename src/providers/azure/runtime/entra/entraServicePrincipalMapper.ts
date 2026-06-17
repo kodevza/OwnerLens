@@ -9,7 +9,7 @@ import type {
   ServicePrincipalOwner as EntraOwner
 } from "../../inputTransferObject/generated/EntraSnapshot";
 
-export function mapEntraServicePrincipalToCore(
+function mapEntraServicePrincipalToCore(
   servicePrincipal: EntraServicePrincipal
 ): CoreEntraServicePrincipal {
   return {

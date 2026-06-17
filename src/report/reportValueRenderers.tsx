@@ -1,6 +1,6 @@
 import { formatDate, formatValue } from "../lib/utils";
 import type { OwnerConfidence } from "./types";
-import type { ReportDetailsValue, ReportFieldDescriptor } from "./reportTypes";
+import type { ReportFieldDescriptor } from "./reportTypes";
 import { ConfidenceBadge } from "./components/ConfidenceBadge";
 import { PermissionRiskBadge } from "./components/PermissionRiskBadge";
 import type { PermissionRiskLevel } from "../core/risk/types";

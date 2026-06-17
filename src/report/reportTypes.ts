@@ -4,7 +4,7 @@ export type ReportColumnHelp = {
   logic?: string[];
 };
 
-export type ReportValueType =
+type ReportValueType =
   | "text"
   | "number"
   | "date"
