@@ -1,4 +1,5 @@
 import type { OwnerCandidate, OwnerConfidence, OwnerEvidence } from "../ownership/types";
+import type { PermissionRiskLevel } from "../risk/types";
 
 export type AzureResourceTags = Record<string, string>;
 
@@ -110,6 +111,9 @@ export type ResourceGroupOwnershipRow = AzureResourceGroup & {
   confidence: OwnerConfidence;
   source: string;
   evidence: OwnerEvidence[];
+  roleAssignments: AzureRoleAssignment[];
+  rbacRoleAssignmentCount: number;
+  rbacRoleLevel: PermissionRiskLevel;
 };
 
 export type AzureUserAssignedIdentityAssignment = {

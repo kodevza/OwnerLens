@@ -1149,6 +1149,108 @@ test("opens Azure RBAC tab for the selected managed identity from its RBAC badge
   act(() => root.unmount());
 });
 
+test("opens Azure RBAC tab for the selected resource group from its RBAC badge", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/azureResources/resourceGroupOwnership")) {
+      return jsonResponse({
+        collectionId: "azureResources.resourceGroupOwnership",
+        columns: [],
+        count: 1,
+        page: 1,
+        pageSize: 20,
+        rows: [
+          {
+            subscriptionId: "sub-1",
+            subscriptionName: "Platform",
+            resourceGroup: "rg-app",
+            location: "westeurope",
+            tags: null,
+            targetKey: "resourceGroup:sub-1:rg-app",
+            ownerCandidates: [],
+            owner: null,
+            confidence: "none",
+            source: "none",
+            evidence: [],
+            roleAssignments: [testRoleAssignment("Owner", "/subscriptions/sub-1/resourceGroups/rg-app")],
+            rbacRoleAssignmentCount: 1,
+            rbacRoleLevel: "high"
+          }
+        ]
+      });
+    }
+
+    if (requestUrl.startsWith("/api/data/azureRbac")) {
+      return jsonResponse({
+        collectionId: "azureRbac",
+        columns: [],
+        count: 1,
+        page: 1,
+        pageSize: 20,
+        rows: [
+          {
+            accessDisplayName: "Owner on resource group rg-app",
+            accessRisk: "high",
+            accessResourceGroup: "rg-app",
+            accessResourceId: null,
+            accessScope: "/subscriptions/sub-1/resourceGroups/rg-app",
+            accessScopeType: "ResourceGroup",
+            accessSubscriptionId: "sub-1",
+            canDelegate: false,
+            condition: null,
+            conditionVersion: null,
+            principalDisplayName: "Service principal app",
+            principalId: "sp-object-id",
+            principalType: "ServicePrincipal",
+            roleAssignmentId: "assignment-1",
+            roleDefinitionId: "owner-role-id",
+            roleDefinitionName: "Owner",
+            scope: "/subscriptions/sub-1/resourceGroups/rg-app",
+            scopeSubscriptionId: "sub-1",
+            servicePrincipalId: "sp-object-id",
+            signInName: null,
+            subscriptionId: "sub-1",
+            subscriptionName: "Platform"
+          }
+        ]
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 0,
+      page: 1,
+      pageSize: 20,
+      rows: []
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await clickButton("Resource groups");
+  await waitForText(container, "rg-app");
+  await clickButton("Open Azure RBAC assignments for resource group rg-app");
+  await waitForText(container, "Owner on resource group rg-app");
+
+  const azureRbacRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .find((requestUrl) => requestUrl.startsWith("/api/data/azureRbac"));
+  expect(azureRbacRequest).toBeDefined();
+
+  const url = new URL(azureRbacRequest ?? "", window.location.origin);
+  expect(url.searchParams.get("subscriptionId")).toBe("sub-1");
+  expect(url.searchParams.get("resourceGroup")).toBe("rg-app");
+  expect(url.searchParams.get("servicePrincipalId")).toBeNull();
+
+  await clickButton("Close rg-app Azure RBAC tab");
+  await waitForText(container, "rg-app");
+
+  act(() => root.unmount());
+});
+
 test.skip("handles Backspace as in-app view back navigation outside editable fields", async () => {
   globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);

@@ -6,17 +6,32 @@ import type {
   OwnerEvidence,
   OwnerType
 } from "../../../../core/ownership/types";
-import type { AzureResourceGroup, ResourceGroupOwnershipRow } from "../../../../core/azure/resources";
+import type {
+  AzureResourceGroup,
+  AzureRoleAssignment,
+  ResourceGroupOwnershipRow
+} from "../../../../core/azure/resources";
+import type { EntraServicePrincipal } from "../../../../core/azure/entra/types";
+import type { PermissionRiskLevel } from "../../../../core/risk/types";
 import type { OwnerReportRow } from "../../ownership/azureOwnerReportTypes";
+import { evaluateAzureRoleAssignmentRisk } from "../enrichment/evaluateAzureRoleAssignmentRisk";
 
 export function buildResourceGroupOwnershipRows(
   resourceGroups: AzureResourceGroup[],
-  ownerRows: OwnerReportRow[]
+  ownerRows: OwnerReportRow[],
+  roleAssignments: AzureRoleAssignment[] = [],
+  servicePrincipals: EntraServicePrincipal[] = []
 ): ResourceGroupOwnershipRow[] {
   const ownerIndex = buildResourceGroupOwnerIndex(ownerRows);
+  const servicePrincipalIds = new Set(servicePrincipals.map((principal) => principal.id.toLowerCase()));
 
   return resourceGroups.map((group) => {
     const ownerRow = ownerIndex.get(getResourceGroupOwnerIndexKey(group.subscriptionId, group.resourceGroup));
+    const groupRoleAssignments = getResourceGroupServicePrincipalRoleAssignments(
+      group,
+      roleAssignments,
+      servicePrincipalIds
+    );
 
     return {
       ...group,
@@ -25,10 +40,73 @@ export function buildResourceGroupOwnershipRows(
       owner: ownerRow?.owner ?? null,
       confidence: ownerRow?.confidence ?? "none",
       source: ownerRow?.source ?? "none",
-      evidence: ownerRow?.evidence ?? []
+      evidence: ownerRow?.evidence ?? [],
+      roleAssignments: groupRoleAssignments,
+      rbacRoleAssignmentCount: groupRoleAssignments.length,
+      rbacRoleLevel: getHighestRbacRiskLevel(groupRoleAssignments)
     };
   });
 }
+
+function getResourceGroupServicePrincipalRoleAssignments(
+  group: AzureResourceGroup,
+  roleAssignments: AzureRoleAssignment[],
+  servicePrincipalIds: ReadonlySet<string>
+): AzureRoleAssignment[] {
+  return roleAssignments.filter(
+    (assignment) =>
+      isServicePrincipalRoleAssignment(assignment, servicePrincipalIds) &&
+      isRoleAssignmentInResourceGroup(assignment, group)
+  );
+}
+
+function isServicePrincipalRoleAssignment(
+  assignment: AzureRoleAssignment,
+  servicePrincipalIds: ReadonlySet<string>
+): boolean {
+  return assignment.principalType?.toLowerCase() === "serviceprincipal" ||
+    servicePrincipalIds.has(assignment.principalId.toLowerCase());
+}
+
+function isRoleAssignmentInResourceGroup(assignment: AzureRoleAssignment, group: AzureResourceGroup): boolean {
+  const scopeSubscriptionId = assignment.scopeSubscriptionId ?? getScopeSubscriptionId(assignment.scope);
+  const scopeResourceGroup = assignment.scopeResourceGroup ?? getScopeResourceGroup(assignment.scope);
+
+  return (
+    Boolean(scopeSubscriptionId) &&
+    Boolean(scopeResourceGroup) &&
+    scopeSubscriptionId?.toLowerCase() === group.subscriptionId.toLowerCase() &&
+    scopeResourceGroup?.toLowerCase() === group.resourceGroup.toLowerCase()
+  );
+}
+
+function getHighestRbacRiskLevel(roleAssignments: AzureRoleAssignment[]): PermissionRiskLevel {
+  let highestRisk: PermissionRiskLevel = "none";
+
+  for (const assignment of roleAssignments) {
+    const riskLevel = evaluateAzureRoleAssignmentRisk(assignment).riskLevel;
+    if (permissionRiskRank[riskLevel] > permissionRiskRank[highestRisk]) {
+      highestRisk = riskLevel;
+    }
+  }
+
+  return highestRisk;
+}
+
+function getScopeSubscriptionId(scope: string): string | null {
+  return scope.match(/\/subscriptions\/([^/]+)/i)?.[1] ?? null;
+}
+
+function getScopeResourceGroup(scope: string): string | null {
+  return scope.match(/\/resourceGroups\/([^/]+)/i)?.[1] ?? null;
+}
+
+const permissionRiskRank: Record<PermissionRiskLevel, number> = {
+  high: 3,
+  medium: 2,
+  low: 1,
+  none: 0
+};
 
 function buildResourceGroupOwnerCandidates(
   group: AzureResourceGroup,

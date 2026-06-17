@@ -324,6 +324,14 @@ export class LocalReportRuntime {
     return this.azureResourcesQueries.queryAzureRbac(servicePrincipalId, options);
   }
 
+  async queryAzureRbacForResourceGroup(
+    target: { subscriptionId: string; resourceGroup: string },
+    options: LocalReportCollectionQueryOptions
+  ): Promise<LocalReportPaginatedCollection<"azureRbac">> {
+    await this.initialize();
+    return this.azureResourcesQueries.queryAzureRbacForResourceGroup(target, options);
+  }
+
   async queryZeroTrustAssessmentReport(
     options: LocalReportCollectionQueryOptions
   ): Promise<

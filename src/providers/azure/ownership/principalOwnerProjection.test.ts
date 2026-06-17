@@ -197,7 +197,10 @@ function resourceGroupOwnership(
     owner,
     confidence,
     source: owner ? "tag.ownerGroup" : "none",
-    evidence: owner ? [{ user: `ownerGroup=${owner}`, date: null }] : []
+    evidence: owner ? [{ user: `ownerGroup=${owner}`, date: null }] : [],
+    roleAssignments: [],
+    rbacRoleAssignmentCount: 0,
+    rbacRoleLevel: "none"
   };
 }
 

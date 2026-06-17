@@ -1,27 +1,26 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 
 import type { AzureResourceTags, ResourceGroupOwnershipRow } from "../../core/azure/resources";
-import { appConfig } from "../../core/config";
 import type { OwnerConfidence } from "../../core/ownership/types";
-import type { OwnerEvidence } from "../../report/types";
+import type { PermissionRiskLevel } from "../../core/risk/types";
 import { azureOwnerColumnHelp } from "./azureReportConfig";
-import { exportResourceGroupsCsv, readResourceGroups, updateEvidenceStatus } from "./api";
-import { EvidenceList } from "../../report/components/EvidenceList";
+import { exportResourceGroupsCsv, readResourceGroups } from "./api";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
 import type { ColumnFilters, SortRule } from "../../core/collectionControls";
-import { Card } from "../../report/components/ui/card";
-import { getOwnerEvidenceKey, isActivityOwnerRow } from "../../report/ownerManualPrecheck";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
+import { Badge, type BadgeProps } from "../../report/components/ui/badge";
 import { OwnerBadge, type OwnershipEvidenceSelection } from "./ServicePrincipalFieldRenderers";
 import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
 
+export type AzureRbacResourceGroupSelection = {
+  displayName: string;
+  resourceGroup: string;
+  subscriptionId: string;
+};
+
 const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];
-const resourceGroupOwnerSourceOptions = [
-  ...appConfig.azure.ownership.ownerTags.map((tag) => `tag.${tag.name}`),
-  "activity.lastModifier",
-  "none"
-];
+const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 
 const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = [
   {
@@ -61,25 +60,22 @@ const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = 
     }
   },
   {
-    id: "source",
-    label: "Source",
+    id: "azureRbac",
+    label: "Azure RBAC",
     valueType: "text",
-    getValue: (group) => group.source,
-    filter: { kind: "multiSelect", options: resourceGroupOwnerSourceOptions }
-  },
-  {
-    id: "evidence",
-    label: "Evidence",
-    valueType: "list",
-    getValue: (group) => group.evidence.map((entry) => [entry.user, entry.date]),
-    filter: { kind: "text" }
-  },
-  {
-    id: "location",
-    label: "Location",
-    valueType: "text",
-    getValue: (group) => group.location,
-    filter: { kind: "text" }
+    getValue: (group) => group.roleAssignments,
+    sortColumnId: "rbacRoleLevel",
+    getFilterValue: (group) => ({
+      roleLevel: group.rbacRoleLevel,
+      summary: group.roleAssignments
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "roleLevel", label: "Role level", filterColumnId: "rbacRoleLevel", options: permissionRiskLevelOptions },
+        { id: "summary", label: "Summary", filterColumnId: "roleAssignments" }
+      ]
+    }
   },
   {
     id: "tags",
@@ -91,28 +87,12 @@ const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = 
 ];
 
 export function ResourceGroupComponent({
+  onAzureRbacClick,
   onOwnershipEvidenceClick
 }: {
+  onAzureRbacClick?: (selection: AzureRbacResourceGroupSelection) => void;
   onOwnershipEvidenceClick?: (selection: OwnershipEvidenceSelection) => void;
 }) {
-  const [refreshToken, setRefreshToken] = useState(0);
-  const [toggleError, setToggleError] = useState<string | null>(null);
-  const handleOwnerEvidenceDisabledChange = useCallback(
-    async (row: ResourceGroupOwnershipRow, entry: OwnerEvidence, disabled: boolean) => {
-      setToggleError(null);
-
-      try {
-        await updateEvidenceStatus({
-          key: getOwnerEvidenceKey(row, entry),
-          status: disabled ? "unactive" : "active"
-        });
-        setRefreshToken((current) => current + 1);
-      } catch (error) {
-        setToggleError(error instanceof Error ? error.message : "Could not update owner candidate.");
-      }
-    },
-    []
-  );
   const resourceGroupFieldRenderers = useMemo<ReportColumnRenderers<ResourceGroupOwnershipRow>>(
     () => ({
       resourceGroup: (group) => (
@@ -140,27 +120,32 @@ export function ResourceGroupComponent({
           }
         />
       ),
-      evidence: (group) => (
-        <EvidenceList
-          canDisable={isActivityOwnerRow(group)}
-          evidence={group.evidence}
-          onDisabledChange={(entry, disabled) => {
-            void handleOwnerEvidenceDisabledChange(group, entry, disabled);
-          }}
+      azureRbac: (group) => (
+        <ResourceGroupRbacBadge
+          group={group}
+          onClick={
+            onAzureRbacClick
+              ? () =>
+                  onAzureRbacClick({
+                    displayName: group.resourceGroup,
+                    resourceGroup: group.resourceGroup,
+                    subscriptionId: group.subscriptionId
+                  })
+              : undefined
+          }
         />
       )
     }),
-    [handleOwnerEvidenceDisabledChange, onOwnershipEvidenceClick]
+    [onAzureRbacClick, onOwnershipEvidenceClick]
   );
   const loadResourceGroups = useCallback(
     (input: { filters: ColumnFilters; page: number; signal: AbortSignal; sortRules: SortRule[] }) =>
       readResourceGroups(input),
-    [refreshToken]
+    []
   );
 
   return (
     <>
-      {toggleError ? <Card className="border-red-200 bg-red-50 p-4 text-sm text-red-900">{toggleError}</Card> : null}
       <SelectableGenericTable
         columnHelp={azureOwnerColumnHelp}
         emptyMessage="No resource groups match the filter."
@@ -169,7 +154,7 @@ export function ResourceGroupComponent({
         getRowKey={getResourceGroupOwnershipRowKey}
         loadPage={loadResourceGroups}
         loadingMessage="Loading resource groups..."
-        minWidthClassName="min-w-[1360px]"
+        minWidthClassName="min-w-[1040px]"
         renderSelectionOverlay={({ filters, selectAllMatchingFilters, selectedRowKeys, sortRules }) => (
           <CsvSelectionActionBar
             filters={filters}
@@ -183,6 +168,58 @@ export function ResourceGroupComponent({
       />
     </>
   );
+}
+
+const permissionRiskBadgeVariants: Record<PermissionRiskLevel, BadgeProps["variant"]> = {
+  high: "riskHigh",
+  medium: "riskMedium",
+  low: "riskLow",
+  none: "riskNone"
+};
+
+function ResourceGroupRbacBadge({
+  group,
+  onClick
+}: {
+  group: ResourceGroupOwnershipRow;
+  onClick?: () => void;
+}) {
+  const title = formatResourceGroupRbacSummary(group);
+  const badge = (
+    <Badge
+      className="min-w-10 justify-center font-sans text-xs font-semibold tabular-nums"
+      title={title}
+      variant={permissionRiskBadgeVariants[group.rbacRoleLevel]}
+    >
+      {group.rbacRoleAssignmentCount}
+    </Badge>
+  );
+
+  if (!onClick) {
+    return badge;
+  }
+
+  return (
+    <button
+      aria-label={`Open Azure RBAC assignments for resource group ${group.resourceGroup}`}
+      className="cursor-pointer rounded-full font-sans text-xs font-semibold transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      title={title}
+      type="button"
+      onClick={onClick}
+    >
+      {badge}
+    </button>
+  );
+}
+
+function formatResourceGroupRbacSummary(group: ResourceGroupOwnershipRow): string {
+  if (group.rbacRoleAssignmentCount === 0) {
+    return "No Azure RBAC assignments for service principals or managed identities in this resource group";
+  }
+
+  return group.roleAssignments
+    .map((assignment) => `${assignment.roleDefinitionName ?? "Role"} assigned to ${assignment.principalDisplayName ?? assignment.principalId}`)
+    .join(", ");
 }
 
 function getResourceGroupOwnershipRowKey(row: Pick<ResourceGroupOwnershipRow, "subscriptionId" | "resourceGroup">) {
