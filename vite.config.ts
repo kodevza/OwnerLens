@@ -3,12 +3,15 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin } from "vite";
 
 import {
+  createLocalReportRuntime,
   createDefaultLocalReportRuntime,
   installLocalReportRuntimeRest
 } from "./src/providers/azure/runtime/localReportRuntimeRest";
 
 function localReportRuntimeApi(): Plugin {
-  const runtime = createDefaultLocalReportRuntime(process.env.OWNERLENS_DATA_DIR ?? process.cwd());
+  const runtime = process.env.OWNERLENS_DATA_DIR
+    ? createLocalReportRuntime(process.env.OWNERLENS_DATA_DIR)
+    : createDefaultLocalReportRuntime(process.cwd());
 
   return {
     name: "ownerlens-local-report-runtime-api",
