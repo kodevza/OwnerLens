@@ -9,8 +9,9 @@ import {
   type LocalReportCollectionQueryOptions,
   type LocalReportPaginatedCollection
 } from "../../../../core/runtime/collections";
-import { buildRuntimeCollectionCsvExport, type RuntimeCollectionCsvExport } from "../../../../core/runtime/collectionExport";
+import type { RuntimeCollectionCsvExport } from "../../../../core/runtime/collectionExport";
 import type { DisabledEvidenceStore } from "../DisabledEvidenceStore";
+import type { ExportService } from "../ExportService";
 import type { LocalEntraReportRuntime } from "../entra/LocalEntraReportRuntime";
 import {
   type LocalAzureResourcesReportCollectionId,
@@ -30,17 +31,20 @@ export type AzureResourcesCollectionQueryServiceOptions = {
   entra: LocalEntraReportRuntime;
   azureResources: LocalAzureResourcesReportRuntime;
   disabledEvidenceStore: DisabledEvidenceStore;
+  exportService: ExportService;
 };
 
 export class AzureResourcesCollectionQueryService {
   private readonly entra: LocalEntraReportRuntime;
   private readonly azureResources: LocalAzureResourcesReportRuntime;
   private readonly disabledEvidenceStore: DisabledEvidenceStore;
+  private readonly exportService: ExportService;
 
   constructor(options: AzureResourcesCollectionQueryServiceOptions) {
     this.entra = options.entra;
     this.azureResources = options.azureResources;
     this.disabledEvidenceStore = options.disabledEvidenceStore;
+    this.exportService = options.exportService;
   }
 
   async querySubscriptions(
@@ -76,16 +80,10 @@ export class AzureResourcesCollectionQueryService {
   async exportResourceGroupOwnershipCsv(
     options: LocalReportCollectionQueryOptions
   ): Promise<RuntimeCollectionCsvExport<"azureResources.resourceGroupOwnership">> {
-    return buildRuntimeCollectionCsvExport({
-      collectionId: "azureResources.resourceGroupOwnership",
-      fileName: "ownerlens-resource-groups.csv",
-      rows: await this.readResourceGroupOwnershipRows(),
-      filters: options.filters,
-      sortRules: options.sortRules,
-      selectedRowKeys: options.selectedRowKeys,
-      getRowKey: getResourceGroupOwnershipRowKey,
-      includeBom: true
-    });
+    return this.exportService.exportAzureResourceGroupOwnershipCsv(
+      await this.readResourceGroupOwnershipRows(),
+      options
+    );
   }
 
   async queryResources(
@@ -204,11 +202,4 @@ function getAzureRbacAssignmentKey(assignment: AzureRoleAssignment): string {
     assignment.roleDefinitionName,
     assignment.scope
   ].join(":").toLowerCase();
-}
-
-function getResourceGroupOwnershipRowKey(row: Record<string, unknown>): string {
-  const subscriptionId = typeof row.subscriptionId === "string" ? row.subscriptionId : "";
-  const resourceGroup = typeof row.resourceGroup === "string" ? row.resourceGroup : "";
-
-  return `${subscriptionId}:${resourceGroup}`;
 }

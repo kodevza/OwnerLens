@@ -99,7 +99,7 @@ npx ownerlens collect:entra -TenantId "<tenant-id>"
 - `collect-azure.ps1` signs in when needed, then calls `prepare-resource-snapshot.ps1`.
 - `collect-entra.ps1` signs in when needed, then calls `prepare-entra-snapshot.ps1`.
 - `prepare-resource-snapshot.ps1` exports Azure subscriptions, resource groups, resources, user-assigned managed identities, role assignments, and optional Azure Monitor activity logs.
-- `prepare-entra-snapshot.ps1` exports Entra service principals, application registrations, owner relationships, groups, and group memberships. Service principal owner evidence keeps Graph service principal owners and matching application registration owners separate, with a combined owner list for compatibility. Group memberships are collected as object IDs and member object types; Azure RBAC access inherited through a group is resolved later by the local runtime, not by the collector.
+- `prepare-entra-snapshot.ps1` exports Entra service principals, application registrations, owner relationships, groups, and group memberships. Service principal owner evidence keeps Graph service principal owners and matching application registration owners separate. Group memberships are collected as object IDs and member object types; Azure RBAC access inherited through a group is resolved later by the local runtime, not by the collector.
 - `azure-activity-check.ps1` is a helper loaded by `prepare-resource-snapshot.ps1`; it is not usually run directly.
 
 ## Notes

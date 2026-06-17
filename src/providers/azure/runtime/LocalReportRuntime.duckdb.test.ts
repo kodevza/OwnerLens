@@ -1428,7 +1428,6 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
             allowedMemberTypes: ["Application"]
           }
         ],
-        owners: [{ id: "legacy-owner-1", displayName: "Legacy Owner One" }],
         servicePrincipalOwners: [{ id: "owner-1", displayName: "Owner One" }],
         metadata: { source: "test" }
       },
@@ -1447,7 +1446,6 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         servicePrincipalNames: [],
         tags: ["WindowsAzureActiveDirectoryManagedIdentity"],
         appRoles: [],
-        owners: [],
         servicePrincipalOwners: [],
         metadata: null
       }
@@ -1641,7 +1639,6 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
       id: "sp-1",
       appRoles: [{ id: "role-1" }],
       metadata: { source: "test" },
-      owners: [{ id: "legacy-owner-1" }],
       servicePrincipalOwners: [{ id: "owner-1" }]
     });
     expect(imported.applications).toHaveLength(1);
@@ -2193,6 +2190,7 @@ test("enriches Entra runtime collections with latest ZTA remediation summaries",
       count: 1
     });
     expect(servicePrincipalsCsv.columns).not.toContain("owners");
+    expect(servicePrincipalsCsv.columns).not.toContain("appOwners");
     expect(servicePrincipalsCsv.body).toContain("ztaRemediationCountAll");
     expect(servicePrincipalsCsv.body).toContain("sp-1");
     expect(servicePrincipalsCsv.body).toContain(remediationPackage.id);
@@ -2904,7 +2902,6 @@ function servicePrincipal(
     servicePrincipalNames: [],
     tags: typeof options === "string" ? [] : options.tags ?? [],
     appRoles: [],
-    owners: [],
     servicePrincipalOwners: [],
     metadata: null
   };

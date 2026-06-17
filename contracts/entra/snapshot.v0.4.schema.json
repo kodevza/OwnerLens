@@ -236,12 +236,6 @@
             "null"
           ]
         },
-        "appOwners": {
-          "items": {
-            "$ref": "#/definitions/ServicePrincipalOwner"
-          },
-          "type": "array"
-        },
         "appRoles": {
           "items": {
             "$ref": "#/definitions/ServicePrincipalAppRole"
@@ -282,12 +276,6 @@
               "type": "null"
             }
           ]
-        },
-        "owners": {
-          "items": {
-            "$ref": "#/definitions/ServicePrincipalOwner"
-          },
-          "type": "array"
         },
         "publisherName": {
           "type": [

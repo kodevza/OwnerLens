@@ -52,6 +52,7 @@ import {
 import { RuntimeHost } from "./RuntimeHost";
 import { SnapshotImporter } from "./SnapshotImporter";
 import { EnrichmentService } from "./EnrichmentService";
+import { ExportService } from "./ExportService";
 import { DisabledEvidenceStore, type DisabledOwnerKey } from "./DisabledEvidenceStore";
 import { prepareRuntimeSqlSchema } from "./runtimeSqlSchema";
 
@@ -85,6 +86,7 @@ export class LocalReportRuntime {
   private readonly entraQueries: EntraCollectionQueryService;
   private readonly snapshotImporter: SnapshotImporter;
   private readonly enrichmentService: EnrichmentService;
+  private readonly exportService: ExportService;
   private readonly disabledEvidenceStore: DisabledEvidenceStore;
   private readonly remediationPackageStore: RemediationPackageStore;
   private initializePromise: Promise<void> | null = null;
@@ -113,18 +115,21 @@ export class LocalReportRuntime {
       zeroTrustAssessment: this.zeroTrustAssessment
     });
     this.enrichmentService = new EnrichmentService(() => this.requireConnection());
+    this.exportService = new ExportService();
     this.disabledEvidenceStore = new DisabledEvidenceStore(() => this.requireConnection());
     this.remediationPackageStore = new RemediationPackageStore(() => this.requireConnection());
     this.azureResourcesQueries = new AzureResourcesCollectionQueryService({
       entra: this.entra,
       azureResources: this.azureResources,
-      disabledEvidenceStore: this.disabledEvidenceStore
+      disabledEvidenceStore: this.disabledEvidenceStore,
+      exportService: this.exportService
     });
     this.entraQueries = new EntraCollectionQueryService({
       entra: this.entra,
       azureResources: this.azureResources,
       azureResourcesQueries: this.azureResourcesQueries,
-      zeroTrustAssessmentQueries: this.zeroTrustAssessmentQueries
+      zeroTrustAssessmentQueries: this.zeroTrustAssessmentQueries,
+      exportService: this.exportService
     });
   }
 

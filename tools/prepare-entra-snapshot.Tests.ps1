@@ -45,18 +45,6 @@ Describe "prepare-entra-snapshot owner helpers" {
     $owners[0].displayName | Should -Be "Owner Two"
   }
 
-  It "deduplicates merged owner evidence by object id case-insensitively" {
-    $first = [pscustomobject]@{ id = "OWNER-1"; displayName = "First owner" }
-    $duplicate = [pscustomobject]@{ id = "owner-1"; displayName = "Duplicate owner" }
-    $second = [pscustomobject]@{ id = "owner-2"; displayName = "Second owner" }
-
-    $owners = @(Merge-OwnerSnapshots -OwnerSets @(@($first, $second), @($duplicate)))
-
-    $owners | Should -HaveCount 2
-    $owners[0].displayName | Should -Be "First owner"
-    $owners[1].displayName | Should -Be "Second owner"
-  }
-
   It "indexes application owners by app id for matching service principals" {
     $application = [pscustomobject]@{
       AppId = "app-1"

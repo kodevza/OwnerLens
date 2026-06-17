@@ -34,8 +34,6 @@ const entraServicePrincipalSchemaSql = [
       service_principal_names json not null,
       tags json not null,
       app_roles json not null,
-      owners json not null,
-      app_owners json not null,
       service_principal_owners json not null,
       application_owners json not null,
       metadata json
@@ -369,8 +367,14 @@ const runtimeSchemaSql = [
   ...azureIdentityEnrichmentSchemaSql
 ];
 
+const runtimeMigrationSql = [
+  "alter table entra_service_principals drop column if exists owners",
+  "alter table entra_service_principals drop column if exists app_owners"
+];
+
 export async function prepareRuntimeSqlSchema(connection: DuckDBConnection): Promise<void> {
   await runSqlSchema(connection, runtimeSchemaSql);
+  await runSqlSchema(connection, runtimeMigrationSql);
 }
 
 async function runSqlSchema(connection: DuckDBConnection, statements: string[]): Promise<void> {

@@ -266,7 +266,6 @@ foreach ($app in $applications) {
 foreach ($sp in $servicePrincipals) {
   $servicePrincipalOwners = Get-ExpandedOwnerSnapshots -DirectoryObject $sp
   $applicationOwners = Get-ApplicationOwnersByAppId -AppId $sp.AppId -ApplicationOwnersByAppId $applicationOwnersByAppId
-  $owners = Merge-OwnerSnapshots -OwnerSets @($servicePrincipalOwners, $applicationOwners)
 
   $snapshot.servicePrincipals += [pscustomobject]@{
     id = $sp.Id
@@ -282,8 +281,6 @@ foreach ($sp in $servicePrincipals) {
     replyUrls = $sp.ReplyUrls
     servicePrincipalNames = $sp.ServicePrincipalNames
     tags = @(ConvertTo-EntraSnapshotTags -Tags $sp.Tags)
-    owners = @($owners)
-    appOwners = @($owners)
     servicePrincipalOwners = @($servicePrincipalOwners)
     applicationOwners = @($applicationOwners)
     appRoles = @(

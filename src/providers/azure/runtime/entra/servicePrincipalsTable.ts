@@ -24,8 +24,6 @@ export async function insertEntraServicePrincipalRows(
         $servicePrincipalNames::json,
         $tags::json,
         $appRoles::json,
-        $owners::json,
-        $appOwners::json,
         $servicePrincipalOwners::json,
         $applicationOwners::json,
         $metadata::json
@@ -46,8 +44,6 @@ export async function insertEntraServicePrincipalRows(
         servicePrincipalNames: JSON.stringify(servicePrincipal.servicePrincipalNames),
         tags: JSON.stringify(servicePrincipal.tags),
         appRoles: JSON.stringify(servicePrincipal.appRoles ?? []),
-        owners: JSON.stringify(servicePrincipal.owners ?? []),
-        appOwners: JSON.stringify(servicePrincipal.appOwners ?? []),
         servicePrincipalOwners: JSON.stringify(servicePrincipal.servicePrincipalOwners ?? []),
         applicationOwners: JSON.stringify(servicePrincipal.applicationOwners ?? []),
         metadata: JSON.stringify(servicePrincipal.metadata ?? null)
@@ -74,8 +70,6 @@ export async function readEntraServicePrincipalRows(connection: DuckDBConnection
       service_principal_names,
       tags,
       app_roles,
-      owners,
-      app_owners,
       service_principal_owners,
       application_owners,
       metadata
@@ -101,8 +95,6 @@ type EntraServicePrincipalRow = {
   service_principal_names: string;
   tags: string;
   app_roles: string;
-  owners: string;
-  app_owners: string;
   service_principal_owners: string;
   application_owners: string;
   metadata: string | null;
@@ -124,8 +116,6 @@ function mapServicePrincipalRow(row: EntraServicePrincipalRow): EntraServicePrin
     servicePrincipalNames: parseJsonArray<string>(row.service_principal_names),
     tags: parseJsonArray<string>(row.tags),
     appRoles: parseJsonArray(row.app_roles),
-    owners: parseJsonArray(row.owners),
-    appOwners: parseJsonArray(row.app_owners),
     servicePrincipalOwners: parseJsonArray(row.service_principal_owners),
     applicationOwners: parseJsonArray(row.application_owners),
     metadata: row.metadata ? parseJsonObject(row.metadata) : null
