@@ -263,6 +263,29 @@ test("closes an open value filter when the table is clicked", async () => {
   act(() => root.unmount());
 });
 
+test("renders service principal tags as colored badges", async () => {
+  const servicePrincipalWithTags = servicePrincipal({
+    appId: "tagged-client-id",
+    displayName: "Tagged app",
+    id: "tagged-sp-id",
+    tags: ["owner:team-a", "environment:prod"]
+  });
+  globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
+    jsonResponse(collection([servicePrincipalWithTags], { page: 1, count: 1 }))
+  );
+
+  const { container, root } = renderComponent(<ServicePrincipalComponent />);
+
+  await waitForText(container, "owner:team-a");
+
+  const ownerTagBadge = getCell("owner:team-a").querySelector('span[title="owner:team-a"]');
+  const environmentTagBadge = getCell("environment:prod").querySelector('span[title="environment:prod"]');
+  expect(ownerTagBadge?.className).toContain("bg-emerald-100");
+  expect(environmentTagBadge?.className).toContain("bg-muted");
+
+  act(() => root.unmount());
+});
+
 test("exports selected and all filtered service principals to CSV", async () => {
   URL.createObjectURL = jest.fn(() => "blob:ownerlens-export");
   URL.revokeObjectURL = jest.fn();

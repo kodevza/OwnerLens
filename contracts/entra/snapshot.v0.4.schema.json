@@ -382,7 +382,10 @@
       "additionalProperties": false,
       "properties": {
         "account": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "appRoleAssignmentCount": {
           "type": "number"
