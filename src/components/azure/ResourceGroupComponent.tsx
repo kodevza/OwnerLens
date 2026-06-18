@@ -12,6 +12,7 @@ import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import { Badge, type BadgeProps } from "../../report/components/ui/badge";
 import { OwnerBadge, type OwnershipEvidenceSelection } from "./ServicePrincipalFieldRenderers";
 import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
+import { TagBadges } from "./TagBadges";
 
 export type AzureRbacResourceGroupSelection = {
   displayName: string;
@@ -134,7 +135,8 @@ export function ResourceGroupComponent({
               : undefined
           }
         />
-      )
+      ),
+      tags: (group) => <TagBadges tags={group.tags} />
     }),
     [onAzureRbacClick, onOwnershipEvidenceClick]
   );

@@ -16,6 +16,7 @@ import {
   type EntraPermissionsPrincipalSelection,
   type OwnershipEvidenceSelection
 } from "./ServicePrincipalFieldRenderers";
+import { TagBadges } from "./TagBadges";
 import { ZtaRemediationPackageBadges } from "./ZtaRemediationPackageBadges";
 
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
@@ -147,7 +148,8 @@ export function ManagedIdentityComponent({
           packages={identity.RemediationPackages ?? []}
           onRemediationPackageClick={onRemediationPackageClick ? openRemediationPackage : undefined}
         />
-      )
+      ),
+      tags: (identity: ManagedIdentity) => <TagBadges tags={identity.tags} />
     }),
     [
       onAzureRbacClick,

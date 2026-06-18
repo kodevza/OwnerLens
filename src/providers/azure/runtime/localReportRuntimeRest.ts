@@ -21,7 +21,7 @@ export type LocalReportRuntimePluginHost = {
   };
 };
 
-function createLocalReportRuntime(dataDir: string): LocalReportRuntime {
+export function createLocalReportRuntime(dataDir: string): LocalReportRuntime {
   return new LocalReportRuntime({ dataDir, databasePath: path.join(dataDir, "runtime.duckdb") });
 }
 

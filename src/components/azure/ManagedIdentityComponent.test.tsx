@@ -194,6 +194,32 @@ test.skip("loads managed identities with runtime risk enrichment", async () => {
   act(() => root.unmount());
 });
 
+test("renders managed identity tags as badges", async () => {
+  const identity = managedIdentity({
+    appId: "client-1",
+    displayName: "uami-a",
+    id: "principal-uami-1",
+    tags: ["ownerlens", "managed-identity"]
+  });
+  globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
+    jsonResponse(collection([identity], { count: 1 }))
+  );
+
+  const { container, root } = renderComponent(<ManagedIdentityComponent />);
+
+  await waitForText(container, "ownerlens");
+
+  const tagsCell = getCell("ownerlens");
+  const badges = [...tagsCell.querySelectorAll("span[title]")].filter((element) =>
+    ["ownerlens", "managed-identity"].includes(element.getAttribute("title") ?? "")
+  );
+  expect(badges).toHaveLength(2);
+  expect(badges.map((badge) => badge.getAttribute("title"))).toEqual(["ownerlens", "managed-identity"]);
+  expect(badges[0]?.className).toContain("rounded-full");
+
+  act(() => root.unmount());
+});
+
 const columns = [
   "displayName",
   "permissionRisk",

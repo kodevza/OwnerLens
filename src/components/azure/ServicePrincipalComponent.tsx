@@ -17,6 +17,7 @@ import {
   type EntraPermissionsPrincipalSelection,
   type OwnershipEvidenceSelection
 } from "./ServicePrincipalFieldRenderers";
+import { TagBadges } from "./TagBadges";
 import { ZtaRemediationPackageBadges } from "./ZtaRemediationPackageBadges";
 
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
@@ -169,7 +170,8 @@ export function ServicePrincipalComponent({
           packages={servicePrincipal.RemediationPackages ?? []}
           onRemediationPackageClick={onRemediationPackageClick ? openRemediationPackage : undefined}
         />
-      )
+      ),
+      tags: (servicePrincipal: ServicePrincipal) => <TagBadges tags={servicePrincipal.tags} />
     }),
     [
       onAzureRbacClick,

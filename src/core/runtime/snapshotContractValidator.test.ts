@@ -22,6 +22,18 @@ describe("parseAndValidateSnapshot", () => {
     ).not.toThrow();
   });
 
+  it("accepts an Entra snapshot without a Graph account", () => {
+    const snapshot = validEntraSnapshot();
+    snapshot.meta.account = null;
+
+    expect(() =>
+      parseAndValidateSnapshot(JSON.stringify(snapshot), {
+        fileName: "entra-snapshot.json",
+        schema: entraSnapshotSchema
+      })
+    ).not.toThrow();
+  });
+
   it("accepts ServiceIdentity service principals from Microsoft Graph", () => {
     const snapshot = validEntraSnapshot();
     snapshot.servicePrincipals[0].servicePrincipalType = "ServiceIdentity";
