@@ -1,4 +1,5 @@
 import type { PermissionRiskLevel } from "../../risk/types";
+import type { Tags } from "../tags";
 
 export type ServicePrincipalType = "Application" | "ManagedIdentity" | "ServiceIdentity" | "SocialIdp" | "Legacy";
 
@@ -32,7 +33,7 @@ export type EntraServicePrincipal = {
   loginUrl: string | null;
   replyUrls: string[];
   servicePrincipalNames: string[];
-  tags: string[];
+  tags: Tags;
   appRoles?: ServicePrincipalAppRole[];
   servicePrincipalOwners?: ServicePrincipalOwner[];
   applicationOwners?: ServicePrincipalOwner[];

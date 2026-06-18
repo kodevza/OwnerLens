@@ -199,6 +199,11 @@ function enrichServicePrincipalsWithResourceGroupOwners(
 ): ServicePrincipal[] {
   return servicePrincipals.map((servicePrincipal) => ({
     ...servicePrincipal,
-    ...projectServicePrincipalOwners(servicePrincipal.roleAssignments, resourceGroupOwnershipRows)
+    ...projectServicePrincipalOwners(
+      servicePrincipal.servicePrincipalOwners,
+      servicePrincipal.applicationOwners,
+      servicePrincipal.roleAssignments,
+      resourceGroupOwnershipRows
+    )
   }));
 }

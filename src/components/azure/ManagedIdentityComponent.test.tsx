@@ -56,7 +56,7 @@ test.skip("loads managed identities with runtime risk enrichment", async () => {
     assignedResourceGroups: ["rg-app"],
     potentialOwners: ["alice@example.test"],
     ownerConfidence: "high",
-    tags: ["ownerlens", "managed-identity"]
+    tags: { ownerlens: "", "managed-identity": "" }
   });
   const highIdentity = managedIdentity({
     accountEnabled: false,
@@ -199,7 +199,7 @@ test("renders managed identity tags as badges", async () => {
     appId: "client-1",
     displayName: "uami-a",
     id: "principal-uami-1",
-    tags: ["ownerlens", "managed-identity"]
+    tags: { ownerlens: "", "managed-identity": "" }
   });
   globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
     jsonResponse(collection([identity], { count: 1 }))
@@ -262,7 +262,7 @@ function managedIdentity(input: Partial<ManagedIdentity> & Pick<ManagedIdentity,
     assignedResourceGroups: [],
     potentialOwners: [],
     ownerConfidence: "none",
-    tags: [],
+    tags: {},
     ztaMaxRisk: "none",
     ztaRemediationCountAll: 0,
     ztaRemediationFailedCount: 0,

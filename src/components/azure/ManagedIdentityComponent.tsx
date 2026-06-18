@@ -4,6 +4,7 @@ import type { ManagedIdentity } from "../../core/azure/entra/managedIdentity";
 import type { OwnerConfidence } from "../../core/ownership/types";
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import type { RemediationPackage } from "../../core/runtime/remediation";
+import { getTagNames } from "../../core/azure/tags";
 import { azureManagedIdentityColumnHelp } from "./azureReportConfig";
 import { exportManagedIdentitiesCsv, readManagedIdentities, readRemediationPackage } from "./api";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
@@ -95,7 +96,7 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
     id: "tags",
     label: "Tags",
     valueType: "list",
-    getValue: (identity) => identity.tags,
+    getValue: (identity) => getTagNames(identity.tags),
     filter: { kind: "text" }
   },
 ];

@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 
-import type { AzureResourceTags, ResourceGroupOwnershipRow } from "../../core/azure/resources";
+import type { ResourceGroupOwnershipRow } from "../../core/azure/resources";
+import type { Tags } from "../../core/azure/tags";
 import type { OwnerConfidence } from "../../core/ownership/types";
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import { azureOwnerColumnHelp } from "./azureReportConfig";
@@ -228,7 +229,7 @@ function getResourceGroupOwnershipRowKey(row: Pick<ResourceGroupOwnershipRow, "s
   return `${row.subscriptionId}:${row.resourceGroup}`;
 }
 
-function formatAzureTags(tags: AzureResourceTags | null): string {
+function formatAzureTags(tags: Tags | null): string {
   if (!tags) {
     return "";
   }

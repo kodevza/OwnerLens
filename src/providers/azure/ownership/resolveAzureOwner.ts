@@ -1,4 +1,5 @@
-import type { AzureActivityLog, AzureResourceGroup, AzureResourceTags } from "../../../core/azure/resources";
+import type { AzureActivityLog, AzureResourceGroup } from "../../../core/azure/resources";
+import type { Tags } from "../../../core/azure/tags";
 import type { OwnerEvidence, OwnerResolution } from "../../../core/ownership/types";
 import {
   compareLogsNewestFirst,
@@ -11,7 +12,7 @@ import {
 import type { ActivityLogIndex, OwnerResolverAdapter, OwnerResolverContext } from "./azureOwnershipTypes";
 
 type AzureResourceWithTags = {
-  tags: AzureResourceTags | null;
+  tags: Tags | null;
 };
 
 export const azureOwnerAdapter: OwnerResolverAdapter = {

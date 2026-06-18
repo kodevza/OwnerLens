@@ -5,9 +5,9 @@ import { appConfig } from "../../core/config";
 import { createViewHistoryState, getHistoryStateView } from "../../lib/historyState";
 import type { RemediationPackage } from "../../core/runtime/remediation";
 import type { ColumnFilters } from "../../core/collectionControls";
+import { ClosableTab } from "../../report/components/ClosableTab";
 import { Tabs, TabsList, TabsTrigger } from "../../report/components/ui/tabs";
 import { AzureRbacComponent } from "./AzureRbacComponent";
-import { ClosableAzureTab } from "./ClosableAzureTab";
 import { EntraPermissionsComponent } from "./EntraPermissionsComponent";
 import { ManagedIdentityComponent } from "./ManagedIdentityComponent";
 import { OwnershipEvidenceComponent } from "./OwnershipEvidenceComponent";
@@ -267,7 +267,7 @@ export function AzureComponent() {
             </TabsTrigger>
           ) : null}
           {azureRbacTab ? (
-            <ClosableAzureTab
+            <ClosableTab
               active={activeView === "azureRbac"}
               closeLabel={`Close ${azureRbacTab.displayName} Azure RBAC tab`}
               label={azureRbacTab.displayName}
@@ -276,7 +276,7 @@ export function AzureComponent() {
             />
           ) : null}
           {entraPermissionsTab ? (
-            <ClosableAzureTab
+            <ClosableTab
               active={activeView === "entraPermissions"}
               closeLabel={`Close ${entraPermissionsTab.displayName} Entra API permissions tab`}
               label={`${entraPermissionsTab.displayName} permissions`}
@@ -285,7 +285,7 @@ export function AzureComponent() {
             />
           ) : null}
           {ownershipEvidenceTab ? (
-            <ClosableAzureTab
+            <ClosableTab
               active={activeView === "ownershipEvidence"}
               closeLabel={`Close ${ownershipEvidenceTab.displayName} ownership evidence tab`}
               label={`${ownershipEvidenceTab.displayName} owners`}
@@ -294,7 +294,7 @@ export function AzureComponent() {
             />
           ) : null}
           {remediationPackageTab ? (
-            <ClosableAzureTab
+            <ClosableTab
               active={activeView === "remediationPackage"}
               closeLabel="Close remediation package tab"
               label="Remediation package"

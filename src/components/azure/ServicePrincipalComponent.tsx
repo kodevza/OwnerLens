@@ -5,6 +5,7 @@ import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
 import type { OwnerConfidence } from "../../core/ownership/types";
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import type { RemediationPackage } from "../../core/runtime/remediation";
+import { getTagNames } from "../../core/azure/tags";
 import { azureServicePrincipalColumnHelp } from "./azureReportConfig";
 import { exportServicePrincipalsCsv, readRemediationPackage, readServicePrincipals } from "./api";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
@@ -116,7 +117,7 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     id: "tags",
     label: "Tags",
     valueType: "list",
-    getValue: (sp) => sp.tags,
+    getValue: (sp) => getTagNames(sp.tags),
     filter: { kind: "text" }
   }
 ];

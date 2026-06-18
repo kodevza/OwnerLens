@@ -1,14 +1,13 @@
 import type { OwnerCandidate, OwnerConfidence, OwnerEvidence } from "../ownership/types";
 import type { PermissionRiskLevel } from "../risk/types";
-
-export type AzureResourceTags = Record<string, string>;
+import type { Tags } from "./tags";
 
 export type AzureResourceGroup = {
   subscriptionId: string;
   subscriptionName: string;
   resourceGroup: string;
   location: string;
-  tags: AzureResourceTags | null;
+  tags: Tags | null;
 };
 
 export type AzureResource = {
@@ -20,7 +19,7 @@ export type AzureResource = {
   resourceType: string;
   kind: string | null;
   location: string;
-  tags: AzureResourceTags | null;
+  tags: Tags | null;
   identityType: string | null;
   identityPrincipalId: string | null;
   identityTenantId: string | null;
@@ -35,7 +34,7 @@ export type AzureSubscription = {
   subscriptionName: string;
   tenantId: string;
   state: AzureSubscriptionState;
-  tags: AzureResourceTags | null;
+  tags: Tags | null;
 };
 
 export type AzureUserAssignedManagedIdentity = {
@@ -48,7 +47,7 @@ export type AzureUserAssignedManagedIdentity = {
   clientId: string;
   principalId: string;
   tenantId: string;
-  tags: AzureResourceTags | null;
+  tags: Tags | null;
 };
 
 export type AzureActivityLog = {

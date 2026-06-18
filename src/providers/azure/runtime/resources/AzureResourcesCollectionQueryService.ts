@@ -18,6 +18,7 @@ import {
   applyResourceGroupOwnerDisabledEvidence,
   buildResourceGroupOwnershipRows
 } from "./resourceGroupOwnership";
+import { mapEntraServicePrincipalsToCore } from "../entra/entraServicePrincipalMapper";
 
 export type AzureResourcesCollectionQueryServiceOptions = {
   entra: LocalEntraReportRuntime;
@@ -143,7 +144,7 @@ export class AzureResourcesCollectionQueryService {
       resourceSnapshot.resourceGroups,
       ownerRows,
       resourceSnapshot.roleAssignments ?? [],
-      entraSnapshot.servicePrincipals
+      mapEntraServicePrincipalsToCore(entraSnapshot.servicePrincipals)
     );
   }
 

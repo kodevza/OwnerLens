@@ -10,6 +10,8 @@ import {
 
 test("projects service principal owners from role assignment resource group ownership", () => {
   const projection = projectServicePrincipalOwners(
+    [],
+    [],
     [
       roleAssignment("sp-1", "/subscriptions/sub-1/resourceGroups/rg-high"),
       roleAssignment("sp-1", "/subscriptions/sub-1/resourceGroups/rg-medium"),
@@ -63,6 +65,8 @@ test("projects service principal owners from role assignment resource group owne
 
 test("projects service principal owners from subscription-scoped role assignments", () => {
   const projection = projectServicePrincipalOwners(
+    [],
+    [],
     [roleAssignment("sp-1", "/subscriptions/sub-1")],
     [
       resourceGroupOwnership("sub-1", "rg-a", "team-a@example.test", "medium"),
@@ -93,6 +97,8 @@ test("projects service principal owners from subscription-scoped role assignment
 
 test("deduplicates the same service principal owner across resource groups", () => {
   const projection = projectServicePrincipalOwners(
+    [],
+    [],
     [roleAssignment("sp-1", "/subscriptions/sub-1")],
     [
       resourceGroupOwnership("sub-1", "rg-a", "payments-team", "medium"),
@@ -116,6 +122,56 @@ test("deduplicates the same service principal owner across resource groups", () 
         { user: "ownerGroup=payments-team", date: null }
       ]
     })
+  ]);
+});
+
+test("projects direct service principal and application owners", () => {
+  const projection = projectServicePrincipalOwners(
+    [
+      {
+        id: "sp-owner-1",
+        displayName: "Service Principal Owner",
+        userPrincipalName: "sp-owner@example.test",
+        ownerType: "User"
+      }
+    ],
+    [
+      {
+        id: "app-owner-1",
+        displayName: "Application Owner",
+        mail: "app-owner@example.test",
+        ownerType: "Group"
+      }
+    ],
+    [],
+    []
+  );
+
+  expect(projection).toMatchObject({
+    potentialOwners: ["app-owner@example.test", "sp-owner@example.test"],
+    ownerConfidence: "high"
+  });
+  expect(projection.ownerCandidates).toEqual([
+    {
+      key: "ownerGroup:app-owner@example.test",
+      displayName: "app-owner@example.test",
+      type: "ownerGroup",
+      confidence: "high",
+      source: "entraApplicationOwner",
+      rank: 1,
+      evidence: [{ user: "app-owner@example.test", date: null }],
+      relatedScopes: []
+    },
+    {
+      key: "ownerUser:sp-owner@example.test",
+      displayName: "sp-owner@example.test",
+      type: "ownerUser",
+      confidence: "high",
+      source: "entraServicePrincipalOwner",
+      rank: 2,
+      evidence: [{ user: "sp-owner@example.test", date: null }],
+      relatedScopes: []
+    }
   ]);
 });
 
@@ -149,7 +205,7 @@ test("projects managed identity owners from its resource group", () => {
 });
 
 test("returns no owners when a principal has no matching ownership context", () => {
-  expect(projectServicePrincipalOwners([], [])).toEqual({
+  expect(projectServicePrincipalOwners([], [], [], [])).toEqual({
     ownerCandidates: [],
     potentialOwners: [],
     ownerConfidence: "none"

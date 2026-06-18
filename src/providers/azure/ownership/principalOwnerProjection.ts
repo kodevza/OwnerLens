@@ -3,12 +3,14 @@ import type {
   AzureUserAssignedManagedIdentity,
   ResourceGroupOwnershipRow
 } from "../../../core/azure/resources";
+import type { EntraOwner } from "../../../core/azure/entra/types";
 import { rankOwnerCandidates } from "../../../core/ownership/ownerCandidateRanking";
 import type {
   OwnerCandidate,
   OwnerCandidateScope,
   OwnerConfidence,
-  OwnerEvidence
+  OwnerEvidence,
+  OwnerType
 } from "../../../core/ownership/types";
 
 export type PrincipalOwnerProjection = {
@@ -56,6 +58,8 @@ export function projectManagedIdentityOwners(
 }
 
 export function projectServicePrincipalOwners(
+  servicePrincipalOwners: EntraOwner[] | undefined,
+  applicationOwners: EntraOwner[] | undefined,
   roleAssignments: AzureRoleAssignment[],
   resourceGroupOwnershipRows: ResourceGroupOwnershipRow[]
 ): PrincipalOwnerProjection {
@@ -81,7 +85,11 @@ export function projectServicePrincipalOwners(
     }
   }
 
-  return buildPrincipalOwnerProjection(buildOwnerCandidatesFromResourceGroupRows(ownerRows));
+  return buildPrincipalOwnerProjection(rankOwnerCandidates([
+    ...buildDirectEntraOwnerCandidates(servicePrincipalOwners ?? [], "entraServicePrincipalOwner"),
+    ...buildDirectEntraOwnerCandidates(applicationOwners ?? [], "entraApplicationOwner"),
+    ...buildOwnerCandidatesFromResourceGroupRows(ownerRows)
+  ]));
 }
 
 function emptyPrincipalOwnerProjection(): PrincipalOwnerProjection {
@@ -101,6 +109,83 @@ function buildPrincipalOwnerProjection(ownerCandidates: OwnerCandidate[]): Princ
       "none"
     )
   };
+}
+
+function buildDirectEntraOwnerCandidates(
+  owners: EntraOwner[],
+  source: "entraServicePrincipalOwner" | "entraApplicationOwner"
+): OwnerCandidate[] {
+  const candidates = new Map<string, OwnerCandidate>();
+
+  for (const owner of owners) {
+    const displayName = getOwnerDisplayName(owner);
+    if (!displayName) {
+      continue;
+    }
+
+    const ownerType = inferEntraOwnerType(owner);
+    const key = getOwnerCandidateKey(displayName, ownerType);
+    const evidence: OwnerEvidence = {
+      user: displayName,
+      date: null
+    };
+    const existing = candidates.get(key);
+
+    if (existing) {
+      existing.evidence = mergeOwnerEvidence(existing.evidence, [evidence]);
+      continue;
+    }
+
+    candidates.set(key, {
+      key,
+      displayName,
+      type: ownerType,
+      confidence: "high",
+      source,
+      rank: 0,
+      evidence: [evidence],
+      relatedScopes: []
+    });
+  }
+
+  return [...candidates.values()];
+}
+
+function getOwnerDisplayName(owner: EntraOwner): string | null {
+  return firstNonEmpty([
+    owner.userPrincipalName,
+    owner.mail,
+    owner.displayName,
+    owner.id
+  ]);
+}
+
+function firstNonEmpty(values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    const normalized = value?.trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
+function inferEntraOwnerType(owner: EntraOwner): OwnerType {
+  const ownerType = owner.ownerType?.trim().toLowerCase();
+  if (ownerType === "group") {
+    return "ownerGroup";
+  }
+
+  if (ownerType === "user") {
+    return "ownerUser";
+  }
+
+  return "unknown";
+}
+
+function getOwnerCandidateKey(owner: string, type: OwnerType): string {
+  return `${type}:${owner.trim().toLowerCase()}`;
 }
 
 type ResourceGroupOwnerCandidateInput = {
