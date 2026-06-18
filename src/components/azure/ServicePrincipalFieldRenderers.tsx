@@ -280,7 +280,11 @@ export function OwnerBadge({
   return wrapOwnerBadgeButton(badge, clickLabel, onClick);
 }
 
-function wrapOwnerBadgeButton(badge: ReactElement, label: string, onClick?: () => void) {
+function wrapOwnerBadgeButton(
+  badge: ReactElement,
+  label: string,
+  onClick?: () => void
+) {
   if (!onClick) {
     return badge;
   }

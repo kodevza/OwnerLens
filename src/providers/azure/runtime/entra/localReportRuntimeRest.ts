@@ -27,6 +27,10 @@ export function defineEntraLocalReportRuntimeRestEndpoints(
       handle: ({ url }) => runtime.readEntraPrincipalPermissions(readRequiredSearchParam(url, "principalId"))
     },
     {
+      path: `${restBasePath}/entra/userGroups`,
+      handle: ({ url }) => runtime.readEntraUserGroups(readRequiredSearchParam(url, "user"))
+    },
+    {
       path: `${restBasePath}/entra/oauth2PermissionGrants`,
       handle: ({ url }) => runtime.queryEntraOAuth2PermissionGrants(parseRuntimeCollectionQueryOptions(url))
     },

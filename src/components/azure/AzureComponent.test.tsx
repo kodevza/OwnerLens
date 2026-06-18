@@ -950,6 +950,179 @@ test("opens selectable ownership evidence table from a service principal owner b
   act(() => root.unmount());
 });
 
+test("opens direct Entra user groups dropdown from ownership evidence", async () => {
+  let resolveUserGroups: ((response: Response) => void) | null = null;
+  const userGroupsResponse = new Promise<Response>((resolve) => {
+    resolveUserGroups = resolve;
+  });
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/entra/userGroups")) {
+      return userGroupsResponse;
+    }
+
+    if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      return ownershipEvidenceResponse({
+        displayName: "alice@example.test",
+        type: "ownerUser"
+      });
+    }
+
+    return servicePrincipalOwnerResponse({
+      displayName: "alice@example.test",
+      type: "ownerUser"
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await waitForText(container, "Service principal app");
+  await clickButton("Open ownership evidence for alice@example.test");
+  await waitForText(container, "Application owner");
+  await clickButton("Open direct groups for alice@example.test");
+  await waitForText(document.body, "Loading groups...");
+
+  const userGroupsRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .find((requestUrl) => requestUrl.startsWith("/api/data/entra/userGroups"));
+  expect(userGroupsRequest).toBeDefined();
+  expect(new URL(userGroupsRequest ?? "", window.location.origin).searchParams.get("user")).toBe("alice@example.test");
+
+  await act(async () => {
+    resolveUserGroups?.(jsonResponse({
+      user: "alice@example.test",
+      groups: [
+        { groupId: "group-1", groupDisplayName: "Engineering Owners" },
+        { groupId: "group-2", groupDisplayName: "Platform Operators" }
+      ]
+    }));
+    await userGroupsResponse;
+  });
+  await waitForText(document.body, "Engineering Owners");
+  expect(document.querySelector('[role="dialog"]')?.className).toContain("max-h-[50vh]");
+  expect(document.body.textContent).toContain("group-2");
+
+  await changeInput("Filter direct groups for alice@example.test", "^Engineering");
+  await waitFor(() => {
+    expect(document.body.textContent).toContain("Engineering Owners");
+    expect(document.body.textContent).not.toContain("Platform Operators");
+  });
+
+  await changeInput("Filter direct groups for alice@example.test", "group-2");
+  await waitFor(() => {
+    expect(document.body.textContent).toContain("Platform Operators");
+    expect(document.body.textContent).not.toContain("Engineering Owners");
+  });
+
+  await changeInput("Filter direct groups for alice@example.test", "not-present");
+  await waitForText(document.body, "No direct group memberships match the filter.");
+
+  await changeInput("Filter direct groups for alice@example.test", "[");
+  await waitForText(document.body, "Invalid regular expression.");
+  expect(document.body.textContent).toContain("Engineering Owners");
+  expect(document.body.textContent).toContain("Platform Operators");
+
+  expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("/api/data/ownership/evidence"))).toBe(true);
+
+  act(() => root.unmount());
+});
+
+test("renders empty and failed direct Entra user group dropdown states", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/entra/userGroups")) {
+      return jsonResponse({ user: "alice@example.test", groups: [] });
+    }
+
+    if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      return ownershipEvidenceResponse({
+        displayName: "alice@example.test",
+        type: "ownerUser"
+      });
+    }
+
+    return servicePrincipalOwnerResponse({
+      displayName: "alice@example.test",
+      type: "ownerUser"
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await waitForText(container, "Service principal app");
+  await clickButton("Open ownership evidence for alice@example.test");
+  await waitForText(container, "Application owner");
+  await clickButton("Open direct groups for alice@example.test");
+  await waitForText(document.body, "No direct group memberships found.");
+
+  act(() => root.unmount());
+
+  const failedFetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/entra/userGroups")) {
+      return { ok: false, status: 500 } as Response;
+    }
+
+    if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      return ownershipEvidenceResponse({
+        displayName: "alice@example.test",
+        type: "ownerUser"
+      });
+    }
+
+    return servicePrincipalOwnerResponse({
+      displayName: "alice@example.test",
+      type: "ownerUser"
+    });
+  });
+  globalThis.fetch = failedFetchMock;
+
+  const failedRender = renderComponent(<AzureComponent />);
+  await waitForText(failedRender.container, "Service principal app");
+  await clickButton("Open ownership evidence for alice@example.test");
+  await waitForText(failedRender.container, "Application owner");
+  await clickButton("Open direct groups for alice@example.test");
+  await waitForText(document.body, "Entra user groups read failed: 500");
+
+  act(() => failedRender.root.unmount());
+});
+
+test("does not show direct Entra user groups action for non-user ownership evidence", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      return ownershipEvidenceResponse({
+        displayName: "Platform Owners",
+        type: "ownerGroup"
+      });
+    }
+
+    return servicePrincipalOwnerResponse({
+      displayName: "Platform Owners",
+      type: "ownerGroup"
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await waitForText(container, "Service principal app");
+  await clickButton("Open ownership evidence for Platform Owners");
+  await waitForText(container, "Application owner");
+
+  expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("/api/data/entra/userGroups"))).toBe(false);
+  expect(queryButton("Open direct groups for Platform Owners")).toBeNull();
+  expect(document.body.textContent).not.toContain("Direct groups for Platform Owners");
+
+  act(() => root.unmount());
+});
+
 test("opens Entra API permissions tab for the selected service principal from its permissions badge", async () => {
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);
@@ -1520,6 +1693,15 @@ async function clickButton(label: string) {
   });
 }
 
+async function changeInput(label: string, value: string): Promise<void> {
+  const input = getInput(label);
+
+  await act(async () => {
+    setNativeInputValue(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 async function toggleCheckbox(label: string, checked: boolean): Promise<void> {
   const checkbox = getCheckbox(label);
 
@@ -1557,6 +1739,85 @@ async function waitFor(assertion: () => void): Promise<void> {
   throw lastError;
 }
 
+function servicePrincipalOwnerResponse(owner: { displayName: string; type: string }): Response {
+  return jsonResponse({
+    collectionId: "entra.servicePrincipals",
+    columns: [],
+    count: 1,
+    page: 1,
+    pageSize: 20,
+    rows: [
+      {
+        accountEnabled: true,
+        appDisplayName: "Service principal app",
+        appId: "sp-client-id",
+        appOwnerOrganizationId: null,
+        azureRbac: "No Azure RBAC assignments",
+        displayName: "Service principal app",
+        homepage: null,
+        id: "sp-object-id",
+        loginUrl: null,
+        permissionRisk: "none",
+        rbacRoleAssignmentCount: 0,
+        rbacRoleLevel: "none",
+        rbacSubscriptionCount: 0,
+        publisherName: null,
+        replyUrls: [],
+        roleAssignments: [],
+        oauthPermissionsCount: 0,
+        appRolesPermissionCount: 0,
+        entraPermissionRisk: "none",
+        servicePrincipalNames: [],
+        servicePrincipalType: "Application",
+        potentialOwners: [owner.displayName],
+        ownerCandidates: [
+          {
+            key: "owner-1",
+            displayName: owner.displayName,
+            type: owner.type,
+            confidence: "high",
+            source: "entraApplicationOwner",
+            rank: 1,
+            evidence: [{ user: owner.displayName, date: "2026-06-05T00:00:00.000Z" }],
+            relatedScopes: []
+          }
+        ],
+        ownerConfidence: "high",
+        tags: [],
+        ztaMaxRisk: "none",
+        ztaRemediationCountAll: 0,
+        ztaRemediationFailedCount: 0
+      }
+    ]
+  });
+}
+
+function ownershipEvidenceResponse(owner: { displayName: string; type: string }): Response {
+  return jsonResponse({
+    target: {
+      kind: "servicePrincipal",
+      id: "sp-object-id",
+      displayName: "Service principal app"
+    },
+    evidence: [
+      {
+        key: `owner-1:${owner.displayName}:2026-06-05T00:00:00.000Z`,
+        ownerCandidateKey: "owner-1",
+        ownerDisplayName: owner.displayName,
+        ownerType: owner.type,
+        confidence: "high",
+        source: "entraApplicationOwner",
+        path: "direct",
+        discoverySource: "applicationOwner",
+        rank: 1,
+        evidence: owner.displayName,
+        date: "2026-06-05T00:00:00.000Z",
+        relatedScopes: []
+      }
+    ]
+  });
+}
+
 function getButton(label: string): HTMLButtonElement {
   const button = queryButton(label);
   if (!(button instanceof HTMLButtonElement)) {
@@ -1577,12 +1838,37 @@ function getCheckbox(label: string): HTMLInputElement {
   return checkbox;
 }
 
+function getInput(label: string): HTMLInputElement {
+  const input = [...document.querySelectorAll("input")].find(
+    (candidate) => candidate.getAttribute("aria-label") === label
+  );
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error(`Expected input ${label}.`);
+  }
+
+  return input;
+}
+
 function queryButton(label: string): HTMLButtonElement | null {
   const button = [...document.querySelectorAll("button")].find(
     (candidate) => candidate.getAttribute("aria-label") === label || candidate.textContent?.trim() === label
   );
 
   return button instanceof HTMLButtonElement ? button : null;
+}
+
+function setNativeInputValue(input: HTMLInputElement, value: string): void {
+  const valueSetter = Object.getOwnPropertyDescriptor(input, "value")?.set;
+  const prototype = Object.getPrototypeOf(input) as HTMLInputElement;
+  const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+
+  if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
+    prototypeValueSetter.call(input, value);
+  } else if (valueSetter) {
+    valueSetter.call(input, value);
+  } else {
+    input.value = value;
+  }
 }
 
 function readBlobText(blob: Blob): Promise<string> {

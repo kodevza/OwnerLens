@@ -1,6 +1,10 @@
 import type { ManagedIdentity } from "../../core/azure/entra/managedIdentity";
 import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
-import type { EntraAppRoleAssignment, EntraOAuth2PermissionGrant } from "../../core/azure/entra/types";
+import type {
+  EntraAppRoleAssignment,
+  EntraOAuth2PermissionGrant,
+  EntraUserGroupMembershipResponse
+} from "../../core/azure/entra/types";
 import type { AzureRbac } from "../../core/azure/azureRbac";
 import type { ResourceGroupOwnershipRow } from "../../core/azure/resources";
 import type { ZtaReport } from "../../core/azure/ztaReport";
@@ -226,6 +230,28 @@ export async function readEntraPermissions({
   }
 
   return (await response.json()) as EntraPrincipalPermissionsResponse;
+}
+
+export async function readEntraUserGroups({
+  signal,
+  user
+}: {
+  signal: AbortSignal;
+  user: string;
+}): Promise<EntraUserGroupMembershipResponse> {
+  const url = new URL("/api/data/entra/userGroups", window.location.origin);
+  url.searchParams.set("user", user);
+
+  const response = await fetch(`${url.pathname}${url.search}`, { signal });
+  if (!response.ok) {
+    throw new Error(`Entra user groups read failed: ${response.status}`);
+  }
+
+  return readJsonResponse<EntraUserGroupMembershipResponse>(
+    response,
+    `${url.pathname}${url.search}`,
+    "Entra user groups read failed"
+  );
 }
 
 export async function readOwnershipEvidence({

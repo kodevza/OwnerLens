@@ -1774,6 +1774,106 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
   });
 });
 
+test("reads direct Entra user group memberships by user identity fields", async () => {
+  const snapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    groupMembers: [
+      {
+        groupId: "group-beta",
+        groupDisplayName: "Beta Operators",
+        memberId: "user-1",
+        memberDisplayName: "Alice Owner",
+        memberType: "user",
+        memberUserPrincipalName: "alice@example.test",
+        memberMail: "alice.mail@example.test",
+        memberAppId: null,
+        memberServicePrincipalType: null
+      },
+      {
+        groupId: "group-alpha",
+        groupDisplayName: "Alpha Operators",
+        memberId: "user-1",
+        memberDisplayName: "Alice Owner",
+        memberType: "user",
+        memberUserPrincipalName: "alice@example.test",
+        memberMail: "alice.mail@example.test",
+        memberAppId: null,
+        memberServicePrincipalType: null
+      },
+      {
+        groupId: "group-sp",
+        groupDisplayName: "Service principal group",
+        memberId: "alice@example.test",
+        memberDisplayName: "Alice app",
+        memberType: "servicePrincipal",
+        memberUserPrincipalName: null,
+        memberMail: null,
+        memberAppId: "app-1",
+        memberServicePrincipalType: "Application"
+      },
+      {
+        groupId: "group-device",
+        groupDisplayName: "Device group",
+        memberId: "alice@example.test",
+        memberDisplayName: "Alice device",
+        memberType: "device",
+        memberUserPrincipalName: null,
+        memberMail: null,
+        memberAppId: null,
+        memberServicePrincipalType: null
+      }
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(snapshot), "utf8");
+    await runtime.initialize();
+
+    const endpoints = defineLocalReportRuntimeRestEndpoints(runtime);
+    const endpoint = getEndpoint(endpoints, "/api/data/entra/userGroups");
+
+    await expect(runtime.readEntraUserGroups("ALICE@EXAMPLE.TEST")).resolves.toEqual({
+      user: "alice@example.test",
+      groups: [
+        { groupId: "group-alpha", groupDisplayName: "Alpha Operators" },
+        { groupId: "group-beta", groupDisplayName: "Beta Operators" }
+      ]
+    });
+    await expect(runtime.readEntraUserGroups("alice.mail@example.test")).resolves.toHaveProperty(
+      "groups",
+      expect.arrayContaining([{ groupId: "group-alpha", groupDisplayName: "Alpha Operators" }])
+    );
+    await expect(runtime.readEntraUserGroups("USER-1")).resolves.toHaveProperty("groups", expect.any(Array));
+    await expect(runtime.readEntraUserGroups("Alice Owner")).resolves.toHaveProperty("groups", expect.any(Array));
+    await expect(runtime.readEntraUserGroups("missing@example.test")).resolves.toEqual({
+      user: "missing@example.test",
+      groups: []
+    });
+    await expect(
+      endpoint.handle({
+        req: {},
+        url: new URL("http://localhost/api/data/entra/userGroups?user=ALICE%40EXAMPLE.TEST")
+      })
+    ).resolves.toEqual({
+      user: "alice@example.test",
+      groups: [
+        { groupId: "group-alpha", groupDisplayName: "Alpha Operators" },
+        { groupId: "group-beta", groupDisplayName: "Beta Operators" }
+      ]
+    });
+  });
+});
+
+test("returns the existing Entra snapshot 404 for user groups when no Entra snapshot is imported", async () => {
+  await withRuntimeTestDir(async ({ runtime }) => {
+    await runtime.initialize();
+
+    await expect(runtime.readEntraUserGroups("alice@example.test")).rejects.toMatchObject({
+      statusCode: 404
+    });
+  });
+});
+
 test("imports legacy Entra snapshots without applications as an empty applications collection", async () => {
   const snapshot: EntraSnapshot = {
     meta: {

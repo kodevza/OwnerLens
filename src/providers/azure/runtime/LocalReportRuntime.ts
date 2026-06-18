@@ -11,6 +11,7 @@ import {
 } from "../../../core/runtime/localSnapshotFiles";
 import type { ManagedIdentity } from "../../../core/azure/entra/managedIdentity";
 import type { ServicePrincipal } from "../../../core/azure/entra/servicePrincipal";
+import type { EntraUserGroupMembershipResponse } from "../../../core/azure/entra/types";
 import type { ZtaReport, ZtaReportTest } from "../../../core/azure/ztaReport";
 import { RemediationPackageStore } from "../../../core/runtime/RemediationPackageStore";
 import type {
@@ -250,6 +251,11 @@ export class LocalReportRuntime {
   async readEntraPrincipalPermissions(principalId: string): Promise<EntraPrincipalPermissions> {
     await this.initialize();
     return this.entra.readEntraPrincipalPermissions(principalId);
+  }
+
+  async readEntraUserGroups(user: string): Promise<EntraUserGroupMembershipResponse> {
+    await this.initialize();
+    return this.entra.readUserGroupMembership(user);
   }
 
   async queryAzureSubscriptions(

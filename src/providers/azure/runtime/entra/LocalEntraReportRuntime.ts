@@ -15,7 +15,11 @@ import {
 } from "../../../../core/runtime/snapshotImportRegistry";
 import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
 import type { EntraPrincipalPermissionSummary, ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
-import type { EntraAppRoleAssignment, EntraOAuth2PermissionGrant } from "../../../../core/azure/entra/types";
+import type {
+  EntraAppRoleAssignment,
+  EntraOAuth2PermissionGrant,
+  EntraUserGroupMembershipResponse
+} from "../../../../core/azure/entra/types";
 import type { PermissionRiskLevel } from "../../../../core/risk/types";
 import type {
   EntraOAuth2PermissionGrant as InputEntraOAuth2PermissionGrant,
@@ -26,6 +30,7 @@ import { readEntraAppRoleAssignmentRows } from "./appRoleAssignmentsTable";
 import { readEntraOAuth2PermissionGrantRows } from "./oauth2PermissionGrantsTable";
 import { readLatestAzureIdentityEnrichment } from "../enrichment/azureIdentityEnrichment";
 import { readEntraServicePrincipalRows } from "./servicePrincipalsTable";
+import { readEntraUserGroupMembership } from "./groupMembersTable";
 import {
   entraSnapshotFileName,
   importEntraSnapshotToDuckDb,
@@ -157,6 +162,11 @@ export class LocalEntraReportRuntime {
         (assignment) => assignment.principalId.toLowerCase() === normalizedPrincipalId
       )
     };
+  }
+
+  async readUserGroupMembership(user: string): Promise<EntraUserGroupMembershipResponse> {
+    this.assertImported();
+    return readEntraUserGroupMembership(this.getConnection(), user);
   }
 
   private assertImported(): void {
