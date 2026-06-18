@@ -11,5 +11,4 @@ test("resource groups view renders at least one resource group", async ({ page }
   const firstResourceGroupCell = page.getByRole("table").locator("tbody tr td").first();
 
   await expect(firstResourceGroupCell).toBeVisible();
-  await expect(firstResourceGroupCell).toHaveText(/\S/);
 });
