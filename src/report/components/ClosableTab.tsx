@@ -1,17 +1,17 @@
 import { X } from "lucide-react";
 
 import { cn } from "../../lib/utils";
-import { TabsTrigger } from "../../report/components/ui/tabs";
+import { TabsTrigger } from "./ui/tabs";
 
-type ClosableAzureTabProps = {
+type ClosableTabProps = {
   active: boolean;
   closeLabel: string;
   label: string;
   onClose: () => void;
-  value: "azureRbac" | "entraPermissions" | "ownershipEvidence" | "remediationPackage";
+  value: string;
 };
 
-export function ClosableAzureTab({ active, closeLabel, label, onClose, value }: ClosableAzureTabProps) {
+export function ClosableTab({ active, closeLabel, label, onClose, value }: ClosableTabProps) {
   return (
     <span
       className={cn(

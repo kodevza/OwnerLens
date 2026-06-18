@@ -8,6 +8,7 @@ import type {
   ServicePrincipalAppRole as EntraAppRole,
   ServicePrincipalOwner as EntraOwner
 } from "../../inputTransferObject/generated/EntraSnapshot";
+import { buildTags } from "../../../../core/azure/tags";
 
 function mapEntraServicePrincipalToCore(
   servicePrincipal: EntraServicePrincipal
@@ -25,7 +26,7 @@ function mapEntraServicePrincipalToCore(
     loginUrl: servicePrincipal.loginUrl,
     replyUrls: [...servicePrincipal.replyUrls],
     servicePrincipalNames: [...servicePrincipal.servicePrincipalNames],
-    tags: [...servicePrincipal.tags],
+    tags: buildTags(servicePrincipal.tags),
     appRoles: servicePrincipal.appRoles?.map(mapEntraAppRoleToCore),
     servicePrincipalOwners: servicePrincipal.servicePrincipalOwners?.map(mapEntraOwnerToCore),
     applicationOwners: servicePrincipal.applicationOwners?.map(mapEntraOwnerToCore),

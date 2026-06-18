@@ -268,7 +268,7 @@ test("renders service principal tags as colored badges", async () => {
     appId: "tagged-client-id",
     displayName: "Tagged app",
     id: "tagged-sp-id",
-    tags: ["owner:team-a", "environment:prod"]
+    tags: { "owner:team-a": "", "environment:prod": "" }
   });
   globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
     jsonResponse(collection([servicePrincipalWithTags], { page: 1, count: 1 }))
@@ -345,7 +345,7 @@ const graphApi = servicePrincipal({
   rbacRoleLevel: "high",
   rbacSubscriptionCount: 1,
   servicePrincipalType: "Application",
-  tags: ["windowsAzureActiveDirectoryIntegratedApp"],
+  tags: { windowsAzureActiveDirectoryIntegratedApp: "" },
   ztaMaxRisk: "high",
   ztaRemediationCountAll: 4,
   ztaRemediationFailedCount: 2,
@@ -366,7 +366,7 @@ const payrollApi = servicePrincipal({
   id: "payroll-sp-id",
   publisherName: "Contoso",
   servicePrincipalType: "Application",
-  tags: ["finance", "line-of-business"]
+  tags: { finance: "", "line-of-business": "" }
 });
 
 const disabledLegacyApp = servicePrincipal({
@@ -377,7 +377,7 @@ const disabledLegacyApp = servicePrincipal({
   id: "legacy-sp-id",
   publisherName: null,
   servicePrincipalType: "Legacy",
-  tags: ["disabled"]
+  tags: { disabled: "" }
 });
 
 function servicePrincipal(input: Partial<ServicePrincipal> & Pick<ServicePrincipal, "id" | "appId" | "displayName">): ServicePrincipal {
@@ -391,7 +391,7 @@ function servicePrincipal(input: Partial<ServicePrincipal> & Pick<ServicePrincip
     replyUrls: [],
     servicePrincipalNames: [],
     servicePrincipalType: "Application",
-    tags: [],
+    tags: {},
     permissionRisk: "none",
     roleAssignments: [],
     rbacRoleAssignmentCount: 0,

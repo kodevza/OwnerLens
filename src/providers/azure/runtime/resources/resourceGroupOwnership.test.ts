@@ -112,7 +112,7 @@ function servicePrincipal(id: string, servicePrincipalType: ServicePrincipalType
     loginUrl: null,
     replyUrls: [],
     servicePrincipalNames: [],
-    tags: []
+    tags: {}
   };
 }
 

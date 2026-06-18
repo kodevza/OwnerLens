@@ -1,4 +1,5 @@
-import type { AzureResourceTags } from "../../core/azure/resources";
+import type { Tags } from "../../core/azure/tags";
+import { getTagEntries } from "../../core/azure/tags";
 import { appConfig } from "../../core/config";
 import { formatValue } from "../../lib/utils";
 import { Badge } from "../../report/components/ui/badge";
@@ -6,7 +7,7 @@ import type { BadgeProps } from "../../report/components/ui/badge";
 
 const ownerTagNames = new Set(appConfig.azure.ownership.ownerTags.map((tag) => tag.name.toLowerCase()));
 
-type TagBadgeValue = string[] | AzureResourceTags | null | undefined;
+type TagBadgeValue = string[] | Tags | null | undefined;
 
 export function TagBadges({ tags }: { tags: TagBadgeValue }) {
   const visibleTags = normalizeTags(tags);
@@ -35,9 +36,15 @@ function normalizeTags(tags: TagBadgeValue): string[] {
     return tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0);
   }
 
-  return Object.entries(tags)
-    .map(([key, value]) => `${key.trim()}:${value.trim()}`)
+  return getTagEntries(tags)
+    .map(([key, value]) => formatTag(key, value))
     .filter((tag) => tag !== ":");
+}
+
+function formatTag(key: string, value: string): string {
+  const tagName = key.trim();
+  const tagValue = value.trim();
+  return tagValue.length > 0 ? `${tagName}:${tagValue}` : tagName;
 }
 
 function getTagBadgeVariant(tag: string): BadgeProps["variant"] {

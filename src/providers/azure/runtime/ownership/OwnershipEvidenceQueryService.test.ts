@@ -141,6 +141,75 @@ test("returns indirect activity log owner evidence for a service principal with 
   });
 });
 
+test("returns direct service principal and application owner evidence for a service principal", async () => {
+  const service = buildOwnershipEvidenceService({
+    azureSnapshot: azureSnapshot({ resourceGroups: [] }),
+    servicePrincipals: [
+      servicePrincipal({
+        id: "sp-direct",
+        displayName: "Direct Owner App",
+        servicePrincipalOwners: [
+          {
+            id: "sp-owner-1",
+            displayName: "Service Principal Owner",
+            userPrincipalName: "sp-owner@example.test",
+            mail: null,
+            ownerType: "User"
+          }
+        ],
+        applicationOwners: [
+          {
+            id: "app-owner-1",
+            displayName: "Application Owner",
+            userPrincipalName: null,
+            mail: "app-owner@example.test",
+            ownerType: "Group"
+          }
+        ],
+        roleAssignments: []
+      })
+    ]
+  });
+
+  await expect(service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "SP-DIRECT" })).resolves.toEqual({
+    target: {
+      kind: "servicePrincipal",
+      id: "sp-direct",
+      displayName: "Direct Owner App"
+    },
+    evidence: [
+      {
+        key: "ownerGroup:app-owner@example.test:app-owner@example.test:",
+        ownerCandidateKey: "ownerGroup:app-owner@example.test",
+        ownerDisplayName: "app-owner@example.test",
+        ownerType: "ownerGroup",
+        confidence: "high",
+        source: "entraApplicationOwner",
+        path: "direct",
+        discoverySource: "applicationOwner",
+        rank: 1,
+        evidence: "app-owner@example.test",
+        date: null,
+        relatedScopes: []
+      },
+      {
+        key: "ownerUser:sp-owner@example.test:sp-owner@example.test:",
+        ownerCandidateKey: "ownerUser:sp-owner@example.test",
+        ownerDisplayName: "sp-owner@example.test",
+        ownerType: "ownerUser",
+        confidence: "high",
+        source: "entraServicePrincipalOwner",
+        path: "direct",
+        discoverySource: "servicePrincipalOwner",
+        rank: 2,
+        evidence: "sp-owner@example.test",
+        date: null,
+        relatedScopes: []
+      }
+    ]
+  });
+});
+
 test("returns direct resource group cost center tag evidence", async () => {
   const service = buildOwnershipEvidenceService({
     azureSnapshot: azureSnapshot({
@@ -314,10 +383,14 @@ function entraSnapshot({
 function servicePrincipal({
   id,
   displayName,
+  servicePrincipalOwners = [],
+  applicationOwners = [],
   roleAssignments
 }: {
   id: string;
   displayName: string;
+  servicePrincipalOwners?: NonNullable<ServicePrincipal["servicePrincipalOwners"]>;
+  applicationOwners?: NonNullable<ServicePrincipal["applicationOwners"]>;
   roleAssignments: AzureRoleAssignment[];
 }): ServicePrincipal {
   return {
@@ -329,10 +402,10 @@ function servicePrincipal({
     accountEnabled: true,
     servicePrincipalType: "Application",
     servicePrincipalNames: [],
-    servicePrincipalOwners: [],
-    applicationOwners: [],
+    servicePrincipalOwners,
+    applicationOwners,
     replyUrls: [],
-    tags: [],
+    tags: {},
     homepage: null,
     loginUrl: null,
     publisherName: null,
