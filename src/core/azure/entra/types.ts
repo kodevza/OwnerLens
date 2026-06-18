@@ -64,3 +64,10 @@ export type EntraAppRoleAssignment = {
 export type EntraAppRole = ServicePrincipalAppRole;
 export type EntraServicePrincipalType = ServicePrincipalType;
 export type EntraOwner = ServicePrincipalOwner;
+export type EntraUserGroupMembershipResponse = {
+  user: string;
+  groups: Array<{
+    groupId: string;
+    groupDisplayName: string | null;
+  }>;
+};

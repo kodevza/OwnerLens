@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { UsersRound } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 
 import type { OwnershipEvidenceItem, OwnershipEvidenceResponse } from "../../core/ownership/types";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
@@ -6,109 +7,46 @@ import { SelectableGenericTable } from "../../report/components/SelectableGeneri
 import { ConfidenceBadge } from "../../report/components/ConfidenceBadge";
 import { Badge } from "../../report/components/ui/badge";
 import { Card } from "../../report/components/ui/card";
-import type { ReportFieldDescriptor } from "../../report/reportTypes";
+import { EntraUserGroupsDropdown } from "./EntraUserGroupsDropdown";
 import { readOwnershipEvidence, updateEvidenceStatus, type EvidenceStatus, type OwnershipEvidenceTarget } from "./api";
-
-const ownershipEvidenceFields: ReportFieldDescriptor<OwnershipEvidenceItem>[] = [
-  {
-    id: "ownerDisplayName",
-    label: "Owner candidate",
-    valueType: "text",
-    getValue: (evidence) => evidence.ownerDisplayName,
-    getFilterValue: (evidence) => ({
-      owner: evidence.ownerDisplayName,
-      type: evidence.ownerType
-    }),
-    filter: {
-      kind: "objectFields",
-      fields: [
-        { id: "owner", label: "Owner candidate", filterColumnId: "ownerDisplayName" },
-        { id: "type", label: "Type", filterColumnId: "ownerType", options: ["ownerUser", "ownerGroup", "ownerTag", "unknown"] }
-      ]
-    }
-  },
-  {
-    id: "status",
-    label: "Status",
-    valueType: "text",
-    getValue: (evidence) => getEvidenceStatusLabel(evidence),
-    filter: { kind: "multiSelect", options: ["Active", "Unactive"] }
-  },
-  {
-    id: "confidence",
-    label: "Confidence",
-    valueType: "ownerConfidence",
-    getValue: (evidence) => evidence.confidence,
-    filter: { kind: "multiSelect", options: ["high", "medium", "low", "none"] }
-  },
-  {
-    id: "source",
-    label: "Source",
-    valueType: "text",
-    getValue: (evidence) => evidence.source,
-    filter: {
-      kind: "multiSelect",
-      options: [
-        "resourceGroupOwner",
-        "subscriptionOwner",
-        "entraServicePrincipalOwner",
-        "entraApplicationOwner",
-        "activity",
-        "tag"
-      ]
-    }
-  },
-  {
-    id: "path",
-    label: "Path",
-    valueType: "text",
-    getValue: (evidence) => evidence.path,
-    filter: { kind: "multiSelect", options: ["direct", "indirect"] }
-  },
-  {
-    id: "discoverySource",
-    label: "Found by",
-    valueType: "text",
-    getValue: (evidence) => evidence.discoverySource,
-    filter: {
-      kind: "multiSelect",
-      options: ["azureRbac", "activityLog", "tag", "applicationOwner", "servicePrincipalOwner"]
-    }
-  },
-  {
-    id: "evidence",
-    label: "Evidence",
-    valueType: "text",
-    getValue: (evidence) => evidence.evidence,
-    filter: { kind: "text" }
-  },
-  {
-    id: "relatedScopes",
-    label: "Evidence location",
-    valueType: "text",
-    getValue: (evidence) => evidence.relatedScopes.map(formatOwnershipEvidenceScope).join(", "),
-    filter: { kind: "text" }
-  },
-  {
-    id: "date",
-    label: "Evidence date",
-    valueType: "date",
-    getValue: (evidence) => evidence.date,
-    filter: { kind: "text" }
-  },
-];
+import {
+  formatOwnershipEvidenceDiscoverySource,
+  formatOwnershipEvidencePath,
+  formatOwnershipEvidenceScope,
+  formatOwnershipEvidenceSource,
+  formatOwnershipEvidenceTarget,
+  getEvidenceStatusLabel
+} from "./ownershipEvidenceFormatters";
+import { ownershipEvidenceFields } from "./ownershipEvidenceFields";
 
 function buildOwnershipEvidenceFieldRenderers({
+  onUserGroupsClick,
   onStatusChange,
   updatingEvidenceKeys
 }: {
+  onUserGroupsClick: (evidence: OwnershipEvidenceItem, event: MouseEvent<HTMLButtonElement>) => void;
   onStatusChange: (evidence: OwnershipEvidenceItem, status: EvidenceStatus) => void;
   updatingEvidenceKeys: ReadonlySet<string>;
 }): ReportColumnRenderers<OwnershipEvidenceItem> {
   return {
     ownerDisplayName: (evidence) => (
       <div className="min-w-0">
-        <div className="font-medium">{evidence.ownerDisplayName || "-"}</div>
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="truncate font-medium" title={evidence.ownerDisplayName || undefined}>
+            {evidence.ownerDisplayName || "-"}
+          </div>
+          {evidence.ownerType === "ownerUser" && evidence.ownerDisplayName ? (
+            <button
+              aria-label={`Open direct groups for ${evidence.ownerDisplayName}`}
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-input text-muted-foreground hover:bg-muted hover:text-foreground"
+              title={`Open direct groups for ${evidence.ownerDisplayName}`}
+              type="button"
+              onClick={(event) => onUserGroupsClick(evidence, event)}
+            >
+              <UsersRound aria-hidden="true" className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
         <div className="mt-0.5 text-xs text-muted-foreground">{evidence.ownerType}</div>
       </div>
     ),
@@ -130,15 +68,16 @@ function buildOwnershipEvidenceFieldRenderers({
     status: (evidence) => {
       const isUpdating = updatingEvidenceKeys.has(evidence.key);
       const nextStatus: EvidenceStatus = evidence.disabled ? "active" : "unactive";
+      const nextStatusLabel = evidence.disabled ? "Active" : "Inactive";
 
       return (
         <Badge
           aria-disabled={isUpdating}
-          aria-label={`Set ${evidence.ownerDisplayName} ownership evidence ${nextStatus}`}
+          aria-label={`Set ${evidence.ownerDisplayName} ownership evidence ${nextStatusLabel}`}
           className="min-w-20 justify-center"
           role="button"
           tabIndex={isUpdating ? -1 : 0}
-          title={evidence.disabled ? "Set Active" : "Set Unactive"}
+          title={`Set ${nextStatusLabel}`}
           variant={evidence.disabled ? "riskMedium" : "riskLow"}
           onClick={() => {
             if (!isUpdating) {
@@ -172,6 +111,12 @@ type LoadState =
       message: string;
     };
 
+type UserGroupsDropdownSelection = {
+  left: number;
+  top: number;
+  user: string;
+};
+
 export function OwnershipEvidenceComponent({
   displayName,
   target
@@ -181,6 +126,7 @@ export function OwnershipEvidenceComponent({
 }) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [updatingEvidenceKeys, setUpdatingEvidenceKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const [userGroupsDropdown, setUserGroupsDropdown] = useState<UserGroupsDropdownSelection | null>(null);
 
   const loadOwnershipEvidence = useCallback(
     async (signal: AbortSignal) => {
@@ -243,13 +189,28 @@ export function OwnershipEvidenceComponent({
     [loadOwnershipEvidence]
   );
 
+  const handleUserGroupsClick = useCallback(
+    (evidence: OwnershipEvidenceItem, event: MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      const rect = event.currentTarget.getBoundingClientRect();
+
+      setUserGroupsDropdown({
+        left: rect.left,
+        top: rect.bottom + 4,
+        user: evidence.ownerDisplayName
+      });
+    },
+    []
+  );
+
   const fieldRenderers = useMemo(
     () =>
       buildOwnershipEvidenceFieldRenderers({
+        onUserGroupsClick: handleUserGroupsClick,
         onStatusChange: handleStatusChange,
         updatingEvidenceKeys
       }),
-    [handleStatusChange, updatingEvidenceKeys]
+    [handleStatusChange, handleUserGroupsClick, updatingEvidenceKeys]
   );
 
   if (loadState.status === "loading") {
@@ -275,69 +236,15 @@ export function OwnershipEvidenceComponent({
         minWidthClassName="min-w-[1360px]"
         rows={loadState.response.evidence}
       />
+      {userGroupsDropdown ? (
+        <EntraUserGroupsDropdown
+          key={`${userGroupsDropdown.user}:${userGroupsDropdown.left}:${userGroupsDropdown.top}`}
+          left={userGroupsDropdown.left}
+          top={userGroupsDropdown.top}
+          user={userGroupsDropdown.user}
+          onClose={() => setUserGroupsDropdown(null)}
+        />
+      ) : null}
     </section>
   );
-}
-
-function getEvidenceStatusLabel(evidence: Pick<OwnershipEvidenceItem, "disabled">): "Active" | "Unactive" {
-  return evidence.disabled ? "Unactive" : "Active";
-}
-
-function formatOwnershipEvidenceScope(scope: OwnershipEvidenceItem["relatedScopes"][number]): string {
-  const resourceGroup = scope.resourceGroup ? ` / ${scope.resourceGroup}` : "";
-  const assignmentScope = scope.scope ? ` on ${scope.scope}` : "";
-  const role = scope.roleDefinitionName ? ` as ${scope.roleDefinitionName}` : "";
-
-  return `${scope.subscriptionName ?? scope.subscriptionId ?? "Subscription"}${resourceGroup}${assignmentScope}${role}`;
-}
-
-function formatOwnershipEvidenceTarget(response: OwnershipEvidenceResponse): string {
-  const { target } = response;
-
-  if (target.kind === "resourceGroup") {
-    return `${target.subscriptionName ?? target.subscriptionId ?? "Subscription"} / ${target.resourceGroup ?? target.id}`;
-  }
-
-  return target.id;
-}
-
-function formatOwnershipEvidenceSource(source: OwnershipEvidenceItem["source"]): string {
-  switch (source) {
-    case "resourceGroupOwner":
-      return "Resource group owner";
-    case "subscriptionOwner":
-      return "Subscription owner";
-    case "entraServicePrincipalOwner":
-      return "Service principal owner";
-    case "entraApplicationOwner":
-      return "Application owner";
-    case "activity":
-      return "Activity";
-    case "tag":
-      return "Tag";
-  }
-}
-
-function formatOwnershipEvidencePath(path: OwnershipEvidenceItem["path"]): string {
-  switch (path) {
-    case "direct":
-      return "Direct";
-    case "indirect":
-      return "Indirect";
-  }
-}
-
-function formatOwnershipEvidenceDiscoverySource(source: OwnershipEvidenceItem["discoverySource"]): string {
-  switch (source) {
-    case "azureRbac":
-      return "Azure RBAC";
-    case "activityLog":
-      return "Activity log";
-    case "tag":
-      return "Tag";
-    case "applicationOwner":
-      return "Application owner";
-    case "servicePrincipalOwner":
-      return "Service principal owner";
-  }
 }

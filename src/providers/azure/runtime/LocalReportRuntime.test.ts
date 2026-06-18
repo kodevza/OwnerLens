@@ -303,6 +303,12 @@ test("defines local report runtime REST endpoints", async () => {
         });
       }
     ),
+    readEntraUserGroups: jest.fn((user: string) =>
+      Promise.resolve({
+        user: user.trim().toLowerCase(),
+        groups: [{ groupId: "group-1", groupDisplayName: "Automation Owners" }]
+      })
+    ),
     queryZeroTrustAssessmentReport: jest.fn((options) =>
       Promise.resolve(emptyCollection("zeroTrustAssessment.report", options))
     ),
@@ -420,6 +426,7 @@ test("defines local report runtime REST endpoints", async () => {
   const servicePrincipalsEndpoint = getEndpoint(endpoints, "/api/data/entra/servicePrincipals");
   const managedIdentitiesEndpoint = getEndpoint(endpoints, "/api/data/entra/managedIdentities");
   const entraPermissionsEndpoint = getEndpoint(endpoints, "/api/data/entra/permissions");
+  const entraUserGroupsEndpoint = getEndpoint(endpoints, "/api/data/entra/userGroups");
   const oauth2PermissionGrantsEndpoint = getEndpoint(endpoints, "/api/data/entra/oauth2PermissionGrants");
   const appRoleAssignmentsEndpoint = getEndpoint(endpoints, "/api/data/entra/appRoleAssignments");
   const resourceGroupOwnershipEndpoint = getEndpoint(endpoints, "/api/data/azureResources/resourceGroupOwnership");
@@ -447,6 +454,7 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/entra/servicePrincipals",
     "/api/data/entra/managedIdentities",
     "/api/data/entra/permissions",
+    "/api/data/entra/userGroups",
     "/api/data/entra/oauth2PermissionGrants",
     "/api/data/entra/appRoleAssignments",
     "/api/data/azureResources/resourceGroupOwnership",
@@ -533,6 +541,22 @@ test("defines local report runtime REST endpoints", async () => {
       url: new URL("http://localhost/api/data/entra/permissions")
     })
   ).toThrow("Missing required query parameter: principalId");
+  await expect(
+    entraUserGroupsEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/entra/userGroups?user=Alice%40Example.test")
+    })
+  ).resolves.toEqual({
+    user: "alice@example.test",
+    groups: [{ groupId: "group-1", groupDisplayName: "Automation Owners" }]
+  });
+  expect(runtime.readEntraUserGroups).toHaveBeenCalledWith("Alice@Example.test");
+  expect(() =>
+    entraUserGroupsEndpoint.handle({
+      req: {},
+      url: new URL("http://localhost/api/data/entra/userGroups")
+    })
+  ).toThrow("Missing required query parameter: user");
   await oauth2PermissionGrantsEndpoint.handle({
     req: {},
     url: new URL("http://localhost/api/data/entra/oauth2PermissionGrants?page=1&count=10")
