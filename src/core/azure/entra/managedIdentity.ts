@@ -10,6 +10,7 @@ import type { EntraServicePrincipal } from "./types";
 
 export type ManagedIdentity = EntraServicePrincipal & AzureIdentityRuntimeEnrichment & {
   servicePrincipalType: "ManagedIdentity";
+  resourceGroup?: string;
   managedIdentityAssignments: AzureManagedIdentityResourceAssignment[];
   assignedResourceGroups: string[];
   ownerCandidates?: OwnerCandidate[];

@@ -14,6 +14,7 @@ import type {
 } from "../../../core/ownership/types";
 
 export type PrincipalOwnerProjection = {
+  resourceGroup?: string;
   ownerCandidates: OwnerCandidate[];
   potentialOwners: string[];
   ownerConfidence: OwnerConfidence;
@@ -54,7 +55,10 @@ export function projectManagedIdentityOwners(
       ])
     : [];
 
-  return buildPrincipalOwnerProjection(ownerCandidates);
+  return {
+    resourceGroup: identity.resourceGroup,
+    ...buildPrincipalOwnerProjection(ownerCandidates)
+  };
 }
 
 export function projectServicePrincipalOwners(

@@ -45,7 +45,7 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
     id: "assignedResourceGroups",
     label: "Resource group",
     valueType: "list",
-    getValue: (identity) => identity.assignedResourceGroups,
+    getValue: (identity) => identity.resourceGroup ? [identity.resourceGroup] : identity.assignedResourceGroups,
     filter: { kind: "text" }
   },
   {
