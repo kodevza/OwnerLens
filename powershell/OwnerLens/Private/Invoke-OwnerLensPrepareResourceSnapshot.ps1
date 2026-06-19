@@ -1,11 +1,21 @@
-param(
+<#
+.SYNOPSIS
+Creates an OwnerLens Azure resource snapshot file.
+
+.DESCRIPTION
+Exports subscriptions, resource groups, resources, identities, role assignments, and optional Azure Monitor activity logs into the local JSON snapshot consumed by OwnerLens.
+#>
+
+function Invoke-OwnerLensPrepareResourceSnapshot {
+  [CmdletBinding()]
+  param(
   [string]$OutputPath = ".\data\snapshot.json",
   [int]$ActivityDays = 90,
   [int]$MaxActivityRecords = 10000,
   [switch]$SkipAuditLogsExport,
   [string]$SubscriptionIds = "",
   [switch]$ExpandResourceProperties
-)
+  )
 
 if (-not (Get-Command Get-AzContext -ErrorAction SilentlyContinue)) {
   throw "Az PowerShell module missing. Install: Install-Module Az -Scope CurrentUser"
@@ -14,8 +24,6 @@ if (-not (Get-Command Get-AzContext -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command Invoke-AzRestMethod -ErrorAction SilentlyContinue)) {
   throw "Invoke-AzRestMethod missing. Update Az.Accounts: Update-Module Az.Accounts"
 }
-
-. "$PSScriptRoot\azure-activity-check.ps1"
 
 function Write-SnapshotProgress {
   param([string]$Message)
@@ -344,3 +352,4 @@ if (-not [string]::IsNullOrWhiteSpace($outputDirectory) -and -not (Test-Path $ou
 Write-SnapshotProgress "Writing snapshot JSON to $OutputPath"
 $snapshot | ConvertTo-Json -Depth 20 | Out-File $OutputPath -Encoding utf8
 Write-SnapshotProgress "Snapshot complete: $($snapshot.meta.subscriptionCount) subscriptions, $($snapshot.meta.resourceGroupCount) resource groups, $($snapshot.meta.resourceCount) resources, $($snapshot.meta.userAssignedManagedIdentityCount) user-assigned managed identities, $($snapshot.meta.roleAssignmentCount) role assignments, $($snapshot.meta.activityLogCount) activity logs"
+}

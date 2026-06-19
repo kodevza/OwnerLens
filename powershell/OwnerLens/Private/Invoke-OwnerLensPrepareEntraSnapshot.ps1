@@ -1,10 +1,16 @@
-param(
-  [string]$OutputPath = ".\data\entra-snapshot.json",
+<#
+.SYNOPSIS
+Creates an OwnerLens Microsoft Entra snapshot file.
 
-  [switch]$LoadFunctionsOnly
-)
+.DESCRIPTION
+Exports service principals, application registrations, groups, group membership facts, owners, credentials, and permissions into the local JSON snapshot consumed by OwnerLens.
+#>
 
-. "$PSScriptRoot/utils.ps1"
+function Invoke-OwnerLensPrepareEntraSnapshot {
+  [CmdletBinding()]
+  param(
+  [string]$OutputPath = ".\data\entra-snapshot.json"
+  )
 
 $ownerExpand = "owners(`$select=id,displayName,userPrincipalName,mail)"
 
@@ -142,10 +148,6 @@ function Get-EntraServicePrincipalAppRoleAssignmentsBatch {
   }
 
   return $assignments
-}
-
-if ($LoadFunctionsOnly) {
-  return
 }
 
 $requiredGraphModules = @(
@@ -403,3 +405,4 @@ if (-not [string]::IsNullOrWhiteSpace($outputDirectory) -and -not (Test-Path $ou
 }
 
 $snapshot | ConvertTo-Json -Depth 20 | Out-File $OutputPath -Encoding utf8
+}

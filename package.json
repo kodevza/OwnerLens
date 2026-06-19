@@ -19,6 +19,7 @@
     "dist",
     "index.html",
     "migrations",
+    "powershell",
     "src",
     "tools",
     "contracts",

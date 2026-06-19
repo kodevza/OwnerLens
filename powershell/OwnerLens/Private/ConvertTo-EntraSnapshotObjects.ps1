@@ -1,3 +1,11 @@
+<#
+.SYNOPSIS
+Converts Microsoft Entra directory objects into OwnerLens snapshot records.
+
+.DESCRIPTION
+Normalizes applications, service principals, groups, owners, memberships, tags, and app role assignments into the local snapshot shape used by OwnerLens.
+#>
+
 function Get-DirectoryObjectSnapshotValue {
   param(
     [Parameter(Mandatory = $true)]

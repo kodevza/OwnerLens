@@ -48,8 +48,6 @@ flowchart TD
 
 ## Requirements
 
-- Node.js 20 or newer
-- npm
 - PowerShell 7 or Windows PowerShell for snapshot export scripts
 - Azure PowerShell and Microsoft Graph PowerShell modules when exporting data
 
@@ -84,121 +82,51 @@ Sign in to Microsoft Graph:
 Connect-MgGraph -TenantId "<tenant-id>" -Scopes "Application.Read.All","Group.Read.All","Directory.Read.All"
 ```
 
+Import the PowerShell module:
+
+```powershell
+Import-Module ./artifacts/OwnerLens/OwnerLens.psd1 -Force
+```
+
+Start OwnerLens from PowerShell on Windows:
+
+```powershell
+Start-OwnerLens
+Open-OwnerLens
+Get-OwnerLensStatus
+Stop-OwnerLens
+```
+
+`Start-OwnerLens` starts the local app on `127.0.0.1` using a free port and
+stores runtime state under `$env:LOCALAPPDATA\OwnerLens`. To use a specific data
+directory or port, pass them explicitly:
+
+```powershell
+Start-OwnerLens -DataPath C:\OwnerLensData -Port 4174
+```
+
 Create the resource snapshot:
 
-```bash
-npx ownerlens collect:azure -SubscriptionIds "sub-id-1,sub-id-2"
+```powershell
+Invoke-OwnerLensCollectAzure -SubscriptionIds "sub-id-1,sub-id-2"
 ```
 
 Create the Entra snapshot:
 
-```bash
-npx ownerlens collect:entra -TenantId "<tenant-id>"
+```powershell
+Invoke-OwnerLensCollectEntra -TenantId "<tenant-id>"
 ```
 
-More script options are documented in [tools/README.md](tools/README.md).
+More collector options are documented in [tools/README.md](tools/README.md).
 
 Snapshot files can contain tenant, subscription, resource, identity, group, and
 activity-log metadata. Review them before sharing. Files matching
 `data/*snapshot.json` are ignored by git.
 
-## Local Development
+## Development
 
-Clone the repository, install dependencies, then run the development server:
-
-```bash
-npm install
-npm run dev
-```
-
-Open the Vite URL printed by the command, usually `http://127.0.0.1:5173`.
-
-You can also exercise the published CLI entrypoint from a repository checkout:
-
-```bash
-npm run start
-npm run preview
-npm run collect:azure -- -SubscriptionIds "sub-id-1,sub-id-2"
-npm run collect:entra -- -TenantId "<tenant-id>"
-```
-
-For a production build:
-
-```bash
-npm run build
-```
-
-## Configure Ownership Rules
-
-Edit [src/core/config.ts](src/core/config.ts) to change ownership resolution defaults.
-
-`ownerTags` is ordered by priority. The tag value is treated as the owner
-identity and can be a group name, security group alias, or user email.
-
-```ts
-export const appConfig = {
-  azure: {
-    ownership: {
-      ownerTags: [
-        { name: "ownerGroup", confidence: "high" },
-        { name: "costCenter", confidence: "high" },
-        { name: "owner", confidence: "medium" }
-      ]
-    }
-  }
-};
-```
-
-## Test
-
-```bash
-npm test
-```
-
-Run only component tests:
-
-```bash
-npm run test:components
-```
-
-Track component-test coverage:
-
-```bash
-npm run test:components:coverage
-```
-
-The component coverage report is written to `coverage/components`. Jest also
-enforces the current component coverage baseline so new UI changes do not
-silently reduce coverage.
-
-## Dependency Graph
-
-Generate a folder-level dependency graph:
-
-```bash
-npm run deps:graph
-```
-
-The generated SVG is written to `output/dependency-folders.svg`.
-
-Generate a file-level dependency graph:
-
-```bash
-npm run deps:graph:files
-```
-
-The generated SVG is written to `output/dependency-files.svg`.
-
-## Project Structure
-
-- `src/App.tsx` loads snapshot files and renders the report.
-- `src/core/config.ts` contains ownership resolution configuration.
-- `src/report` contains report UI, filtering, view helpers, and tests.
-- `src/providers/azure` contains Azure and Entra domain models and ownership
-  analysis logic.
-- `tools` contains PowerShell scripts for exporting local snapshot files.
-
-## Contributing
+See [DEVELOPMENT.md](DEVELOPMENT.md) for local development, testing, dependency
+graph, project structure, and ownership rule configuration notes.
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for local
 development expectations.

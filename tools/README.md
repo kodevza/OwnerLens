@@ -1,18 +1,17 @@
-# OwnerLens Tools
+# OwnerLens Collector Commands
 
-PowerShell scripts in this directory create the JSON snapshot files consumed by the OwnerLens app.
+OwnerLens snapshot collectors are exposed through the npm CLI and the PowerShell module in `powershell/OwnerLens`.
 
-## Core Files
+The private snapshot preparation functions live under `powershell/OwnerLens/Private`:
 
-- `prepare-resource-snapshot.ps1` creates the Azure resource snapshot used by the app. It exports subscriptions, resource groups, resources, managed identities, role assignments, and optional Azure Monitor activity logs.
-- `prepare-entra-snapshot.ps1` creates the Entra snapshot used by the app. It exports service principals, application registrations, groups, and raw group membership facts so ownership and identity relationships can be resolved.
+- `Invoke-OwnerLensPrepareResourceSnapshot.ps1` creates the Azure resource snapshot used by the app. It exports subscriptions, resource groups, resources, managed identities, role assignments, and optional Azure Monitor activity logs.
+- `Invoke-OwnerLensPrepareEntraSnapshot.ps1` creates the Entra snapshot used by the app. It exports service principals, application registrations, groups, and raw group membership facts so ownership and identity relationships can be resolved.
 
-Run these commands from the repository root so the default output paths write into `.\data`.
+Run collector commands from the repository root so default output paths write into `.\data`.
 
 ## Prerequisites
 
-- PowerShell 7 or Windows PowerShell
-- PowerShell 7 (`pwsh`) and Pester 5.7 or newer for PowerShell tests. `npm run test:pester` installs Pester for the current user if it is missing.
+- PowerShell 7 (`pwsh`) and Pester 5.7 or newer for PowerShell tests.
 - Azure PowerShell modules:
 
 ```powershell
@@ -45,46 +44,37 @@ Connect-MgGraph -TenantId "<tenant-id>" -Scopes "Application.Read.All","Group.Re
 
 Create the Azure resource snapshot:
 
-```powershell
-.\tools\collect-azure.ps1
+```bash
+npm run collect:azure
 ```
 
 By default this writes `.\data\snapshot.json`, using the current Azure subscription and the last 90 days of activity logs.
 
 Common resource snapshot options:
 
-```powershell
-.\tools\collect-azure.ps1 -SubscriptionIds "sub-id-1,sub-id-2"
-.\tools\collect-azure.ps1 -OutputPath ".\data\snapshot-prod.json"
-.\tools\collect-azure.ps1 -ActivityDays 30 -MaxActivityRecords 5000
-.\tools\collect-azure.ps1 -SkipAuditLogsExport
-.\tools\collect-azure.ps1 -ExpandResourceProperties
+```bash
+npm run collect:azure -- -SubscriptionIds "sub-id-1,sub-id-2"
+npm run collect:azure -- -OutputPath ".\data\snapshot-prod.json"
+npm run collect:azure -- -ActivityDays 30 -MaxActivityRecords 5000
+npm run collect:azure -- -SkipAuditLogsExport
+npm run collect:azure -- -ExpandResourceProperties
 ```
 
 Resource property expansion is disabled by default because OwnerLens reads the standard resource fields plus identity data from the resource list response. Use `-ExpandResourceProperties` only when debugging or when you need Azure's additional expanded metadata in a raw snapshot.
 
 Create the Entra snapshot:
 
-```powershell
-.\tools\collect-entra.ps1
+```bash
+npm run collect:entra
 ```
 
 By default this writes `.\data\entra-snapshot.json`.
 
-Common Entra snapshot option:
-
-```powershell
-.\tools\collect-entra.ps1 -TenantId "<tenant-id>"
-.\tools\collect-entra.ps1 -OutputPath ".\data\entra-snapshot-prod.json"
-```
-
-After both files exist, start the app with `npm run dev` and refresh the browser.
-
-The same collectors are available through npm scripts:
+Common Entra snapshot options:
 
 ```bash
-npm run collect:azure -- -SubscriptionIds "sub-id-1,sub-id-2"
 npm run collect:entra -- -TenantId "<tenant-id>"
+npm run collect:entra -- -OutputPath ".\data\entra-snapshot-prod.json"
 ```
 
 After publishing the package, the equivalent `npx` commands are:
@@ -94,13 +84,13 @@ npx ownerlens collect:azure -SubscriptionIds "sub-id-1,sub-id-2"
 npx ownerlens collect:entra -TenantId "<tenant-id>"
 ```
 
-## Scripts
+The same collectors are also available from the PowerShell module:
 
-- `collect-azure.ps1` signs in when needed, then calls `prepare-resource-snapshot.ps1`.
-- `collect-entra.ps1` signs in when needed, then calls `prepare-entra-snapshot.ps1`.
-- `prepare-resource-snapshot.ps1` exports Azure subscriptions, resource groups, resources, user-assigned managed identities, role assignments, and optional Azure Monitor activity logs.
-- `prepare-entra-snapshot.ps1` exports Entra service principals, application registrations, owner relationships, groups, and group memberships. Service principal owner evidence keeps Graph service principal owners and matching application registration owners separate. Group memberships are collected as object IDs and member object types; Azure RBAC access inherited through a group is resolved later by the local runtime, not by the collector.
-- `azure-activity-check.ps1` is a helper loaded by `prepare-resource-snapshot.ps1`; it is not usually run directly.
+```powershell
+Import-Module .\powershell\OwnerLens\OwnerLens.psd1 -Force
+Invoke-OwnerLensCollectAzure -SubscriptionIds "sub-id-1,sub-id-2"
+Invoke-OwnerLensCollectEntra -TenantId "<tenant-id>"
+```
 
 ## Notes
 

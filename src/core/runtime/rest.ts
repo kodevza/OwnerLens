@@ -4,6 +4,7 @@ import type { RuntimeCollectionCsvExport } from "./collectionExport";
 export type RuntimeRequest = {
   method?: string;
   url?: string;
+  headers?: Record<string, string | string[] | undefined>;
   body?: unknown;
   [Symbol.asyncIterator]?: () => AsyncIterator<Uint8Array | string>;
 };
@@ -27,6 +28,7 @@ export type RuntimeRestEndpoint = {
 export type RuntimeRestMiddlewareOptions = {
   basePath: string;
   endpoints: RuntimeRestEndpoint[];
+  runtimeToken?: string;
   getErrorStatusCode(error: unknown): number;
 };
 
@@ -40,6 +42,8 @@ export function createRuntimeRestMiddleware(options: RuntimeRestMiddlewareOption
     }
 
     try {
+      validateRuntimeToken(req, options.runtimeToken);
+
       const endpoint = options.endpoints.find(
         (candidate) =>
           candidate.path === url.pathname &&
@@ -60,6 +64,32 @@ export function createRuntimeRestMiddleware(options: RuntimeRestMiddlewareOption
       );
     }
   };
+}
+
+function validateRuntimeToken(req: RuntimeRequest, runtimeToken: string | undefined): void {
+  if (!runtimeToken) {
+    return;
+  }
+
+  const providedToken = readHeader(req, "x-ownerlens-runtime-token");
+  if (providedToken !== runtimeToken) {
+    throw new RuntimeHttpError("Runtime API token is missing or invalid.", 401);
+  }
+}
+
+function readHeader(req: RuntimeRequest, name: string): string | undefined {
+  const headers = req.headers;
+  if (!headers) {
+    return undefined;
+  }
+
+  const headerName = Object.keys(headers).find((candidate) => candidate.toLowerCase() === name.toLowerCase());
+  const header = headerName ? headers[headerName] : undefined;
+  if (Array.isArray(header)) {
+    return header[0];
+  }
+
+  return header;
 }
 
 function isRuntimeApiPath(pathname: string, basePath: string): boolean {

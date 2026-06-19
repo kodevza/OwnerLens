@@ -117,7 +117,7 @@ If `-SubscriptionIds` is provided, split it by comma and export only those subsc
 Example:
 
 ```powershell
-.\tools\prepare-resource-snapshot.ps1 -SubscriptionIds "sub-id-1,sub-id-2"
+npm run collect:azure -- -SubscriptionIds "sub-id-1,sub-id-2"
 ```
 
 Subscription names are also accepted for admin convenience.

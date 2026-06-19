@@ -6,12 +6,14 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set_version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
 
@@ -21,12 +23,15 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Set package version from tag
+        id: set_version
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           if [ "$VERSION" = "$GITHUB_REF_NAME" ]; then
             echo "Expected tag name to start with v, got: $GITHUB_REF_NAME" >&2
             exit 1
           fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - run: npm ci
@@ -35,9 +40,47 @@ jobs:
       - run: npm run build --if-present
       - name: Publish package
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
           if [[ "$VERSION" == *-* ]]; then
             npm publish --tag next
           else
             npm publish
           fi
+
+  package-powershell-module:
+    runs-on: windows-latest
+    needs: publish
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Package PowerShell module
+        shell: pwsh
+        run: |
+          $version = "${{ needs.publish.outputs.version }}"
+          ./scripts/package-powershell-module.ps1 -Version $version
+
+      - name: Upload PowerShell module release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ needs.publish.outputs.version }}"
+          $tag = $env:GITHUB_REF_NAME
+          $zipPath = "artifacts/release/OwnerLens-$version-win-x64.zip"
+          $checksumPath = "$zipPath.sha256"
+
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --verify-tag --title $tag --notes ""
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to create GitHub Release for $tag."
+            }
+          }
+
+          gh release upload $tag $zipPath $checksumPath --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to upload PowerShell module release assets for $tag."
+          }
