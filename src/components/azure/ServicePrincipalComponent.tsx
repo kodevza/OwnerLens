@@ -9,7 +9,7 @@ import { getTagNames } from "../../core/azure/tags";
 import { azureServicePrincipalColumnHelp } from "./azureReportConfig";
 import { exportServicePrincipalsCsv, readRemediationPackage, readServicePrincipals } from "./api";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
-import type { ColumnFilters } from "../../core/collectionControls";
+import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
 import {
@@ -99,7 +99,7 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
   },
   {
     id: "oauthPermissionsCount",
-    label: "Entra API permissions",
+    label: "API Permissions",
     valueType: "text",
     getValue: (sp) => sp.oauthPermissionsCount,
     getFilterValue: (sp) => sp.entraPermissionRisk,
@@ -125,17 +125,27 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
 
 export function ServicePrincipalComponent({
   initialFilters,
+  initialPage,
+  initialSortRules,
   onAzureRbacClick,
   onEntraPermissionsClick,
+  onFiltersChange,
   onOwnershipEvidenceClick,
+  onPageChange,
   onRemediationPackageClick,
+  onSortRulesChange,
   onZtaRemediationsClick
 }: {
   initialFilters?: ColumnFilters;
+  initialPage?: number;
+  initialSortRules?: SortRule[];
   onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
   onEntraPermissionsClick?: (principal: EntraPermissionsPrincipalSelection) => void;
+  onFiltersChange?: (filters: ColumnFilters) => void;
   onOwnershipEvidenceClick?: (selection: OwnershipEvidenceSelection) => void;
+  onPageChange?: (page: number) => void;
   onRemediationPackageClick?: (remediationPackage: RemediationPackage) => void;
+  onSortRulesChange?: (sortRules: SortRule[]) => void;
   onZtaRemediationsClick?: (objectId: string) => void;
 }) {
   const [openPackageState, setOpenPackageState] = useState<{
@@ -196,9 +206,14 @@ export function ServicePrincipalComponent({
         fields={servicePrincipalFields}
         getRowKey={(row) => row.id}
         initialFilters={initialFilters}
+        initialPage={initialPage}
+        initialSortRules={initialSortRules}
         loadPage={readServicePrincipals}
         loadingMessage="Loading service principals..."
         minWidthClassName="min-w-[2380px]"
+        onFiltersChange={onFiltersChange}
+        onPageChange={onPageChange}
+        onSortRulesChange={onSortRulesChange}
         renderSelectionOverlay={({ filters, selectAllMatchingFilters, selectedRowKeys, sortRules }) => (
           <CsvSelectionActionBar
             filters={filters}

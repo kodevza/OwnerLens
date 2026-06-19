@@ -278,6 +278,11 @@ test("renders service principal tags as colored badges", async () => {
 
   await waitForText(container, "owner:team-a");
 
+  const displayNameLink = getCell("Tagged app").querySelector("a");
+  expect(displayNameLink?.getAttribute("href")).toBe(
+    "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/ManagedAppMenuBlade/~/Overview/objectId/tagged-sp-id/appId/tagged-client-id"
+  );
+
   const ownerTagBadge = getCell("owner:team-a").querySelector('span[title="owner:team-a"]');
   const environmentTagBadge = getCell("environment:prod").querySelector('span[title="environment:prod"]');
   expect(ownerTagBadge?.className).toContain("bg-emerald-100");

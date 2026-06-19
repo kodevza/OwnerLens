@@ -59,13 +59,6 @@ export function SelectableGenericTable<TRow>(props: SelectableGenericTableProps<
     },
     [onSelectionChange, selectedRowKeys]
   );
-  const handleRuntimeControlsChange = useCallback(
-    ({ filters, sortRules }: { filters: ColumnFilters; sortRules: SortRule[] }) => {
-      setSelectionFilters(filters);
-      setSelectionSortRules(sortRules);
-    },
-    []
-  );
   const selectionOverlay =
     renderSelectionOverlay && resolvedSelectedRowKeys.length > 0
       ? renderSelectionOverlay({
@@ -138,6 +131,11 @@ export function SelectableGenericTable<TRow>(props: SelectableGenericTableProps<
     const handleFiltersChange = (nextFilters: ColumnFilters) => {
       setSelectionFilters(nextFilters);
       tableProps.onFiltersChange?.(nextFilters);
+    };
+    const handleRuntimeControlsChange = ({ filters, sortRules }: { filters: ColumnFilters; sortRules: SortRule[] }) => {
+      setSelectionFilters(filters);
+      setSelectionSortRules(sortRules);
+      tableProps.onRuntimeControlsChange?.({ filters, sortRules });
     };
 
     return (

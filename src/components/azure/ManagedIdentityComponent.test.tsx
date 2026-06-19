@@ -209,6 +209,11 @@ test("renders managed identity tags as badges", async () => {
 
   await waitForText(container, "ownerlens");
 
+  const displayNameLink = getCell("uami-a").querySelector("a");
+  expect(displayNameLink?.getAttribute("href")).toBe(
+    "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/ManagedAppMenuBlade/~/Overview/objectId/principal-uami-1/appId/client-1"
+  );
+
   const tagsCell = getCell("ownerlens");
   const badges = [...tagsCell.querySelectorAll("span[title]")].filter((element) =>
     ["ownerlens", "managed-identity"].includes(element.getAttribute("title") ?? "")

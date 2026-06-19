@@ -12,10 +12,12 @@ import type { ZtaRemediationSummary } from "../../core/azure/ztaReport";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
 import { Badge, type BadgeProps } from "../../report/components/ui/badge";
 import type { OwnershipEvidenceTarget } from "./api";
+import { EntraLinkBadge, buildEntraEnterpriseApplicationPortalUrl } from "./EntraLinkBadge";
 import { ZtaRemediationBadge } from "./ZtaRemediationBadge";
 
 type EntraPrincipalSummaryRow = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & ZtaRemediationSummary & {
   accountEnabled?: boolean;
+  appId?: string;
   displayName: string;
   id: string;
   roleAssignments?: AzureRoleAssignment[];
@@ -23,6 +25,7 @@ type EntraPrincipalSummaryRow = EntraPrincipalPermissionSummary & EntraPrincipal
 
 type EntraPrincipalIdentitySummary = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & {
   accountEnabled?: boolean;
+  appId?: string;
   displayName: string;
   id: string;
   roleAssignments?: AzureRoleAssignment[];
@@ -75,7 +78,7 @@ export function buildServicePrincipalFieldRenderers<TRow>({
       const sp = readPrincipalSummary(row);
 
       return sp ? (
-        <PrincipalDisplayName disabled={sp.accountEnabled === false} displayName={sp.displayName} objectId={sp.id} />
+        <PrincipalDisplayName appId={sp.appId} disabled={sp.accountEnabled === false} displayName={sp.displayName} objectId={sp.id} />
       ) : (
         <EmptyValue />
       );
@@ -156,18 +159,31 @@ export function buildServicePrincipalFieldRenderers<TRow>({
 }
 
 function PrincipalDisplayName({
+  appId,
   disabled,
   displayName,
   objectId
 }: {
+  appId?: string;
   disabled: boolean;
   displayName: string;
   objectId: string;
 }) {
+  const href = buildEntraEnterpriseApplicationPortalUrl({ appId, objectId });
+  const title = `Open in Microsoft Entra admin center: ${displayName || objectId}`;
+
   return (
     <div className="min-w-0">
-      <div className={disabled ? "font-medium text-muted-foreground" : "font-medium"}>{displayName || "-"}</div>
-      <div className="mt-0.5 font-mono text-xs text-muted-foreground">{objectId}</div>
+      <div className={disabled ? "font-medium text-muted-foreground" : "font-medium"}>
+        <EntraLinkBadge href={href} title={title}>
+          {displayName || "-"}
+        </EntraLinkBadge>
+      </div>
+      <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+        <EntraLinkBadge href={href} title={title}>
+          {objectId}
+        </EntraLinkBadge>
+      </div>
     </div>
   );
 }

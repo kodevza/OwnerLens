@@ -58,6 +58,8 @@ export type GenericRemoteTableProps<TRow> = Omit<
   "filterOptions" | "filters" | "onFiltersChange" | "onPageChange" | "page" | "rows" | "sortRules" | "totalCount"
 > & {
   initialFilters?: ColumnFilters;
+  initialPage?: number;
+  initialSortRules?: SortRule[];
   loadPage: (input: {
     filters: ColumnFilters;
     page: number;
@@ -66,7 +68,9 @@ export type GenericRemoteTableProps<TRow> = Omit<
   }) => Promise<GenericTablePage<TRow>>;
   loadingMessage: string;
   onFiltersChange?: (filters: ColumnFilters) => void;
+  onPageChange?: (page: number) => void;
   onRuntimeControlsChange?: (controls: { filters: ColumnFilters; sortRules: SortRule[] }) => void;
+  onSortRulesChange?: (sortRules: SortRule[]) => void;
 };
 
 export type GenericTableWrapperProps<TRow> = GenericTableProps<TRow> | GenericRemoteTableProps<TRow>;
@@ -98,18 +102,22 @@ export function GenericTable<TRow>(props: GenericTableWrapperProps<TRow>) {
 export function GenericRemoteTable<TRow>({
   fields,
   initialFilters,
+  initialPage,
+  initialSortRules,
   loadPage,
   loadingMessage,
   onFiltersChange,
+  onPageChange,
   onRuntimeControlsChange,
+  onSortRulesChange,
   selectionColumn,
   ...tableProps
 }: GenericRemoteTableProps<TRow> & { selectionColumn?: GenericTableSelectionColumn<TRow> }) {
   const [collection, setCollection] = useState<GenericTablePage<TRow> | null>(null);
   const [filters, setFilters] = useState<ColumnFilters>(() => initialFilters ?? {});
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
-  const [page, setPage] = useState(1);
-  const [sortRules, setSortRules] = useState<SortRule[]>([]);
+  const [page, setPage] = useState(() => initialPage ?? 1);
+  const [sortRules, setSortRules] = useState<SortRule[]>(() => initialSortRules ?? []);
   const runtimeFilters = useMemo(() => remapColumnFiltersForRuntime(fields, filters), [fields, filters]);
   const runtimeSortRules = useMemo(() => remapSortRulesForRuntime(fields, sortRules), [fields, sortRules]);
 
@@ -186,11 +194,17 @@ export function GenericRemoteTable<TRow>({
           setPage(1);
           setFilters(nextFilters);
           onFiltersChange?.(nextFilters);
+          onPageChange?.(1);
         }}
-        onPageChange={setPage}
+        onPageChange={(nextPage) => {
+          setPage(nextPage);
+          onPageChange?.(nextPage);
+        }}
         onSortRulesChange={(nextSortRules) => {
           setPage(1);
           setSortRules(nextSortRules);
+          onPageChange?.(1);
+          onSortRulesChange?.(nextSortRules);
         }}
       />
     </>

@@ -25,6 +25,13 @@ if ($Version -notmatch '^(?<BaseVersion>\d+\.\d+\.\d+(?:\.\d+)?)(?:-(?<Prereleas
 
 $moduleVersion = [version]$Matches.BaseVersion
 $prerelease = $Matches.Prerelease
+$manifestPrerelease = $null
+if ($prerelease) {
+  $manifestPrerelease = $prerelease -replace '[^0-9A-Za-z]', ''
+  if (-not $manifestPrerelease) {
+    throw "Version '$Version' has no PowerShell-compatible prerelease label after manifest normalization."
+  }
+}
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $runtimePath = Join-Path $repoRoot "powershell\OwnerLens\bin\win-x64"
 $stagingRoot = Join-Path $repoRoot "artifacts\powershell-package"
@@ -61,7 +68,10 @@ $manifestUpdate = @{
   ModuleVersion = $moduleVersion
 }
 if ($prerelease) {
-  $manifestUpdate.Prerelease = $prerelease
+  if ($manifestPrerelease -ne $prerelease) {
+    Write-Host "Normalized PowerShell manifest prerelease from '$prerelease' to '$manifestPrerelease'."
+  }
+  $manifestUpdate.Prerelease = $manifestPrerelease
 }
 Update-ModuleManifest @manifestUpdate
 
@@ -69,8 +79,8 @@ $manifestData = Import-PowerShellDataFile -LiteralPath $manifestPath
 if ([string]$manifestData.ModuleVersion -ne [string]$moduleVersion) {
   throw "OwnerLens.psd1 ModuleVersion '$($manifestData.ModuleVersion)' does not match expected '$moduleVersion'."
 }
-if ($prerelease -and $manifestData.PrivateData.PSData.Prerelease -ne $prerelease) {
-  throw "OwnerLens.psd1 prerelease '$($manifestData.PrivateData.PSData.Prerelease)' does not match expected '$prerelease'."
+if ($manifestPrerelease -and $manifestData.PrivateData.PSData.Prerelease -ne $manifestPrerelease) {
+  throw "OwnerLens.psd1 prerelease '$($manifestData.PrivateData.PSData.Prerelease)' does not match expected '$manifestPrerelease'."
 }
 Test-ModuleManifest -Path $manifestPath -ErrorAction Stop | Out-Null
 

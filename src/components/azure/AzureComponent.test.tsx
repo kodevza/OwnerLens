@@ -43,6 +43,141 @@ test("hides the Zero Trust Assessment tab by default", () => {
   act(() => root.unmount());
 });
 
+test("keeps service principal filters and page separate from managed identities", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+    const url = new URL(requestUrl, window.location.origin);
+
+    if (requestUrl.startsWith("/api/data/entra/managedIdentities")) {
+      return jsonResponse({
+        collectionId: "entra.managedIdentities",
+        columns: [],
+        count: 1,
+        page: Number(url.searchParams.get("page") ?? "1"),
+        pageSize: 20,
+        rows: [
+          {
+            accountEnabled: true,
+            appDisplayName: null,
+            appId: "mi-client-id",
+            appOwnerOrganizationId: null,
+            azureRbac: "No Azure RBAC assignments",
+            displayName: "uami-prod",
+            homepage: null,
+            id: "mi-object-id",
+            loginUrl: null,
+            managedIdentityAssignments: [],
+            permissionRisk: "none",
+            rbacRoleAssignmentCount: 0,
+            rbacRoleLevel: "none",
+            rbacSubscriptionCount: 0,
+            publisherName: null,
+            replyUrls: [],
+            roleAssignments: [],
+            oauthPermissionsCount: 0,
+            appRolesPermissionCount: 0,
+            entraPermissionRisk: "none",
+            servicePrincipalNames: [],
+            servicePrincipalType: "ManagedIdentity",
+            assignedResourceGroups: [],
+            potentialOwners: [],
+            ownerConfidence: "none",
+            tags: [],
+            ztaMaxRisk: "none",
+            ztaRemediationCountAll: 0,
+            ztaRemediationFailedCount: 0
+          }
+        ]
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 75,
+      page: Number(url.searchParams.get("page") ?? "1"),
+      pageSize: 20,
+      rows: [
+        {
+          accountEnabled: true,
+          appDisplayName: "Payroll API",
+          appId: "sp-client-id",
+          appOwnerOrganizationId: null,
+          azureRbac: "No Azure RBAC assignments",
+          displayName: "Payroll API",
+          homepage: null,
+          id: "sp-object-id",
+          loginUrl: null,
+          permissionRisk: "none",
+          rbacRoleAssignmentCount: 0,
+          rbacRoleLevel: "none",
+          rbacSubscriptionCount: 0,
+          publisherName: null,
+          replyUrls: [],
+          roleAssignments: [],
+          oauthPermissionsCount: 0,
+          appRolesPermissionCount: 0,
+          entraPermissionRisk: "none",
+          servicePrincipalNames: [],
+          servicePrincipalType: "Application",
+          potentialOwners: [],
+          ownerConfidence: "none",
+          tags: [],
+          ztaMaxRisk: "none",
+          ztaRemediationCountAll: 0,
+          ztaRemediationFailedCount: 0
+        }
+      ]
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await waitForText(container, "Payroll API");
+  await clickButton("Filter Display name");
+  await changeInput("Display name Display name value", "Payroll");
+  await waitForRequest((requestUrl) => requestUrl.includes("filter%5B0%5D%5Bvalue%5D%5B0%5D=Payroll"));
+  await clickButton("Next");
+  await waitForRequest((requestUrl) =>
+    requestUrl.startsWith("/api/data/entra/servicePrincipals?page=2&count=20") &&
+    requestUrl.includes("filter%5B0%5D%5Bvalue%5D%5B0%5D=Payroll")
+  );
+
+  await clickButton("Managed identities");
+  await waitForText(container, "uami-prod");
+
+  const managedIdentityRequest = lastRequest((requestUrl) => requestUrl.startsWith("/api/data/entra/managedIdentities"));
+  expect(managedIdentityRequest).toContain("page=1&count=20");
+  expect(managedIdentityRequest).not.toContain("Payroll");
+
+  await clickButton("Service principals");
+  await waitForRequest((requestUrl) =>
+    requestUrl.startsWith("/api/data/entra/servicePrincipals?page=2&count=20") &&
+    requestUrl.includes("filter%5B0%5D%5Bvalue%5D%5B0%5D=Payroll")
+  );
+
+  act(() => root.unmount());
+
+  async function waitForRequest(predicate: (requestUrl: string) => boolean): Promise<void> {
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.map(([input]) => String(input)).some(predicate)).toBe(true);
+    });
+  }
+
+  function lastRequest(predicate: (requestUrl: string) => boolean): string {
+    const requestUrl = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .reverse()
+      .find(predicate);
+    if (!requestUrl) {
+      throw new Error("Expected matching request.");
+    }
+
+    return requestUrl;
+  }
+});
+
 test.skip("opens related managed identity from Zero Trust Assessment with an Object ID filter", async () => {
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);
