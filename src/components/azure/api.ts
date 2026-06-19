@@ -96,7 +96,7 @@ export async function readServicePrincipals({
   appendRuntimeCollectionFilters(url, filters);
   appendRuntimeCollectionSortRules(url, sortRules);
 
-  const response = await fetch(`${url.pathname}${url.search}`, { signal });
+  const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
     throw new Error(`Service principals read failed: ${response.status}`);
   }
@@ -121,7 +121,7 @@ export async function readManagedIdentities({
   appendRuntimeCollectionFilters(url, filters);
   appendRuntimeCollectionSortRules(url, sortRules);
 
-  const response = await fetch(`${url.pathname}${url.search}`, { signal });
+  const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
     throw new Error(`Managed identities read failed: ${response.status}`);
   }
@@ -146,7 +146,7 @@ export async function readResourceGroups({
   appendRuntimeCollectionFilters(url, filters);
   appendRuntimeCollectionSortRules(url, sortRules);
 
-  const response = await fetch(`${url.pathname}${url.search}`, { signal });
+  const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
     throw new Error(`Resource groups read failed: ${response.status}`);
   }
@@ -206,7 +206,7 @@ export async function readAzureRbac({
   appendRuntimeCollectionFilters(url, filters);
   appendRuntimeCollectionSortRules(url, sortRules);
 
-  const response = await fetch(`${url.pathname}${url.search}`, { signal });
+  const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
     throw new Error(`Azure RBAC read failed: ${response.status}`);
   }
@@ -224,7 +224,7 @@ export async function readEntraPermissions({
   const url = new URL("/api/data/entra/permissions", window.location.origin);
   url.searchParams.set("principalId", principalId);
 
-  const response = await fetch(`${url.pathname}${url.search}`, { signal });
+  const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
     throw new Error(`Entra API permissions read failed: ${response.status}`);
   }
@@ -242,7 +242,7 @@ export async function readEntraUserGroups({
   const url = new URL("/api/data/entra/userGroups", window.location.origin);
   url.searchParams.set("user", user);
 
-  const response = await fetch(`${url.pathname}${url.search}`, { signal });
+  const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
     throw new Error(`Entra user groups read failed: ${response.status}`);
   }
@@ -271,7 +271,7 @@ export async function readOwnershipEvidence({
     url.searchParams.set("resourceGroup", target.resourceGroup);
   }
 
-  const response = await fetch(`${url.pathname}${url.search}`, { signal });
+  const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
     throw new Error(`Ownership evidence read failed: ${response.status}`);
   }
@@ -306,7 +306,7 @@ export async function readZeroTrustAssessmentReport({
   appendRuntimeCollectionFilters(url, filters);
   appendRuntimeCollectionSortRules(url, sortRules);
 
-  const response = await fetch(`${url.pathname}${url.search}`, { signal });
+  const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
     throw new Error(`Zero Trust Assessment report read failed: ${response.status}`);
   }
@@ -317,7 +317,7 @@ export async function readZeroTrustAssessmentReport({
 export async function createZeroTrustAssessmentRemediationPackage(
   request: CreateRuntimeRemediationPackageRequest
 ): Promise<CreateRuntimeRemediationPackageResponse> {
-  const response = await fetch("/api/data/zeroTrustAssessment/remediationPackages", {
+  const response = await runtimeFetch("/api/data/zeroTrustAssessment/remediationPackages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -340,7 +340,7 @@ export async function readRemediationPackage(packageId: string): Promise<Remedia
   const url = new URL("/api/data/remediationPackages", window.location.origin);
   url.searchParams.set("id", packageId);
 
-  const response = await fetch(`${url.pathname}${url.search}`);
+  const response = await runtimeFetch(`${url.pathname}${url.search}`);
   if (!response.ok) {
     throw new Error(`Remediation package read failed: ${response.status}`);
   }
@@ -351,7 +351,7 @@ export async function readRemediationPackage(packageId: string): Promise<Remedia
 export async function deleteRemediationTasks(
   request: DeleteRuntimeRemediationTasksRequest
 ): Promise<RemediationPackage> {
-  const response = await fetch("/api/data/remediationPackages/tasks", {
+  const response = await runtimeFetch("/api/data/remediationPackages/tasks", {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json"
@@ -383,7 +383,7 @@ export async function updateEvidenceStatus({
   url.searchParams.set("key", key);
   url.searchParams.set("status", status);
 
-  const response = await fetch(`${url.pathname}${url.search}`);
+  const response = await runtimeFetch(`${url.pathname}${url.search}`);
   if (!response.ok) {
     throw new Error(`Ownership evidence status update failed: ${response.status}`);
   }
@@ -419,7 +419,7 @@ async function downloadRuntimeCsv(path: string, selection: CsvExportSelection, f
   }
 
   const requestPath = `${url.pathname}${url.search}`;
-  const response = await fetch(requestPath);
+  const response = await runtimeFetch(requestPath);
   if (!response.ok) {
     throw new Error(`${failurePrefix}: ${response.status}`);
   }
@@ -440,4 +440,40 @@ function getDownloadFileName(response: Response, fallback: string): string {
   const fileNameMatch = /filename="([^"]+)"/.exec(disposition);
 
   return fileNameMatch?.[1] ?? fallback;
+}
+
+function runtimeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const token = readRuntimeToken();
+  if (!token) {
+    return init === undefined ? fetch(input) : fetch(input, init);
+  }
+
+  const headers = new Headers(init?.headers);
+  headers.set("X-OwnerLens-Runtime-Token", token);
+
+  return fetch(input, {
+    ...init,
+    headers
+  });
+}
+
+function readRuntimeToken(): string {
+  const tokenFromHash = readRuntimeTokenFromHash();
+  if (tokenFromHash) {
+    window.sessionStorage.setItem("ownerlens.runtimeToken", tokenFromHash);
+    window.history.replaceState(null, document.title, `${window.location.pathname}${window.location.search}`);
+    return tokenFromHash;
+  }
+
+  return window.sessionStorage.getItem("ownerlens.runtimeToken") ?? "";
+}
+
+function readRuntimeTokenFromHash(): string {
+  const hash = window.location.hash;
+  if (!hash.startsWith("#")) {
+    return "";
+  }
+
+  const params = new URLSearchParams(hash.slice(1));
+  return params.get("ownerlens_token") ?? "";
 }

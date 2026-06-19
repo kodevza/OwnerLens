@@ -1061,6 +1061,95 @@ test("returns CSV runtime export artifacts as downloadable files", async () => {
   expect(response.body).toBe("id\n1");
 });
 
+test("rejects runtime API requests without token when token is configured", async () => {
+  const middleware = createRuntimeRestMiddleware({
+    basePath: "/api/data",
+    endpoints: [
+      {
+        path: "/api/data/test",
+        handle: () => ({ ok: true })
+      }
+    ],
+    runtimeToken: "expected-token",
+    getErrorStatusCode: (error) => (error instanceof Error && error.message.includes("token") ? 401 : 500)
+  });
+  const response = createTestResponse();
+  const next = jest.fn();
+
+  await middleware(
+    {
+      method: "GET",
+      url: "/api/data/test"
+    },
+    response,
+    next
+  );
+
+  expect(next).not.toHaveBeenCalled();
+  expect(response.statusCode).toBe(401);
+  expect(JSON.parse(response.body)).toEqual({ error: "Runtime API token is missing or invalid." });
+});
+
+test("accepts runtime API requests with a valid configured token", async () => {
+  const middleware = createRuntimeRestMiddleware({
+    basePath: "/api/data",
+    endpoints: [
+      {
+        path: "/api/data/test",
+        handle: () => ({ ok: true })
+      }
+    ],
+    runtimeToken: "expected-token",
+    getErrorStatusCode: (error) => (error instanceof Error && error.message.includes("token") ? 401 : 500)
+  });
+  const response = createTestResponse();
+  const next = jest.fn();
+
+  await middleware(
+    {
+      headers: {
+        "x-ownerlens-runtime-token": "expected-token"
+      },
+      method: "GET",
+      url: "/api/data/test"
+    },
+    response,
+    next
+  );
+
+  expect(next).not.toHaveBeenCalled();
+  expect(response.statusCode).toBe(200);
+  expect(JSON.parse(response.body)).toEqual({ ok: true });
+});
+
+test("keeps runtime API requests unchanged when no token is configured", async () => {
+  const middleware = createRuntimeRestMiddleware({
+    basePath: "/api/data",
+    endpoints: [
+      {
+        path: "/api/data/test",
+        handle: () => ({ ok: true })
+      }
+    ],
+    getErrorStatusCode: () => 500
+  });
+  const response = createTestResponse();
+  const next = jest.fn();
+
+  await middleware(
+    {
+      method: "GET",
+      url: "/api/data/test"
+    },
+    response,
+    next
+  );
+
+  expect(next).not.toHaveBeenCalled();
+  expect(response.statusCode).toBe(200);
+  expect(JSON.parse(response.body)).toEqual({ ok: true });
+});
+
 test("returns 400 for malformed JSON request bodies", async () => {
   const middleware = createRuntimeRestMiddleware({
     basePath: "/api/data",

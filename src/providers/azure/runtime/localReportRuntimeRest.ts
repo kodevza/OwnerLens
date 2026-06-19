@@ -90,6 +90,7 @@ export function installLocalReportRuntimeRest(host: LocalReportRuntimePluginHost
     createRuntimeRestMiddleware({
       basePath: restBasePath,
       endpoints: defineLocalReportRuntimeRestEndpoints(runtime),
+      runtimeToken: process.env.OWNERLENS_RUNTIME_TOKEN,
       getErrorStatusCode: (error) => (error instanceof RuntimeHttpError ? error.statusCode : 500)
     })
   );

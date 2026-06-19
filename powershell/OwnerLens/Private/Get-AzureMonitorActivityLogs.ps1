@@ -1,3 +1,11 @@
+<#
+.SYNOPSIS
+Reads Azure Monitor activity logs for OwnerLens resource snapshots.
+
+.DESCRIPTION
+Fetches recent activity log records, normalizes caller and claim fields, and caches requests so resource snapshot collection can attach low-confidence activity evidence locally.
+#>
+
 if (-not $script:AzureActivityLogCache) {
   $script:AzureActivityLogCache = @{}
 }

@@ -12,3 +12,4 @@ dependency-graph.svg
 src/providers/azure/inputTransferObject/
 playwright-report/
 test-results/
+testResults.xml

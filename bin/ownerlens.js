@@ -15,10 +15,10 @@ const dataDir = ensureDataDirectory(invocationRoot);
 printDataDirectorySummary(dataDir);
 
 const commands = new Map([
-  ["collect:entra", "collect-entra.ps1"],
-  ["collect-azure", "collect-azure.ps1"],
-  ["collect:azure", "collect-azure.ps1"],
-  ["collect-entra", "collect-entra.ps1"]
+  ["collect:entra", { root: "powershell", script: join("OwnerLens", "Public", "Invoke-OwnerLensCollectEntra.ps1") }],
+  ["collect-azure", { root: "powershell", script: join("OwnerLens", "Public", "Invoke-OwnerLensCollectAzure.ps1") }],
+  ["collect:azure", { root: "powershell", script: join("OwnerLens", "Public", "Invoke-OwnerLensCollectAzure.ps1") }],
+  ["collect-entra", { root: "powershell", script: join("OwnerLens", "Public", "Invoke-OwnerLensCollectEntra.ps1") }]
 ]);
 
 if (command === "help" || command === "--help" || command === "-h") {
@@ -36,9 +36,9 @@ if (commands.has(command)) {
   process.exit(1);
 }
 
-function runPowerShellScript(scriptName, args, options = {}) {
+function runPowerShellScript(script, args, options = {}) {
   const pwsh = resolvePowerShell();
-  const scriptPath = join(packageRoot, "tools", scriptName);
+  const scriptPath = join(packageRoot, script.root, script.script);
   const psArgs = [
     "-NoProfile",
     "-ExecutionPolicy",
