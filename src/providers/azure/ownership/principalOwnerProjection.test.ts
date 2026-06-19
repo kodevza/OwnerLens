@@ -184,6 +184,7 @@ test("projects managed identity owners from its resource group", () => {
   );
 
   expect(projection).toMatchObject({
+    resourceGroup: "rg-mi",
     potentialOwners: ["identity-owner@example.test"],
     ownerConfidence: "high"
   });
