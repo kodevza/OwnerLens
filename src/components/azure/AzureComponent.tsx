@@ -4,7 +4,7 @@ import type { ZtaRelatedObject } from "../../core/azure/ztaReport";
 import { appConfig } from "../../core/config";
 import { createViewHistoryState, getHistoryStateView } from "../../lib/historyState";
 import type { RemediationPackage } from "../../core/runtime/remediation";
-import type { ColumnFilters } from "../../core/collectionControls";
+import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import { ClosableTab } from "../../report/components/ClosableTab";
 import { Tabs, TabsList, TabsTrigger } from "../../report/components/ui/tabs";
 import { AzureRbacComponent } from "./AzureRbacComponent";
@@ -47,9 +47,12 @@ const enabledViewValues = zeroTrustAssessmentEnabled
   ? viewValues
   : viewValues.filter((view) => view !== "zeroTrustAssessment");
 
-type PrincipalObjectFilter = {
-  objectId: string;
-  view: Extract<AzureView, "servicePrincipals" | "managedIdentities">;
+type PersistentTableView = Extract<AzureView, "servicePrincipals" | "managedIdentities" | "resourceGroups">;
+
+type PersistentTableControls = {
+  filters: ColumnFilters;
+  page: number;
+  sortRules: SortRule[];
 };
 
 type AzureRbacTab = AzureRbacPrincipalSelection & {
@@ -79,8 +82,12 @@ export function AzureComponent() {
   const [entraPermissionsTab, setEntraPermissionsTab] = useState<EntraPermissionsTab | null>(null);
   const [ownershipEvidenceTab, setOwnershipEvidenceTab] = useState<OwnershipEvidenceTab | null>(null);
   const [remediationPackageTab, setRemediationPackageTab] = useState<RemediationPackageTab | null>(null);
-  const [principalObjectFilter, setPrincipalObjectFilter] = useState<PrincipalObjectFilter | null>(null);
   const [ztaRelatedObjectFilter, setZtaRelatedObjectFilter] = useState<string | null>(null);
+  const [tableControls, setTableControls] = useState<Record<PersistentTableView, PersistentTableControls>>({
+    servicePrincipals: createPersistentTableControls(),
+    managedIdentities: createPersistentTableControls(),
+    resourceGroups: createPersistentTableControls()
+  });
   const activeViewRef = useRef<AzureView>("servicePrincipals");
   const viewHistoryRef = useRef<AzureView[]>([]);
 
@@ -166,8 +173,21 @@ export function AzureComponent() {
       return;
     }
 
-    setPrincipalObjectFilter({ objectId, view });
+    setPersistentTableControls(view, {
+      filters: getPrincipalObjectFilters(objectId),
+      page: 1
+    });
     activateView(view);
+  }
+
+  function setPersistentTableControls(view: PersistentTableView, controls: Partial<PersistentTableControls>) {
+    setTableControls((currentControls) => ({
+      ...currentControls,
+      [view]: {
+        ...currentControls[view],
+        ...controls
+      }
+    }));
   }
 
   function openZtaRelatedObject(objectId: string) {
@@ -307,27 +327,43 @@ export function AzureComponent() {
       <div className="relative z-0">
         {activeView === "resourceGroups" ? (
           <ResourceGroupComponent
+            initialFilters={tableControls.resourceGroups.filters}
+            initialPage={tableControls.resourceGroups.page}
+            initialSortRules={tableControls.resourceGroups.sortRules}
             onAzureRbacClick={openResourceGroupAzureRbac}
+            onFiltersChange={(filters) => setPersistentTableControls("resourceGroups", { filters })}
             onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, "resourceGroups")}
+            onPageChange={(page) => setPersistentTableControls("resourceGroups", { page })}
+            onSortRulesChange={(sortRules) => setPersistentTableControls("resourceGroups", { sortRules })}
           />
         ) : null}
         {activeView === "servicePrincipals" ? (
           <ServicePrincipalComponent
-            initialFilters={getPrincipalObjectFilters(principalObjectFilter, "servicePrincipals")}
+            initialFilters={tableControls.servicePrincipals.filters}
+            initialPage={tableControls.servicePrincipals.page}
+            initialSortRules={tableControls.servicePrincipals.sortRules}
             onAzureRbacClick={(principal) => openAzureRbac(principal, "servicePrincipals")}
             onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "servicePrincipals")}
+            onFiltersChange={(filters) => setPersistentTableControls("servicePrincipals", { filters })}
             onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, "servicePrincipals")}
+            onPageChange={(page) => setPersistentTableControls("servicePrincipals", { page })}
             onRemediationPackageClick={(remediationPackage) => openRemediationPackage(remediationPackage, "servicePrincipals")}
+            onSortRulesChange={(sortRules) => setPersistentTableControls("servicePrincipals", { sortRules })}
             onZtaRemediationsClick={openZtaRelatedObject}
           />
         ) : null}
         {activeView === "managedIdentities" ? (
           <ManagedIdentityComponent
-            initialFilters={getPrincipalObjectFilters(principalObjectFilter, "managedIdentities")}
+            initialFilters={tableControls.managedIdentities.filters}
+            initialPage={tableControls.managedIdentities.page}
+            initialSortRules={tableControls.managedIdentities.sortRules}
             onAzureRbacClick={(principal) => openAzureRbac(principal, "managedIdentities")}
             onEntraPermissionsClick={(principal) => openEntraPermissions(principal, "managedIdentities")}
+            onFiltersChange={(filters) => setPersistentTableControls("managedIdentities", { filters })}
             onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, "managedIdentities")}
+            onPageChange={(page) => setPersistentTableControls("managedIdentities", { page })}
             onRemediationPackageClick={(remediationPackage) => openRemediationPackage(remediationPackage, "managedIdentities")}
+            onSortRulesChange={(sortRules) => setPersistentTableControls("managedIdentities", { sortRules })}
             onZtaRemediationsClick={openZtaRelatedObject}
           />
         ) : null}
@@ -381,18 +417,19 @@ function getZtaRelatedObjectFilters(objectId: string | null): ColumnFilters | un
   };
 }
 
-function getPrincipalObjectFilters(
-  principalObjectFilter: PrincipalObjectFilter | null,
-  view: PrincipalObjectFilter["view"]
-): ColumnFilters | undefined {
-  if (!principalObjectFilter || principalObjectFilter.view !== view) {
-    return undefined;
-  }
+function createPersistentTableControls(): PersistentTableControls {
+  return {
+    filters: {},
+    page: 1,
+    sortRules: []
+  };
+}
 
+function getPrincipalObjectFilters(objectId: string): ColumnFilters {
   return {
     id: {
       type: "text",
-      value: principalObjectFilter.objectId
+      value: objectId
     }
   };
 }
@@ -431,7 +468,9 @@ function getAzureRbacTabTarget(tab: AzureRbacTab) {
       };
 }
 
-function getRelatedPrincipalView(relatedObject: ZtaRelatedObject): PrincipalObjectFilter["view"] | null {
+function getRelatedPrincipalView(
+  relatedObject: ZtaRelatedObject
+): Extract<PersistentTableView, "servicePrincipals" | "managedIdentities"> | null {
   switch (relatedObject.servicePrincipalType) {
     case "ManagedIdentity":
       return "managedIdentities";

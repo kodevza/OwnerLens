@@ -8,7 +8,7 @@ import { getTagNames } from "../../core/azure/tags";
 import { azureManagedIdentityColumnHelp } from "./azureReportConfig";
 import { exportManagedIdentitiesCsv, readManagedIdentities, readRemediationPackage } from "./api";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
-import type { ColumnFilters } from "../../core/collectionControls";
+import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../report/reportTypes";
 import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
 import {
@@ -84,7 +84,7 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
   },
   {
     id: "oauthPermissionsCount",
-    label: "Entra API permissions",
+    label: "API Permissions",
     valueType: "number",
     getValue: (identity) => identity.oauthPermissionsCount,
     getFilterValue: (identity) => identity.entraPermissionRisk,
@@ -103,17 +103,27 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
 
 export function ManagedIdentityComponent({
   initialFilters,
+  initialPage,
+  initialSortRules,
   onAzureRbacClick,
   onEntraPermissionsClick,
+  onFiltersChange,
   onOwnershipEvidenceClick,
+  onPageChange,
   onRemediationPackageClick,
+  onSortRulesChange,
   onZtaRemediationsClick
 }: {
   initialFilters?: ColumnFilters;
+  initialPage?: number;
+  initialSortRules?: SortRule[];
   onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
   onEntraPermissionsClick?: (principal: EntraPermissionsPrincipalSelection) => void;
+  onFiltersChange?: (filters: ColumnFilters) => void;
   onOwnershipEvidenceClick?: (selection: OwnershipEvidenceSelection) => void;
+  onPageChange?: (page: number) => void;
   onRemediationPackageClick?: (remediationPackage: RemediationPackage) => void;
+  onSortRulesChange?: (sortRules: SortRule[]) => void;
   onZtaRemediationsClick?: (objectId: string) => void;
 }) {
   const [openPackageState, setOpenPackageState] = useState<{
@@ -174,9 +184,14 @@ export function ManagedIdentityComponent({
         fields={managedIdentityFields}
         getRowKey={(row) => row.id}
         initialFilters={initialFilters}
+        initialPage={initialPage}
+        initialSortRules={initialSortRules}
         loadPage={readManagedIdentities}
         loadingMessage="Loading managed identities..."
         minWidthClassName="min-w-[2140px]"
+        onFiltersChange={onFiltersChange}
+        onPageChange={onPageChange}
+        onSortRulesChange={onSortRulesChange}
         renderSelectionOverlay={({ filters, selectAllMatchingFilters, selectedRowKeys, sortRules }) => (
           <CsvSelectionActionBar
             filters={filters}

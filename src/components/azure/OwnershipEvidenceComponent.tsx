@@ -7,6 +7,7 @@ import { SelectableGenericTable } from "../../report/components/SelectableGeneri
 import { ConfidenceBadge } from "../../report/components/ConfidenceBadge";
 import { Badge } from "../../report/components/ui/badge";
 import { Card } from "../../report/components/ui/card";
+import { AzureLinkBadge, buildAzureResourceGroupPortalUrl } from "./AzureLinkBadge";
 import { EntraUserGroupsDropdown } from "./EntraUserGroupsDropdown";
 import { readOwnershipEvidence, updateEvidenceStatus, type EvidenceStatus, type OwnershipEvidenceTarget } from "./api";
 import {
@@ -58,11 +59,29 @@ function buildOwnershipEvidenceFieldRenderers({
       <div className="max-w-md space-y-1">
         {evidence.relatedScopes.length === 0
           ? <span className="text-muted-foreground">-</span>
-          : evidence.relatedScopes.map((scope) => (
-              <div key={formatOwnershipEvidenceScope(scope)} className="truncate" title={formatOwnershipEvidenceScope(scope)}>
-                {formatOwnershipEvidenceScope(scope)}
-              </div>
-            ))}
+          : evidence.relatedScopes.map((scope) => {
+              const scopeLabel = formatOwnershipEvidenceScope(scope);
+              const scopeKey = scopeLabel;
+
+              return (
+                <div key={scopeKey} className="truncate" title={scopeLabel}>
+                  {scope.subscriptionId && scope.resourceGroup ? (
+                    <AzureLinkBadge
+                      aria-label={`Open resource group ${scope.resourceGroup} in Azure portal`}
+                      href={buildAzureResourceGroupPortalUrl({
+                        resourceGroup: scope.resourceGroup,
+                        subscriptionId: scope.subscriptionId
+                      })}
+                      title={`Go to: /subscriptions/${scope.subscriptionId}/resourceGroups/${scope.resourceGroup}`}
+                    >
+                      {scopeLabel}
+                    </AzureLinkBadge>
+                  ) : (
+                    scopeLabel
+                  )}
+                </div>
+              );
+            })}
       </div>
     ),
     status: (evidence) => {

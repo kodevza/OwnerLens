@@ -14,6 +14,7 @@ import { Badge, type BadgeProps } from "../../report/components/ui/badge";
 import { OwnerBadge, type OwnershipEvidenceSelection } from "./ServicePrincipalFieldRenderers";
 import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
 import { TagBadges } from "./TagBadges";
+import { AzureLinkBadge, buildAzureResourceGroupPortalUrl } from "./AzureLinkBadge";
 
 export type AzureRbacResourceGroupSelection = {
   displayName: string;
@@ -90,16 +91,34 @@ const resourceGroupFields: ReportFieldDescriptor<ResourceGroupOwnershipRow>[] = 
 
 export function ResourceGroupComponent({
   onAzureRbacClick,
-  onOwnershipEvidenceClick
+  onOwnershipEvidenceClick,
+  initialFilters,
+  initialPage,
+  initialSortRules,
+  onFiltersChange,
+  onPageChange,
+  onSortRulesChange
 }: {
   onAzureRbacClick?: (selection: AzureRbacResourceGroupSelection) => void;
   onOwnershipEvidenceClick?: (selection: OwnershipEvidenceSelection) => void;
+  initialFilters?: ColumnFilters;
+  initialPage?: number;
+  initialSortRules?: SortRule[];
+  onFiltersChange?: (filters: ColumnFilters) => void;
+  onPageChange?: (page: number) => void;
+  onSortRulesChange?: (sortRules: SortRule[]) => void;
 }) {
   const resourceGroupFieldRenderers = useMemo<ReportColumnRenderers<ResourceGroupOwnershipRow>>(
     () => ({
       resourceGroup: (group) => (
         <div>
-          <div>{group.resourceGroup}</div>
+          <AzureLinkBadge
+            aria-label={`Open resource group ${group.resourceGroup} in Azure portal`}
+            href={buildAzureResourceGroupPortalUrl(group)}
+            title={`Go to: ${getResourceGroupResourceId(group)}`}
+          >
+            {group.resourceGroup}
+          </AzureLinkBadge>
           <div className="mt-0.5 text-xs text-muted-foreground">{group.subscriptionName}</div>
         </div>
       ),
@@ -155,9 +174,15 @@ export function ResourceGroupComponent({
         fieldRenderers={resourceGroupFieldRenderers}
         fields={resourceGroupFields}
         getRowKey={getResourceGroupOwnershipRowKey}
+        initialFilters={initialFilters}
+        initialPage={initialPage}
+        initialSortRules={initialSortRules}
         loadPage={loadResourceGroups}
         loadingMessage="Loading resource groups..."
         minWidthClassName="min-w-[1040px]"
+        onFiltersChange={onFiltersChange}
+        onPageChange={onPageChange}
+        onSortRulesChange={onSortRulesChange}
         renderSelectionOverlay={({ filters, selectAllMatchingFilters, selectedRowKeys, sortRules }) => (
           <CsvSelectionActionBar
             filters={filters}
@@ -227,6 +252,10 @@ function formatResourceGroupRbacSummary(group: ResourceGroupOwnershipRow): strin
 
 function getResourceGroupOwnershipRowKey(row: Pick<ResourceGroupOwnershipRow, "subscriptionId" | "resourceGroup">) {
   return `${row.subscriptionId}:${row.resourceGroup}`;
+}
+
+function getResourceGroupResourceId(row: Pick<ResourceGroupOwnershipRow, "subscriptionId" | "resourceGroup">) {
+  return `/subscriptions/${row.subscriptionId}/resourceGroups/${row.resourceGroup}`;
 }
 
 function formatAzureTags(tags: Tags | null): string {
