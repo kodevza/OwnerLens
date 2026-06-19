@@ -1,17 +1,15 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, readdirSync, statSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const invocationRoot = process.cwd();
-const require = createRequire(import.meta.url);
 const [, , command = "help", ...args] = process.argv;
 
-const dataDir = ensureDataDirectory(invocationRoot);
+const dataDir = resolveDataDirectory(invocationRoot);
 printDataDirectorySummary(dataDir);
 
 const commands = new Map([
@@ -28,8 +26,8 @@ if (command === "help" || command === "--help" || command === "-h") {
 
 if (commands.has(command)) {
   runPowerShellScript(commands.get(command), args);
-} else if (command === "start" || command === "preview") {
-  runViteProductionServer(args);
+} else if (command === "start") {
+  runOwnerLensServer(args);
 } else {
   console.error(`Unknown command: ${command}`);
   printHelp();
@@ -65,53 +63,50 @@ function runPowerShellScript(script, args, options = {}) {
   return child;
 }
 
-function runViteProductionServer(args) {
-  const build = runViteSync(["build"]);
+function runOwnerLensServer(args) {
+  assertBuiltApp();
+  assertBuiltServer();
+  const { host, port } = parseServerArgs(args);
+  const serverModulePath = join(packageRoot, "dist-server", "ownerlens-server.js");
 
-  if (build.signal) {
-    process.kill(process.pid, build.signal);
-    return build;
+  process.chdir(packageRoot);
+  import(pathToFileURL(serverModulePath).href)
+    .then(async ({ startOwnerLensServer }) => {
+      const started = await startOwnerLensServer({
+        appRoot: packageRoot,
+        dataDir,
+        host,
+        port,
+        runtimeToken: process.env.OWNERLENS_RUNTIME_TOKEN
+      });
+      console.log(`OwnerLens running at ${started.url}`);
+    })
+    .catch((error) => {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    });
+}
+
+function assertBuiltApp() {
+  const indexPath = join(packageRoot, "dist", "index.html");
+  if (existsSync(indexPath)) {
+    return;
   }
 
-  if (build.status !== 0) {
-    process.exit(build.status ?? 1);
+  console.error("OwnerLens build output was not found at ./dist.");
+  console.error("Run `npm run build` before `ownerlens start`, or use a packaged OwnerLens release that includes dist.");
+  process.exit(1);
+}
+
+function assertBuiltServer() {
+  const serverPath = join(packageRoot, "dist-server", "ownerlens-server.js");
+  if (existsSync(serverPath)) {
+    return;
   }
 
-  return runVite(["preview", "--host", "127.0.0.1", ...args]);
-}
-
-function runVite(args) {
-  return runNodeScript([resolveViteScript(), ...args]);
-}
-
-function runViteSync(args) {
-  return spawnSync(process.execPath, [resolveViteScript(), ...args], {
-    cwd: packageRoot,
-    env: viteEnv(),
-    stdio: "inherit"
-  });
-}
-
-function resolveViteScript() {
-  return join(dirname(require.resolve("vite/package.json")), "bin", "vite.js");
-}
-
-function runNodeScript(args) {
-  const child = spawn(process.execPath, args, { cwd: packageRoot, env: viteEnv(), stdio: "inherit" });
-  child.on("exit", (code, signal) => {
-    if (signal) {
-      process.kill(process.pid, signal);
-      return;
-    }
-
-    process.exit(code ?? 1);
-  });
-
-  return child;
-}
-
-function viteEnv() {
-  return { ...process.env, OWNERLENS_DATA_DIR: dataDir };
+  console.error("OwnerLens runtime server build was not found at ./dist-server.");
+  console.error("Use a packaged OwnerLens release that includes dist-server.");
+  process.exit(1);
 }
 
 function resolvePowerShell() {
@@ -135,8 +130,11 @@ function commandExists(name) {
   return result.status === 0;
 }
 
-function ensureDataDirectory(rootDir) {
-  const dataDir = join(rootDir, "data");
+function resolveDataDirectory(rootDir) {
+  const configuredDataDir = process.env.OWNERLENS_DATA_DIR?.trim();
+  const dataDir = configuredDataDir
+    ? resolvePath(rootDir, configuredDataDir)
+    : join(rootDir, "data");
 
   try {
     if (statSync(dataDir, { throwIfNoEntry: false })?.isDirectory()) {
@@ -152,11 +150,12 @@ function ensureDataDirectory(rootDir) {
 }
 
 function printDataDirectorySummary(dataDir) {
-  console.log(`Working data directory: ./data`);
+  const displayPath = dataDir === join(invocationRoot, "data") ? "./data" : dataDir;
+  console.log(`Working data directory: ${displayPath}`);
   console.log("Depth 1 data files:");
 
   const entries = readdirSync(dataDir, { withFileTypes: true })
-    .map((entry) => `${entry.isDirectory() ? "d" : "f"} ./data/${entry.name}`)
+    .map((entry) => `${entry.isDirectory() ? "d" : "f"} ${displayPath}/${entry.name}`)
     .sort();
 
   if (entries.length === 0) {
@@ -167,16 +166,65 @@ function printDataDirectorySummary(dataDir) {
     }
   }
 
-  console.log("OwnerLens will read local snapshots and runtime state from ./data.");
+  console.log(`OwnerLens will read local snapshots and runtime state from ${displayPath}.`);
   console.log("");
+}
+
+function parseServerArgs(args) {
+  const parsed = {
+    host: "127.0.0.1",
+    port: 4173
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--host") {
+      parsed.host = readRequiredArg(args, index, "--host");
+      index += 1;
+    } else if (arg.startsWith("--host=")) {
+      parsed.host = arg.slice("--host=".length);
+    } else if (arg === "--port") {
+      parsed.port = parsePort(readRequiredArg(args, index, "--port"));
+      index += 1;
+    } else if (arg.startsWith("--port=")) {
+      parsed.port = parsePort(arg.slice("--port=".length));
+    } else {
+      console.error(`Unknown start argument: ${arg}`);
+      printHelp();
+      process.exit(1);
+    }
+  }
+
+  return parsed;
+}
+
+function readRequiredArg(args, index, name) {
+  const value = args[index + 1];
+  if (!value) {
+    console.error(`Missing value for ${name}.`);
+    process.exit(1);
+  }
+  return value;
+}
+
+function parsePort(value) {
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    console.error(`Invalid port: ${value}`);
+    process.exit(1);
+  }
+  return port;
+}
+
+function resolvePath(rootDir, candidate) {
+  return isAbsolute(candidate) ? candidate : resolve(rootDir, candidate);
 }
 
 function printHelp() {
   console.log(`OwnerLens
 
 Usage:
-  ownerlens start [Vite preview args]
-  ownerlens preview [Vite preview args]
+  ownerlens start [--host 127.0.0.1] [--port 4173]
   ownerlens collect:entra [PowerShell args]
   ownerlens collect:azure [PowerShell args]
 

@@ -14,8 +14,8 @@ Open the Vite URL printed by the command, usually `http://127.0.0.1:5173`.
 You can also exercise the published CLI entrypoint from a repository checkout:
 
 ```bash
+npm run build
 npm run start
-npm run preview
 npm run collect:azure -- -SubscriptionIds "sub-id-1,sub-id-2"
 npm run collect:entra -- -TenantId "<tenant-id>"
 ```

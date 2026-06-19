@@ -3,7 +3,7 @@
 Starts the local OwnerLens runtime server.
 
 .DESCRIPTION
-Launches the packaged OwnerLens preview server on loopback, creates a runtime token, persists process state, and returns the runtime status.
+Launches the packaged OwnerLens runtime server on loopback, creates a runtime token, persists process state, and returns the runtime status.
 #>
 
 function Start-OwnerLens {
@@ -39,8 +39,8 @@ function Start-OwnerLens {
   $startInfo.CreateNoWindow = $true
   $startInfo.RedirectStandardOutput = $true
   $startInfo.RedirectStandardError = $true
-  $startInfo.ArgumentList.Add($runtime.ViteScript)
-  $startInfo.ArgumentList.Add("preview")
+  $startInfo.ArgumentList.Add($runtime.Entrypoint)
+  $startInfo.ArgumentList.Add("start")
   $startInfo.ArgumentList.Add("--host")
   $startInfo.ArgumentList.Add("127.0.0.1")
   $startInfo.ArgumentList.Add("--port")
@@ -62,7 +62,7 @@ function Start-OwnerLens {
     ServerUrl = $serverUrl
     RuntimeRoot = $runtime.RuntimeRoot
     NodePath = $runtime.NodePath
-    ViteScript = $runtime.ViteScript
+    ServerScript = $runtime.ServerScript
   }
   Write-OwnerLensState -State $state
 

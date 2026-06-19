@@ -31,13 +31,30 @@ try {
   }
   New-Item -ItemType Directory -Path $appRoot -Force | Out-Null
 
-  foreach ($path in @("bin", "dist", "tools", "migrations", "contracts", "src")) {
+  foreach ($path in @("bin", "dist", "dist-server", "tools", "migrations", "contracts")) {
     Copy-Item -Path (Join-Path $repoRoot $path) -Destination $appRoot -Recurse -Force
   }
 
-  foreach ($file in @("package.json", "package-lock.json", "index.html", "vite.config.ts", "tsconfig.json")) {
+  foreach ($file in @("index.html")) {
     Copy-Item -Path (Join-Path $repoRoot $file) -Destination $appRoot -Force
   }
+
+  $rootPackage = Get-Content -LiteralPath (Join-Path $repoRoot "package.json") -Raw | ConvertFrom-Json
+  $runtimeDependencies = [ordered]@{}
+  foreach ($dependencyName in @("@duckdb/node-api", "ajv", "ajv-formats")) {
+    $dependencyVersion = $rootPackage.dependencies.PSObject.Properties[$dependencyName].Value
+    if (-not $dependencyVersion) {
+      throw "Runtime dependency '$dependencyName' was not found in package.json dependencies."
+    }
+    $runtimeDependencies[$dependencyName] = $dependencyVersion
+  }
+  [ordered]@{
+    name = "ownerlens-runtime"
+    version = $rootPackage.version
+    private = $true
+    type = "module"
+    dependencies = $runtimeDependencies
+  } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $appRoot "package.json") -Encoding UTF8
 
   $nodeCommand = Get-Command "node.exe" -ErrorAction SilentlyContinue
   if ($nodeCommand) {
@@ -46,6 +63,7 @@ try {
 
   Push-Location $appRoot
   try {
+    npm install --omit=dev --package-lock-only
     npm ci --omit=dev
   } finally {
     Pop-Location
@@ -75,7 +93,7 @@ try {
   $startInfo.RedirectStandardOutput = $true
   $startInfo.RedirectStandardError = $true
   $startInfo.ArgumentList.Add("./bin/ownerlens.js")
-  $startInfo.ArgumentList.Add("preview")
+  $startInfo.ArgumentList.Add("start")
   $startInfo.ArgumentList.Add("--host")
   $startInfo.ArgumentList.Add("127.0.0.1")
   $startInfo.ArgumentList.Add("--port")

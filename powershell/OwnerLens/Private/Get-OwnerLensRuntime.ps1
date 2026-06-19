@@ -43,10 +43,10 @@ function Get-OwnerLensRuntime {
   $entrypoint = Join-Path $appRoot "bin\ownerlens.js"
   $packageJson = Join-Path $appRoot "package.json"
   $distPath = Join-Path $appRoot "dist"
+  $serverScript = Join-Path $appRoot "dist-server\ownerlens-server.js"
   $nodeModulesPath = Join-Path $appRoot "node_modules"
-  $viteScript = Join-Path $nodeModulesPath "vite\bin\vite.js"
 
-  foreach ($requiredPath in @($entrypoint, $packageJson, $distPath, $nodeModulesPath, $viteScript)) {
+  foreach ($requiredPath in @($entrypoint, $packageJson, $distPath, $serverScript, $nodeModulesPath)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
       throw "OwnerLens runtime is incomplete. Missing required path: $requiredPath"
     }
@@ -57,6 +57,6 @@ function Get-OwnerLensRuntime {
     AppRoot = $appRoot
     NodePath = $nodePath
     Entrypoint = $entrypoint
-    ViteScript = $viteScript
+    ServerScript = $serverScript
   }
 }

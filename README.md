@@ -57,10 +57,11 @@ flowchart TD
 npx ownerlens start
 ```
 
-`npx ownerlens start` builds the app, starts Vite preview on `127.0.0.1`,
-creates `./data` in the directory where you run the command, and reads snapshot
-files from that directory. Open the Vite URL printed by the command, usually
-`http://127.0.0.1:4173`.
+`npx ownerlens start` starts the packaged app on `127.0.0.1`, creates `./data`
+in the directory where you run the command, and reads snapshot files from that
+directory. Open the local URL printed by the command, usually
+`http://127.0.0.1:4173`. When running from a source checkout, run `npm run build`
+before `npm run start`.
 
 ## Create Snapshot Files
 
