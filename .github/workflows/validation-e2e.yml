@@ -2,7 +2,8 @@ name: Validation E2E
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 permissions:
   contents: read
