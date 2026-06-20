@@ -71,6 +71,15 @@ export type LocalReportRuntimeStatus = {
   enrichment: AzureIdentityEnrichmentStatus;
 };
 
+export type LocalReportRuntimeInventoryStats = {
+  users: number;
+  groups: number;
+  servicePrincipals: number;
+  managedIdentities: number;
+  resourceGroups: number;
+  rbacAssignments: number;
+};
+
 export class LocalReportRuntime {
   private readonly dataDir: string;
   private readonly host: RuntimeHost;
@@ -178,6 +187,41 @@ export class LocalReportRuntime {
       azureResources: importStatus.azureResources,
       zeroTrustAssessment: importStatus.zeroTrustAssessment,
       enrichment: this.enrichmentService.getStatus()
+    };
+  }
+
+  async readInventoryStats(): Promise<LocalReportRuntimeInventoryStats> {
+    await this.initialize();
+
+    const reader = await this.requireConnection().runAndReadAll(`
+      select
+        (select count(distinct member_id) from entra_group_members where lower(coalesce(member_type, '')) = 'user') as users,
+        (select count(distinct group_id) from entra_group_members) as groups,
+        (
+          select count(*)
+          from entra_service_principals
+          where lower(service_principal_type) <> 'managedidentity'
+        ) as servicePrincipals,
+        (
+          select count(*)
+          from entra_service_principals
+          where lower(service_principal_type) = 'managedidentity'
+        ) as managedIdentities,
+        (
+          select count(distinct subscription_id || ':' || lower(resource_group))
+          from azure_resource_groups
+        ) as resourceGroups,
+        (select count(*) from azure_role_assignments) as rbacAssignments
+    `);
+    const [row] = reader.getRowObjectsJson() as RuntimeInventoryStatsRow[];
+
+    return {
+      users: readCount(row?.users),
+      groups: readCount(row?.groups),
+      servicePrincipals: readCount(row?.servicePrincipals),
+      managedIdentities: readCount(row?.managedIdentities),
+      resourceGroups: readCount(row?.resourceGroups),
+      rbacAssignments: readCount(row?.rbacAssignments)
     };
   }
 
@@ -720,6 +764,32 @@ function readStringArray(value: unknown): string[] {
 
 function readNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+type RuntimeInventoryStatsRow = {
+  users?: unknown;
+  groups?: unknown;
+  servicePrincipals?: unknown;
+  managedIdentities?: unknown;
+  resourceGroups?: unknown;
+  rbacAssignments?: unknown;
+};
+
+function readCount(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
 }
 
 function formatJsonScalar(value: unknown): string {

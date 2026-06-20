@@ -237,6 +237,92 @@ test("normalizes runtime identifier columns on insert", async () => {
   });
 });
 
+test("reads compact runtime inventory stats", async () => {
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    const entraSnapshot: EntraSnapshot = {
+      ...minimalEntraSnapshot(),
+      meta: {
+        ...minimalEntraSnapshot().meta,
+        servicePrincipalCount: 3
+      },
+      servicePrincipals: [
+        servicePrincipal("sp-1", "app-1", "Example app", "Application"),
+        servicePrincipal("sp-2", "app-2", "Worker app", "Application"),
+        servicePrincipal("mi-1", "mi-app-1", "uami-prod", "ManagedIdentity")
+      ],
+      groupMembers: [
+        {
+          groupId: "group-1",
+          groupDisplayName: "Owners",
+          memberId: "user-1",
+          memberDisplayName: "Alice",
+          memberType: "user",
+          memberUserPrincipalName: "alice@example.test",
+          memberMail: "alice@example.test",
+          memberAppId: null,
+          memberServicePrincipalType: null
+        },
+        {
+          groupId: "group-2",
+          groupDisplayName: "Operators",
+          memberId: "user-1",
+          memberDisplayName: "Alice",
+          memberType: "user",
+          memberUserPrincipalName: "alice@example.test",
+          memberMail: "alice@example.test",
+          memberAppId: null,
+          memberServicePrincipalType: null
+        },
+        {
+          groupId: "group-2",
+          groupDisplayName: "Operators",
+          memberId: "sp-1",
+          memberDisplayName: "Example app",
+          memberType: "servicePrincipal",
+          memberUserPrincipalName: null,
+          memberMail: null,
+          memberAppId: "app-1",
+          memberServicePrincipalType: "Application"
+        }
+      ]
+    };
+    const azureSnapshot: AzureSnapshot = {
+      ...minimalAzureSnapshot(),
+      meta: {
+        ...minimalAzureSnapshot().meta,
+        resourceGroupCount: 2,
+        roleAssignmentCount: 2
+      },
+      resourceGroups: [
+        ...minimalAzureSnapshot().resourceGroups,
+        {
+          subscriptionId: "sub-1",
+          subscriptionName: "Subscription One",
+          resourceGroup: "rg-data",
+          location: "westeurope",
+          tags: null
+        }
+      ],
+      roleAssignments: [
+        roleAssignment("sp-1", "Reader", "/subscriptions/sub-1/resourceGroups/rg-app", "ResourceGroup"),
+        roleAssignment("mi-1", "Contributor", "/subscriptions/sub-1/resourceGroups/rg-data", "ResourceGroup")
+      ]
+    };
+
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot));
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot));
+
+    await expect(runtime.readInventoryStats()).resolves.toEqual({
+      users: 1,
+      groups: 2,
+      servicePrincipals: 2,
+      managedIdentities: 1,
+      resourceGroups: 2,
+      rbacAssignments: 2
+    });
+  });
+});
+
 test("imports Zero Trust Assessment report into DuckDB and reads it back through the runtime", async () => {
   const taggedServicePrincipal = servicePrincipal("tagged-sp-1", "tagged-client-app-1", "Tagged automation app", {
     servicePrincipalType: "Application",

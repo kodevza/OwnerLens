@@ -72,6 +72,10 @@ export function defineLocalReportRuntimeRestEndpoints(runtime: LocalReportRuntim
       }
     },
     {
+      path: `${restBasePath}/runtime/stats`,
+      handle: () => runtime.readInventoryStats()
+    },
+    {
       path: `${restBasePath}/runtime`,
       handle: () => runtime.getStatus()
     }
