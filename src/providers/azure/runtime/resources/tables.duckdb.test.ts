@@ -6,7 +6,7 @@ import type {
 } from "../../inputTransferObject/generated/AzureSnapshot";
 import type { EntraServicePrincipal } from "../../inputTransferObject/generated/EntraSnapshot";
 import { insertEntraServicePrincipalRows } from "../entra/servicePrincipalsTable";
-import { prepareRuntimeSqlSchema } from "../runtimeSqlSchema";
+import { prepareRuntimeSqlSchema } from "../SnapshotImporter";
 import { disableOwnerEvidenceKey } from "./disabledOwnerEvidenceTable";
 import {
   insertAzureActivityLogRows,

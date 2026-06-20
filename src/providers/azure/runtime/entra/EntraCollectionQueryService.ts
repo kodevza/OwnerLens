@@ -18,6 +18,7 @@ import {
   type LocalReportCollectionQueryOptions,
   type LocalReportPaginatedCollection
 } from "../../../../core/runtime/collections";
+import type { PageOptions } from "../../../../core/runtime/pagination";
 import type { RuntimeCollectionCsvExport } from "../../../../core/runtime/collectionExport";
 import type { AzureResourcesCollectionQueryService } from "../resources/AzureResourcesCollectionQueryService";
 import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
@@ -59,7 +60,7 @@ export class EntraCollectionQueryService {
   async queryServicePrincipals(
     options: LocalReportCollectionQueryOptions
   ): Promise<LocalReportPaginatedCollection<"entra.servicePrincipals">> {
-    return buildPaginatedCollection("entra.servicePrincipals", await this.readServicePrincipalRows(), options);
+    return buildPaginatedCollection("entra.servicePrincipals", await this.readServicePrincipalRows(options), options);
   }
 
   async exportServicePrincipalsCsv(
@@ -159,17 +160,40 @@ export class EntraCollectionQueryService {
     }
   }
 
-  async readServicePrincipalRows(): Promise<Record<string, unknown>[]> {
+  async readServicePrincipalRows(options: PageOptions = {}): Promise<Record<string, unknown>[]> {
     const servicePrincipals = await this.enrichWithZtaRemediationSummaries(await this.entra.readServicePrincipals());
 
     try {
       return enrichServicePrincipalsWithResourceGroupOwners(
         servicePrincipals,
-        await this.azureResourcesQueries.readResourceGroupOwnershipRows()
+        await this.azureResourcesQueries.readResourceGroupOwnershipRows(options)
       ) as unknown as Record<string, unknown>[];
     } catch (error) {
       if (error instanceof RuntimeHttpError && error.statusCode === 404) {
         return servicePrincipals as unknown as Record<string, unknown>[];
+      }
+
+      throw error;
+    }
+  }
+
+  async findServicePrincipalById(principalId: string): Promise<ServicePrincipal | null> {
+    const servicePrincipal = await this.entra.findServicePrincipalById(principalId);
+
+    if (!servicePrincipal) {
+      return null;
+    }
+
+    const [enrichedServicePrincipal] = await this.enrichWithZtaRemediationSummaries([servicePrincipal]);
+
+    try {
+      return enrichServicePrincipalsWithResourceGroupOwners(
+        [enrichedServicePrincipal],
+        await this.azureResourcesQueries.readResourceGroupOwnershipRows()
+      )[0] ?? null;
+    } catch (error) {
+      if (error instanceof RuntimeHttpError && error.statusCode === 404) {
+        return enrichedServicePrincipal;
       }
 
       throw error;

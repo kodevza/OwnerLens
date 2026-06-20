@@ -15,9 +15,13 @@ import {
 import { readAzureIdentityEnrichmentStatus } from "./enrichment/azureIdentityEnrichment";
 import type { SnapshotImportStatus } from "../../../core/runtime/snapshotImportRegistry";
 import { RemediationPackageStore } from "../../../core/runtime/RemediationPackageStore";
-import { insertEntraServicePrincipalRows, readEntraServicePrincipalRows } from "./entra/servicePrincipalsTable";
+import {
+  insertEntraServicePrincipalRows,
+  readEntraServicePrincipalRowById,
+  readEntraServicePrincipalRows
+} from "./entra/servicePrincipalsTable";
 import { insertEntraApplicationRows } from "./entra/applicationsTable";
-import { prepareRuntimeSqlSchema } from "./runtimeSqlSchema";
+import { prepareRuntimeSqlSchema } from "./SnapshotImporter";
 import type { ZeroTrustAssessmentReport } from "./zta/types";
 
 type TestGlobal = typeof globalThis & {
@@ -328,6 +332,28 @@ test("normalizes service principal tag separators on import", async () => {
     "environment:prod",
     "WindowsAzureActiveDirectoryIntegratedApp"
   ]);
+});
+
+test("reads a single service principal row by id", async () => {
+  const rows = await withDuckDb(async ({ connection }) => {
+    await prepareRuntimeSqlSchema(connection);
+    await insertEntraServicePrincipalRows(connection, [
+      servicePrincipal("sp-one", "app-one", "One app", "Application"),
+      servicePrincipal("sp-two", "app-two", "Two app", "Application")
+    ]);
+
+    return {
+      match: await readEntraServicePrincipalRowById(connection, " SP-TWO "),
+      missing: await readEntraServicePrincipalRowById(connection, "missing")
+    };
+  });
+
+  expect(rows.match).toMatchObject({
+    id: "sp-two",
+    appId: "app-two",
+    displayName: "Two app"
+  });
+  expect(rows.missing).toBeNull();
 });
 
 test("imports Zero Trust Assessment report into DuckDB and reads it back through the runtime", async () => {
@@ -1903,6 +1929,73 @@ test("reads direct Entra user group memberships by user identity fields", async 
         { groupId: "group-alpha", groupDisplayName: "Alpha Operators" },
         { groupId: "group-beta", groupDisplayName: "Beta Operators" }
       ]
+    });
+  });
+});
+
+test("reads imported Azure and Entra inventory stats", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    servicePrincipals: [
+      servicePrincipal("sp-1", "app-1", "Example app", "Application"),
+      servicePrincipal("sp-2", "app-2", "Second app", "Application"),
+      servicePrincipal("mi-1", "mi-app-1", "Managed identity", "ManagedIdentity")
+    ],
+    groupMembers: [
+      {
+        groupId: "group-1",
+        groupDisplayName: "Owners",
+        memberId: "user-1",
+        memberDisplayName: "Alice Owner",
+        memberType: "user",
+        memberUserPrincipalName: "alice@example.test",
+        memberMail: "alice@example.test",
+        memberAppId: null,
+        memberServicePrincipalType: null
+      },
+      {
+        groupId: "group-2",
+        groupDisplayName: "Operators",
+        memberId: "user-2",
+        memberDisplayName: "Bob Operator",
+        memberType: "user",
+        memberUserPrincipalName: "bob@example.test",
+        memberMail: "bob@example.test",
+        memberAppId: null,
+        memberServicePrincipalType: null
+      },
+      {
+        groupId: "group-2",
+        groupDisplayName: "Operators",
+        memberId: "sp-1",
+        memberDisplayName: "Example app",
+        memberType: "servicePrincipal",
+        memberUserPrincipalName: null,
+        memberMail: null,
+        memberAppId: "app-1",
+        memberServicePrincipalType: "Application"
+      }
+    ]
+  };
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot(),
+    roleAssignments: [
+      roleAssignment("sp-1", "Reader", "/subscriptions/sub-1/resourceGroups/rg-app", "ResourceGroup"),
+      roleAssignment("sp-2", "Contributor", "/subscriptions/sub-1/resourceGroups/rg-app", "ResourceGroup")
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+
+    await expect(runtime.readInventoryStats()).resolves.toEqual({
+      users: 2,
+      groups: 2,
+      servicePrincipals: 2,
+      managedIdentities: 1,
+      resourceGroups: 1,
+      rbacAssignments: 2
     });
   });
 });

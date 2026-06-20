@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import type { ZtaRelatedObject } from "../../core/azure/ztaReport";
 import { appConfig } from "../../core/config";
-import { createViewHistoryState, getHistoryStateView } from "../../lib/historyState";
 import type { RemediationPackage } from "../../core/runtime/remediation";
 import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import { ClosableTab } from "../../report/components/ClosableTab";
@@ -19,6 +18,7 @@ import type {
   EntraPermissionsPrincipalSelection,
   OwnershipEvidenceSelection
 } from "./identity/ServicePrincipalFieldRenderers";
+import { useAzureViewNavigation } from "./useAzureViewNavigation";
 import { ZtaComponent } from "./remediation/ZtaComponent";
 
 type AzureView =
@@ -77,7 +77,10 @@ type RemediationPackageTab = {
 };
 
 export function AzureComponent() {
-  const [activeView, setActiveView] = useState<AzureView>("servicePrincipals");
+  const { activeView, activateView } = useAzureViewNavigation<AzureView>(
+    "servicePrincipals",
+    enabledViewValues
+  );
   const [azureRbacTab, setAzureRbacTab] = useState<AzureRbacTab | null>(null);
   const [entraPermissionsTab, setEntraPermissionsTab] = useState<EntraPermissionsTab | null>(null);
   const [ownershipEvidenceTab, setOwnershipEvidenceTab] = useState<OwnershipEvidenceTab | null>(null);
@@ -88,79 +91,6 @@ export function AzureComponent() {
     managedIdentities: createPersistentTableControls(),
     resourceGroups: createPersistentTableControls()
   });
-  const activeViewRef = useRef<AzureView>("servicePrincipals");
-  const viewHistoryRef = useRef<AzureView[]>([]);
-
-  useEffect(() => {
-    activeViewRef.current = activeView;
-  }, [activeView]);
-
-  const activateView = useCallback((nextView: AzureView) => {
-    if (!enabledViewValues.includes(nextView)) {
-      return;
-    }
-
-    const currentView = activeViewRef.current;
-    if (nextView === currentView) {
-      return;
-    }
-
-    viewHistoryRef.current = [...viewHistoryRef.current, currentView];
-    activeViewRef.current = nextView;
-    setActiveView(nextView);
-    window.history.pushState(createViewHistoryState(nextView), "", window.location.href);
-  }, []);
-
-  const navigateBack = useCallback((): boolean => {
-    const previousView = viewHistoryRef.current.pop();
-    if (!previousView) {
-      return false;
-    }
-
-    activeViewRef.current = previousView;
-    setActiveView(previousView);
-    return true;
-  }, []);
-
-  useEffect(() => {
-    window.history.replaceState(createViewHistoryState(activeViewRef.current), "", window.location.href);
-
-    function handlePopState(event: PopStateEvent) {
-      const previousView = getHistoryStateView(event.state, enabledViewValues);
-      if (!previousView) {
-        return;
-      }
-
-      const previousViewIndex = viewHistoryRef.current.lastIndexOf(previousView);
-      if (previousViewIndex >= 0) {
-        viewHistoryRef.current = viewHistoryRef.current.slice(0, previousViewIndex);
-      }
-
-      activeViewRef.current = previousView;
-      setActiveView(previousView);
-    }
-
-    window.addEventListener("popstate", handlePopState);
-    return () => {
-      window.removeEventListener("popstate", handlePopState);
-    };
-  }, []);
-
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Backspace" || event.defaultPrevented || isEditableBackspaceTarget(event.target)) {
-        return;
-      }
-
-      event.preventDefault();
-      navigateBack();
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [navigateBack]);
 
   function openRelatedPrincipal(relatedObject: ZtaRelatedObject) {
     const view = getRelatedPrincipalView(relatedObject);
@@ -272,60 +202,62 @@ export function AzureComponent() {
 
   return (
     <section className="flex flex-col">
-      <Tabs className="relative z-10 -mb-px gap-0" value={activeView} onValueChange={(value) => activateView(value as AzureView)}>
-        <TabsList aria-label="Azure data" className="w-fit max-w-full items-end gap-1 rounded-none bg-transparent p-0 shadow-none">
-          <TabsTrigger className={azureTabTriggerClassName} value="resourceGroups">
-            Resource groups
-          </TabsTrigger>
-          <TabsTrigger className={azureTabTriggerClassName} value="servicePrincipals">
-            Service principals
-          </TabsTrigger>
-          <TabsTrigger className={azureTabTriggerClassName} value="managedIdentities">
-            Managed identities
-          </TabsTrigger>
-          {zeroTrustAssessmentEnabled ? (
-            <TabsTrigger className={azureTabTriggerClassName} value="zeroTrustAssessment">
-              Zero Trust Assessment
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <Tabs className="relative z-10 -mb-px gap-0" value={activeView} onValueChange={(value) => activateView(value as AzureView)}>
+          <TabsList aria-label="Azure data" className="w-fit max-w-full items-end gap-1 rounded-none bg-transparent p-0 shadow-none">
+            <TabsTrigger className={azureTabTriggerClassName} value="resourceGroups">
+              Resource groups
             </TabsTrigger>
-          ) : null}
-          {azureRbacTab ? (
-            <ClosableTab
-              active={activeView === "azureRbac"}
-              closeLabel={`Close ${azureRbacTab.displayName} Azure RBAC tab`}
-              label={azureRbacTab.displayName}
-              onClose={closeAzureRbac}
-              value="azureRbac"
-            />
-          ) : null}
-          {entraPermissionsTab ? (
-            <ClosableTab
-              active={activeView === "entraPermissions"}
-              closeLabel={`Close ${entraPermissionsTab.displayName} Entra API permissions tab`}
-              label={`${entraPermissionsTab.displayName} permissions`}
-              onClose={closeEntraPermissions}
-              value="entraPermissions"
-            />
-          ) : null}
-          {ownershipEvidenceTab ? (
-            <ClosableTab
-              active={activeView === "ownershipEvidence"}
-              closeLabel={`Close ${ownershipEvidenceDisplayName} ownership evidence tab`}
-              label={`${ownershipEvidenceDisplayName} owners`}
-              onClose={closeOwnershipEvidence}
-              value="ownershipEvidence"
-            />
-          ) : null}
-          {remediationPackageTab ? (
-            <ClosableTab
-              active={activeView === "remediationPackage"}
-              closeLabel="Close remediation package tab"
-              label="Remediation package"
-              onClose={closeRemediationPackage}
-              value="remediationPackage"
-            />
-          ) : null}
-        </TabsList>
-      </Tabs>
+            <TabsTrigger className={azureTabTriggerClassName} value="servicePrincipals">
+              Service principals
+            </TabsTrigger>
+            <TabsTrigger className={azureTabTriggerClassName} value="managedIdentities">
+              Managed identities
+            </TabsTrigger>
+            {zeroTrustAssessmentEnabled ? (
+              <TabsTrigger className={azureTabTriggerClassName} value="zeroTrustAssessment">
+                Zero Trust Assessment
+              </TabsTrigger>
+            ) : null}
+            {azureRbacTab ? (
+              <ClosableTab
+                active={activeView === "azureRbac"}
+                closeLabel={`Close ${azureRbacTab.displayName} Azure RBAC tab`}
+                label={azureRbacTab.displayName}
+                onClose={closeAzureRbac}
+                value="azureRbac"
+              />
+            ) : null}
+            {entraPermissionsTab ? (
+              <ClosableTab
+                active={activeView === "entraPermissions"}
+                closeLabel={`Close ${entraPermissionsTab.displayName} Entra API permissions tab`}
+                label={`${entraPermissionsTab.displayName} permissions`}
+                onClose={closeEntraPermissions}
+                value="entraPermissions"
+              />
+            ) : null}
+            {ownershipEvidenceTab ? (
+              <ClosableTab
+                active={activeView === "ownershipEvidence"}
+                closeLabel={`Close ${ownershipEvidenceDisplayName} ownership evidence tab`}
+                label={`${ownershipEvidenceDisplayName} owners`}
+                onClose={closeOwnershipEvidence}
+                value="ownershipEvidence"
+              />
+            ) : null}
+            {remediationPackageTab ? (
+              <ClosableTab
+                active={activeView === "remediationPackage"}
+                closeLabel="Close remediation package tab"
+                label="Remediation package"
+                onClose={closeRemediationPackage}
+                value="remediationPackage"
+              />
+            ) : null}
+          </TabsList>
+        </Tabs>
+      </div>
       <div className="relative z-0">
         {activeView === "resourceGroups" ? (
           <ResourceGroupComponent
@@ -499,38 +431,4 @@ function getRelatedPrincipalView(
     default:
       return null;
   }
-}
-
-function isEditableBackspaceTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  const editableElement = target.closest("input, textarea, [contenteditable]");
-  if (!(editableElement instanceof HTMLElement)) {
-    return false;
-  }
-
-  if (editableElement instanceof HTMLTextAreaElement) {
-    return !editableElement.disabled && !editableElement.readOnly;
-  }
-
-  if (editableElement instanceof HTMLInputElement) {
-    return !editableElement.disabled && !editableElement.readOnly && isTextInputType(editableElement.type);
-  }
-
-  return editableElement.isContentEditable;
-}
-
-function isTextInputType(type: string): boolean {
-  return [
-    "",
-    "email",
-    "number",
-    "password",
-    "search",
-    "tel",
-    "text",
-    "url"
-  ].includes(type);
 }

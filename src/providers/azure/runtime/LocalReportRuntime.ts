@@ -6,7 +6,6 @@ import {
   type LocalSnapshotFile
 } from "../../../core/runtime/localSnapshotFiles";
 
-import type { EntraUserGroupMembershipResponse } from "../../../core/azure/entra/types";
 import type { ZtaReport, ZtaReportTest } from "../../../core/azure/ztaReport";
 import type {
   CreateRuntimeRemediationPackageRequest,
@@ -16,7 +15,10 @@ import type {
 import type { RuntimeCollectionCsvExport } from "../../../core/runtime/collectionExport";
 import { EntraCollectionQueryService } from "./entra/EntraCollectionQueryService";
 import { LocalEntraReportRuntime } from "./entra/LocalEntraReportRuntime";
-import type { EntraPrincipalPermissions } from "./entra/EntraReadModel";
+import type {
+  EntraPrincipalPermissions,
+  EntraUserGroupMembershipResponse
+} from "./entra/EntraReadModel";
 import {
   AzureResourcesCollectionQueryService
 } from "./resources/AzureResourcesCollectionQueryService";
@@ -26,8 +28,8 @@ import {
   type LocalReportPaginatedCollection
 } from "../../../core/runtime/collections";
 import { RuntimeHost } from "./RuntimeHost";
-import { SnapshotImporter } from "./SnapshotImporter";
-import { EnrichmentService } from "./EnrichmentService";
+import { prepareRuntimeSqlSchema, SnapshotImporter } from "./SnapshotImporter";
+import { EnrichmentService, type LocalReportRuntimeInventoryStats } from "./EnrichmentService";
 import { ExportService } from "./ExportService";
 import {
   OwnershipRuntime,
@@ -36,7 +38,6 @@ import {
   type OwnershipEvidenceResponse
 } from "./ownership/OwnershipRuntime";
 import { RemediationRuntime } from "./remediation/RemediationRuntime";
-import { prepareRuntimeSqlSchema } from "./runtimeSqlSchema";
 
 export type LocalReportRuntimeOptions = {
   dataDir: string;
@@ -119,6 +120,10 @@ export class LocalReportRuntime {
     return { files: await listLocalSnapshotFiles(this.dataDir) };
   }
 
+  async readInventoryStats(): Promise<LocalReportRuntimeInventoryStats> {
+    await this.initialize();
+    return this.enrichmentService.readInventoryStats();
+  }
 
   async setOwnerCandidateDisabled(key: DisabledOwnerKey, disabled: boolean): Promise<number> {
     await this.initialize();

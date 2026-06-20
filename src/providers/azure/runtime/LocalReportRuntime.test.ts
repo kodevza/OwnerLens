@@ -429,6 +429,14 @@ test("defines local report runtime REST endpoints", async () => {
         tasks: []
       })
     ),
+    readInventoryStats: jest.fn().mockResolvedValue({
+      users: 12,
+      groups: 4,
+      servicePrincipals: 1234,
+      managedIdentities: 9,
+      resourceGroups: 42,
+      rbacAssignments: 321
+    }),
     readDisabledOwnerEvidenceKeys: jest.fn(() => Promise.resolve(new Set(disabledOwnerKeys))),
     setOwnerCandidateDisabled: jest.fn((key: string, disabled: boolean) => {
       if (disabled) {
@@ -460,6 +468,7 @@ test("defines local report runtime REST endpoints", async () => {
     endpoints,
     "/api/data/zeroTrustAssessment/remediationPackages"
   );
+  const runtimeStatsEndpoint = getEndpoint(endpoints, "/api/data/runtime/stats");
   const remediationPackagesEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages");
   const remediationTaskExportEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages/tasks", "GET");
   const remediationTasksEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages/tasks", "DELETE");
@@ -480,12 +489,23 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/ownership/ownerCandidates/status",
     "/api/data/zeroTrustAssessment/report",
     "/api/data/zeroTrustAssessment/remediationPackages",
+    "/api/data/runtime/stats",
     "/api/data/remediationPackages",
     "/api/data/remediationPackages/tasks",
     "/api/data/remediationPackages/tasks"
   ]);
   await expect(listEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data") })).resolves.toEqual({
     files: []
+  });
+  await expect(
+    runtimeStatsEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data/runtime/stats") })
+  ).resolves.toEqual({
+    users: 12,
+    groups: 4,
+    servicePrincipals: 1234,
+    managedIdentities: 9,
+    resourceGroups: 42,
+    rbacAssignments: 321
   });
   await expect(
     servicePrincipalsEndpoint.handle({

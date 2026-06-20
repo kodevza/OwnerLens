@@ -267,6 +267,20 @@ export const createRemediationPackageResponseSchema: RuntimeRestJsonSchema = {
   }
 };
 
+export const runtimeInventoryStatsResponseSchema: RuntimeRestJsonSchema = {
+  type: "object",
+  required: ["users", "groups", "servicePrincipals", "managedIdentities", "resourceGroups", "rbacAssignments"],
+  additionalProperties: false,
+  properties: {
+    users: { type: "integer" },
+    groups: { type: "integer" },
+    servicePrincipals: { type: "integer" },
+    managedIdentities: { type: "integer" },
+    resourceGroups: { type: "integer" },
+    rbacAssignments: { type: "integer" }
+  }
+};
+
 export const ownerCandidateStatusResponseSchema: RuntimeRestJsonSchema = {
   type: "object",
   required: ["key", "status", "disabled", "disabledCount"],

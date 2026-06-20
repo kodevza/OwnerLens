@@ -476,13 +476,25 @@ async function readAzureResourceGroupOwnershipRows(
         and lower(trim(owner.resource_group)) = lower(trim(rg.resource_group))
       order by rg.ordinal, owner.priority
     `,
-    {
-      subscriptionIds: JSON.stringify(options.target?.subscriptionIds ?? []),
-      resourceGroups: JSON.stringify(options.target?.resourceGroups ?? []),
-      principalIds: JSON.stringify(options.target?.principalIds ?? []),
-      limit: Math.max(1, Math.trunc(options.limit))
-    }
+    buildResourceGroupOwnershipSqlParams(options)
   )).map(mapAzureResourceGroupOwnershipRow);
+}
+
+function buildResourceGroupOwnershipSqlParams(options: {
+  target?: { subscriptionIds: string[]; resourceGroups: string[]; principalIds: string[] };
+  limit: number;
+}): Record<string, DuckDBValue> {
+  const params: Record<string, DuckDBValue> = {
+    principalIds: JSON.stringify(options.target?.principalIds ?? []),
+    limit: Math.max(1, Math.trunc(options.limit))
+  };
+
+  if (options.target) {
+    params.subscriptionIds = JSON.stringify(options.target.subscriptionIds);
+    params.resourceGroups = JSON.stringify(options.target.resourceGroups);
+  }
+
+  return params;
 }
 
 function normalizeResourceGroupOwnershipSqlTarget(

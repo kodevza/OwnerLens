@@ -22,7 +22,11 @@ import { mapEntraServicePrincipalsToCore } from "./entraServicePrincipalMapper";
 import { readEntraUserGroupMembership } from "./groupMembersTable";
 import { readEntraOAuth2PermissionGrantRows } from "./oauth2PermissionGrantsTable";
 import { toManagedIdentities, toServicePrincipals } from "./principalProjection";
-import { readEntraServicePrincipalRows } from "./servicePrincipalsTable";
+import { readEntraServicePrincipalRowById, readEntraServicePrincipalRows } from "./servicePrincipalsTable";
+
+export type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
+export type { ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
+export type { EntraUserGroupMembershipResponse } from "../../../../core/azure/entra/types";
 
 export type EntraPrincipalPermissions = {
   principalId: string;
@@ -46,6 +50,25 @@ export async function readServicePrincipals(
     await readLatestAzureIdentityEnrichment(connection),
     permissionsByPrincipalId
   );
+}
+
+export async function findServicePrincipalById(
+  connection: DuckDBConnection,
+  principalId: string
+): Promise<ServicePrincipal | null> {
+  const servicePrincipal = await readEntraServicePrincipalRowById(connection, principalId);
+
+  if (!servicePrincipal) {
+    return null;
+  }
+
+  const permissionsByPrincipalId = await readPrincipalPermissionSummary(connection);
+
+  return toServicePrincipals(
+    mapEntraServicePrincipalsToCore([servicePrincipal]),
+    await readLatestAzureIdentityEnrichment(connection),
+    permissionsByPrincipalId
+  )[0] ?? null;
 }
 
 export async function readManagedIdentities(
@@ -101,7 +124,7 @@ export async function readUserGroupMembership(
   return readEntraUserGroupMembership(connection, user);
 }
 
-export async function readPrincipalPermissionSummary(
+async function readPrincipalPermissionSummary(
   connection: DuckDBConnection
 ): Promise<Map<string, EntraPrincipalPermissionSummary>> {
   const [oauth2PermissionGrants, appRoleAssignments] = await Promise.all([
@@ -131,7 +154,7 @@ export async function readPrincipalPermissionSummary(
   return permissionsByPrincipalId;
 }
 
-export function getOrCreatePrincipalPermissionSummary(
+function getOrCreatePrincipalPermissionSummary(
   permissionsByPrincipalId: Map<string, EntraPrincipalPermissionSummary>,
   principalId: string
 ): EntraPrincipalPermissionSummary {
@@ -152,18 +175,18 @@ export function getOrCreatePrincipalPermissionSummary(
   return summary;
 }
 
-export function countOAuthPermissionScopes(scope: string): number {
+function countOAuthPermissionScopes(scope: string): number {
   return scope.split(/\s+/).filter(Boolean).length;
 }
 
-export function toCoreEntraOAuth2PermissionGrant(grant: InputEntraOAuth2PermissionGrant): EntraOAuth2PermissionGrant {
+function toCoreEntraOAuth2PermissionGrant(grant: InputEntraOAuth2PermissionGrant): EntraOAuth2PermissionGrant {
   return {
     ...grant,
     risk: getOAuth2PermissionGrantRisk(grant)
   };
 }
 
-export function getOAuth2PermissionGrantRisk(
+function getOAuth2PermissionGrantRisk(
   grant: Pick<InputEntraOAuth2PermissionGrant, "consentType">
 ): PermissionRiskLevel {
   if (grant.consentType === "AllPrincipals") {
@@ -177,11 +200,11 @@ export function getOAuth2PermissionGrantRisk(
   return "medium";
 }
 
-export function maxPermissionRisk(left: PermissionRiskLevel, right: PermissionRiskLevel): PermissionRiskLevel {
+function maxPermissionRisk(left: PermissionRiskLevel, right: PermissionRiskLevel): PermissionRiskLevel {
   return permissionRiskRank[left] >= permissionRiskRank[right] ? left : right;
 }
 
-export const permissionRiskRank: Record<PermissionRiskLevel, number> = {
+const permissionRiskRank: Record<PermissionRiskLevel, number> = {
   none: 0,
   low: 1,
   medium: 2,
