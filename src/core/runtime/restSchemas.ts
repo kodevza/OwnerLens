@@ -9,34 +9,6 @@ const queryStringOrStringArraySchema: RuntimeRestJsonSchema = {
   ]
 };
 
-const snapshotImportStatusSchema: RuntimeRestJsonSchema = {
-  type: "object",
-  required: ["source", "fingerprint", "shouldImport", "importedAt", "skippedAt", "error"],
-  additionalProperties: false,
-  properties: {
-    source: { type: ["string", "null"] },
-    fingerprint: {
-      anyOf: [
-        {
-          type: "object",
-          required: ["source", "size", "mtimeMs"],
-          additionalProperties: false,
-          properties: {
-            source: { type: "string" },
-            size: { type: "number" },
-            mtimeMs: { type: "number" }
-          }
-        },
-        { type: "null" }
-      ]
-    },
-    shouldImport: { type: "boolean" },
-    importedAt: { type: ["string", "null"], format: "date-time" },
-    skippedAt: { type: ["string", "null"], format: "date-time" },
-    error: { type: ["string", "null"] }
-  }
-};
-
 export const jsonValueSchema: RuntimeRestJsonSchema = {
   anyOf: [
     { type: "string" },
@@ -141,13 +113,6 @@ export const snapshotListResponseSchema: RuntimeRestJsonSchema = {
     },
     error: { type: "string" }
   }
-};
-
-export const snapshotReadQuerySchema = querySchema({ name: queryStringSchema }, {}, ["name"]);
-
-export const rawSnapshotResponseSchema: RuntimeRestJsonSchema = {
-  type: "object",
-  additionalProperties: true
 };
 
 export const principalIdQuerySchema = querySchema({ principalId: queryStringSchema }, {}, ["principalId"]);
@@ -299,45 +264,6 @@ export const createRemediationPackageResponseSchema: RuntimeRestJsonSchema = {
   additionalProperties: false,
   properties: {
     id: { type: "string" }
-  }
-};
-
-export const runtimeInventoryStatsResponseSchema: RuntimeRestJsonSchema = {
-  type: "object",
-  required: ["users", "groups", "servicePrincipals", "managedIdentities", "resourceGroups", "rbacAssignments"],
-  additionalProperties: false,
-  properties: {
-    users: { type: "integer" },
-    groups: { type: "integer" },
-    servicePrincipals: { type: "integer" },
-    managedIdentities: { type: "integer" },
-    resourceGroups: { type: "integer" },
-    rbacAssignments: { type: "integer" }
-  }
-};
-
-export const runtimeEnrichmentStatusResponseSchema: RuntimeRestJsonSchema = {
-  type: "object",
-  required: ["lastStartedAt", "lastCompletedAt", "lastError"],
-  additionalProperties: false,
-  properties: {
-    lastStartedAt: { type: ["string", "null"], format: "date-time" },
-    lastCompletedAt: { type: ["string", "null"], format: "date-time" },
-    lastError: { type: ["string", "null"] }
-  }
-};
-
-export const runtimeStatusResponseSchema: RuntimeRestJsonSchema = {
-  type: "object",
-  required: ["initialized", "databasePath", "entra", "azureResources", "zeroTrustAssessment", "enrichment"],
-  additionalProperties: false,
-  properties: {
-    initialized: { type: "boolean" },
-    databasePath: { type: "string" },
-    entra: snapshotImportStatusSchema,
-    azureResources: snapshotImportStatusSchema,
-    zeroTrustAssessment: snapshotImportStatusSchema,
-    enrichment: runtimeEnrichmentStatusResponseSchema
   }
 };
 

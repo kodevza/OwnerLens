@@ -20,13 +20,3 @@ export type OwnershipTarget = {
   riskLevel?: OwnershipTargetRiskLevel;
   refs?: OwnershipTargetRef[];
 };
-
-export function buildZeroTrustAssessmentAuditFindingTarget(
-  target: Omit<OwnershipTarget, "kind" | "sourceProvider">
-): OwnershipTarget {
-  return {
-    ...target,
-    kind: "zta.auditFinding",
-    sourceProvider: "zeroTrustAssessment"
-  };
-}

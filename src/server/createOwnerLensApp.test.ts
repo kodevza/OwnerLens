@@ -50,3 +50,18 @@ test("rejects non-GET static requests without replacing runtime API handling", a
   expect(apiResponse.status).toBe(404);
   expect(apiResponse.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
 });
+
+test("serves the runtime data endpoint from existing runtime methods", async () => {
+  const listSnapshots = jest.fn().mockResolvedValue({ files: [] });
+  const app = createOwnerLensApp({
+    distRoot,
+    runtime: { listSnapshots } as unknown as LocalReportRuntime
+  });
+
+  const response = await app.request("/api/data");
+
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
+  expect(await response.json()).toEqual({ files: [] });
+  expect(listSnapshots).toHaveBeenCalledTimes(1);
+});
