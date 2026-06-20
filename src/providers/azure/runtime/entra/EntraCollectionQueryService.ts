@@ -18,12 +18,12 @@ import {
   type LocalReportCollectionQueryOptions,
   type LocalReportPaginatedCollection
 } from "../../../../core/runtime/collections";
-import type { PageOptions } from "../../../../core/runtime/pagination";
 import type { RuntimeCollectionCsvExport } from "../../../../core/runtime/collectionExport";
 import type { AzureResourcesCollectionQueryService } from "../resources/AzureResourcesCollectionQueryService";
 import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
 import type { ExportService } from "../ExportService";
 import type { LocalEntraReportRuntime } from "./LocalEntraReportRuntime";
+import { getRuntimeServicePrincipalFilters } from "./servicePrincipalsTable";
 import {
   projectManagedIdentityOwners,
   projectServicePrincipalOwners
@@ -60,25 +60,45 @@ export class EntraCollectionQueryService {
   async queryServicePrincipals(
     options: LocalReportCollectionQueryOptions
   ): Promise<LocalReportPaginatedCollection<"entra.servicePrincipals">> {
-    return buildPaginatedCollection("entra.servicePrincipals", await this.readServicePrincipalRows(options), options);
+    const rows = await this.readServicePrincipalRows(options);
+    const collection = buildPaginatedCollection(
+      "entra.servicePrincipals",
+      rows,
+      getRuntimePrincipalCollectionOptions(options)
+    );
+
+    return withDuckDbCount(collection, await this.countServicePrincipalRows(options), options);
   }
 
   async exportServicePrincipalsCsv(
     options: LocalReportCollectionQueryOptions
   ): Promise<RuntimeCollectionCsvExport<"entra.servicePrincipals">> {
-    return this.exportService.exportEntraServicePrincipalsCsv(await this.readServicePrincipalRows(), options);
+    return this.exportService.exportEntraServicePrincipalsCsv(
+      await this.readServicePrincipalRows(options),
+      getRuntimePrincipalCollectionOptions(options)
+    );
   }
 
   async queryManagedIdentities(
     options: LocalReportCollectionQueryOptions
   ): Promise<LocalReportPaginatedCollection<"entra.managedIdentities">> {
-    return buildPaginatedCollection("entra.managedIdentities", await this.readManagedIdentityRows(), options);
+    const rows = await this.readManagedIdentityRows(options);
+    const collection = buildPaginatedCollection(
+      "entra.managedIdentities",
+      rows,
+      getRuntimePrincipalCollectionOptions(options)
+    );
+
+    return withDuckDbCount(collection, await this.countManagedIdentityRows(options), options);
   }
 
   async exportManagedIdentitiesCsv(
     options: LocalReportCollectionQueryOptions
   ): Promise<RuntimeCollectionCsvExport<"entra.managedIdentities">> {
-    return this.exportService.exportEntraManagedIdentitiesCsv(await this.readManagedIdentityRows(), options);
+    return this.exportService.exportEntraManagedIdentitiesCsv(
+      await this.readManagedIdentityRows(options),
+      getRuntimePrincipalCollectionOptions(options)
+    );
   }
 
   async readServicePrincipalRemediationSummaries(
@@ -137,12 +157,15 @@ export class EntraCollectionQueryService {
     );
   }
 
-  async readManagedIdentityRows(): Promise<Record<string, unknown>[]> {
-    const managedIdentities = await this.enrichWithZtaRemediationSummaries(await this.entra.readManagedIdentities());
+  async readManagedIdentityRows(options: LocalReportCollectionQueryOptions = {}): Promise<Record<string, unknown>[]> {
+    const ownershipPageOptions = getPrincipalSourceReadOptions(options);
+    const managedIdentities = await this.enrichWithZtaRemediationSummaries(
+      await this.entra.readManagedIdentities(ownershipPageOptions)
+    );
 
     try {
       const [resourceGroupOwnershipRows, userAssignedManagedIdentities] = await Promise.all([
-        this.azureResourcesQueries.readResourceGroupOwnershipRows(),
+        this.azureResourcesQueries.readResourceGroupOwnershipRows(ownershipPageOptions),
         this.azureResources.readAzureUserAssignedManagedIdentities()
       ]);
 
@@ -160,13 +183,22 @@ export class EntraCollectionQueryService {
     }
   }
 
-  async readServicePrincipalRows(options: PageOptions = {}): Promise<Record<string, unknown>[]> {
-    const servicePrincipals = await this.enrichWithZtaRemediationSummaries(await this.entra.readServicePrincipals());
+  async countManagedIdentityRows(options: LocalReportCollectionQueryOptions = {}): Promise<number> {
+    return this.entra.countManagedIdentities({
+      filters: options.filters
+    });
+  }
+
+  async readServicePrincipalRows(options: LocalReportCollectionQueryOptions = {}): Promise<Record<string, unknown>[]> {
+    const ownershipPageOptions = getPrincipalSourceReadOptions(options);
+    const servicePrincipals = await this.enrichWithZtaRemediationSummaries(
+      await this.entra.readServicePrincipals(ownershipPageOptions)
+    );
 
     try {
       return enrichServicePrincipalsWithResourceGroupOwners(
         servicePrincipals,
-        await this.azureResourcesQueries.readResourceGroupOwnershipRows(options)
+        await this.azureResourcesQueries.readResourceGroupOwnershipRows(ownershipPageOptions)
       ) as unknown as Record<string, unknown>[];
     } catch (error) {
       if (error instanceof RuntimeHttpError && error.statusCode === 404) {
@@ -175,6 +207,12 @@ export class EntraCollectionQueryService {
 
       throw error;
     }
+  }
+
+  async countServicePrincipalRows(options: LocalReportCollectionQueryOptions = {}): Promise<number> {
+    return this.entra.countServicePrincipals({
+      filters: options.filters
+    });
   }
 
   async findServicePrincipalById(principalId: string): Promise<ServicePrincipal | null> {
@@ -212,6 +250,53 @@ export class EntraCollectionQueryService {
       RemediationPackages: packagesByPrincipalId.get(row.id.toLowerCase()) ?? []
     }));
   }
+}
+
+function getRuntimePrincipalCollectionOptions(
+  options: LocalReportCollectionQueryOptions
+): LocalReportCollectionQueryOptions {
+  return {
+    ...options,
+    filters: getRuntimeServicePrincipalFilters(options.filters ?? [])
+  };
+}
+
+function getPrincipalSourceReadOptions(
+  options: LocalReportCollectionQueryOptions
+): LocalReportCollectionQueryOptions {
+  if (!canUseDuckDbLookupLimit(options)) {
+    return {
+      filters: options.filters
+    };
+  }
+
+  return {
+    page: options.page ?? 1,
+    pageSize: options.pageSize ?? 50000,
+    filters: options.filters
+  };
+}
+
+function withDuckDbCount<CollectionId extends string>(
+  collection: LocalReportPaginatedCollection<CollectionId>,
+  duckDbCount: number,
+  options: LocalReportCollectionQueryOptions
+): LocalReportPaginatedCollection<CollectionId> {
+  if (!canUseDuckDbLookupLimit(options)) {
+    return collection;
+  }
+
+  return {
+    ...collection,
+    count: duckDbCount
+  };
+}
+
+function canUseDuckDbLookupLimit(options: LocalReportCollectionQueryOptions): boolean {
+  return (
+    getRuntimeServicePrincipalFilters(options.filters ?? []).length === 0 &&
+    (options.sortRules ?? []).filter((rule) => rule.columnId.trim()).length === 0
+  );
 }
 
 function enrichManagedIdentitiesWithResourceGroupOwners(

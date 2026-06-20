@@ -17,16 +17,19 @@ import type {
   EntraAppRoleAssignment,
   EntraOAuth2PermissionGrant
 } from "../../../../core/azure/entra/types";
-import type { EntraServicePrincipal, EntraSnapshot } from "../../inputTransferObject/generated/EntraSnapshot";
+import type { EntraSnapshot } from "../../inputTransferObject/generated/EntraSnapshot";
 import {
+  countManagedIdentities,
+  countServicePrincipals,
   readAppRoleAssignments,
   readManagedIdentities,
   readOAuth2PermissionGrants,
   readPrincipalPermissions,
-  readRawServicePrincipals,
   findServicePrincipalById,
   readServicePrincipals,
   readUserGroupMembership,
+  type EntraPermissionReadOptions,
+  type EntraPrincipalReadOptions,
   type EntraPrincipalPermissions,
   type EntraUserGroupMembershipResponse,
   type ManagedIdentity,
@@ -99,14 +102,14 @@ export class LocalEntraReportRuntime {
     return readEntraSnapshotFromDuckDb(this.getConnection());
   }
 
-  async readEntraServicePrincipals(): Promise<EntraServicePrincipal[]> {
+  async readServicePrincipals(options: EntraPrincipalReadOptions = {}): Promise<ServicePrincipal[]> {
     this.assertImported();
-    return readRawServicePrincipals(this.getConnection());
+    return readServicePrincipals(this.getConnection(), options);
   }
 
-  async readServicePrincipals(): Promise<ServicePrincipal[]> {
+  async countServicePrincipals(options: EntraPrincipalReadOptions = {}): Promise<number> {
     this.assertImported();
-    return readServicePrincipals(this.getConnection());
+    return countServicePrincipals(this.getConnection(), options);
   }
 
   async findServicePrincipalById(principalId: string): Promise<ServicePrincipal | null> {
@@ -114,19 +117,28 @@ export class LocalEntraReportRuntime {
     return findServicePrincipalById(this.getConnection(), principalId);
   }
 
-  async readManagedIdentities(): Promise<ManagedIdentity[]> {
+  async readManagedIdentities(options: EntraPrincipalReadOptions = {}): Promise<ManagedIdentity[]> {
     this.assertImported();
-    return readManagedIdentities(this.getConnection());
+    return readManagedIdentities(this.getConnection(), options);
   }
 
-  async readEntraOAuth2PermissionGrants(): Promise<EntraOAuth2PermissionGrant[]> {
+  async countManagedIdentities(options: EntraPrincipalReadOptions = {}): Promise<number> {
     this.assertImported();
-    return readOAuth2PermissionGrants(this.getConnection());
+    return countManagedIdentities(this.getConnection(), options);
   }
 
-  async readEntraAppRoleAssignments(): Promise<EntraAppRoleAssignment[]> {
+  async readEntraOAuth2PermissionGrants(
+    options: EntraPermissionReadOptions = {}
+  ): Promise<EntraOAuth2PermissionGrant[]> {
     this.assertImported();
-    return readAppRoleAssignments(this.getConnection());
+    return readOAuth2PermissionGrants(this.getConnection(), options);
+  }
+
+  async readEntraAppRoleAssignments(
+    options: EntraPermissionReadOptions = {}
+  ): Promise<EntraAppRoleAssignment[]> {
+    this.assertImported();
+    return readAppRoleAssignments(this.getConnection(), options);
   }
 
   async readEntraPrincipalPermissions(principalId: string): Promise<EntraPrincipalPermissions> {
