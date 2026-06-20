@@ -13,7 +13,7 @@ import {
   readZeroTrustAssessmentReportFromDuckDb
 } from "./zta/snapshotStore";
 import { RemediationPackageStore } from "../../../core/runtime/RemediationPackageStore";
-import { insertEntraServicePrincipalRows } from "./entra/servicePrincipalsTable";
+import { insertEntraServicePrincipalRows, readEntraServicePrincipalRows } from "./entra/servicePrincipalsTable";
 import { insertEntraApplicationRows } from "./entra/applicationsTable";
 import { prepareRuntimeSqlSchema } from "./runtimeSqlSchema";
 import type { ZeroTrustAssessmentReport } from "./zta/types";
@@ -235,6 +235,24 @@ test("normalizes runtime identifier columns on insert", async () => {
     relatedObjects: [{ related_object_id: "app-object-upper" }, { related_object_id: "sp-upper" }],
     remediationTasks: [{ target_id: "target-upper" }]
   });
+});
+
+test("normalizes service principal tag separators on import", async () => {
+  const rows = await withDuckDb(async ({ connection }) => {
+    await prepareRuntimeSqlSchema(connection);
+    const taggedServicePrincipal = servicePrincipal("sp-tagged", "app-tagged", "Tagged app", "Application");
+    taggedServicePrincipal.tags = ["owner=team-a", "environment=prod", "WindowsAzureActiveDirectoryIntegratedApp"];
+
+    await insertEntraServicePrincipalRows(connection, [taggedServicePrincipal]);
+
+    return readEntraServicePrincipalRows(connection);
+  });
+
+  expect(rows[0]?.tags).toEqual([
+    "owner:team-a",
+    "environment:prod",
+    "WindowsAzureActiveDirectoryIntegratedApp"
+  ]);
 });
 
 test("reads compact runtime inventory stats", async () => {

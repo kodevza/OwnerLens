@@ -358,7 +358,12 @@ async function readAzureResourceGroupOwnershipRows(
             latest_principal.display_name || ' (' || latest_log.normalized_caller || ')',
             latest_log.normalized_caller
           ) as owner,
-          case when contains(latest_log.normalized_caller, '@') then 'ownerUser' else 'unknown' end ||
+          case
+            when lower(coalesce(latest_log.caller_identity_type, '')) = 'app' then 'application'
+            when latest_principal.id is not null then 'application'
+            when contains(latest_log.normalized_caller, '@') then 'ownerUser'
+            else 'unknown'
+          end ||
             ':' || lower(trim(latest_log.normalized_caller)) as owner_candidate,
           'low' as confidence,
           'activity.lastModifier' as source,

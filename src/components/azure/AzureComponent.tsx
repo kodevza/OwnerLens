@@ -380,6 +380,7 @@ export function AzureComponent() {
             key={getOwnershipEvidenceTabKey(ownershipEvidenceTab)}
             displayName={ownershipEvidenceDisplayName ?? ownershipEvidenceTab.displayName}
             target={ownershipEvidenceTab.target}
+            onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, ownershipEvidenceTab.returnView)}
           />
         ) : null}
         {zeroTrustAssessmentEnabled && activeView === "zeroTrustAssessment" ? (

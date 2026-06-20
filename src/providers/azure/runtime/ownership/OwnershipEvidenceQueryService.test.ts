@@ -144,6 +144,107 @@ test("returns indirect activity log owner evidence for a service principal with 
   });
 });
 
+test("returns the app caller as indirect activity log owner evidence for a service principal with Azure RBAC on the resource group", async () => {
+  const subscriptionId = "7e7963c6-cddc-4d64-bcdd-1bfb727a05c2";
+  const resourceGroup = "rg-ownerlens-foundry-dev-pl";
+  const callerObjectId = "5b7315c4-5800-421e-b2c0-567b4b9646c0";
+  const callerAppId = "8edd93e1-2103-40b4-bd70-6e34e586362d";
+  const threatProtectionScope = [
+    getResourceGroupScope(subscriptionId, resourceGroup),
+    "providers/Microsoft.Storage/storageAccounts/ownerlensfnw226058f",
+    "providers/Microsoft.Security/advancedThreatProtectionSettings/current"
+  ].join("/");
+  const service = buildOwnershipEvidenceService({
+    azureSnapshot: azureSnapshot({
+      resourceGroups: [
+        {
+          subscriptionId,
+          subscriptionName: "Test",
+          resourceGroup,
+          location: "polandcentral",
+          tags: null
+        }
+      ],
+      activityLogs: [
+        {
+          subscriptionId,
+          subscriptionName: "Test",
+          eventTimestamp: "2026-06-13T14:19:58.4125071Z",
+          submissionTimestamp: "2026-06-13T14:21:21Z",
+          caller: callerObjectId,
+          callerUserPrincipalName: null,
+          callerName: null,
+          callerEmail: null,
+          callerObjectId,
+          callerIdentityType: "app",
+          callerAppId,
+          callerIpAddress: null,
+          callerTenantId: "655ccf7b-6f5b-4110-86e3-45c4b8ffc39a",
+          operationName: "Updates the Advanced Threat Protection Settings",
+          operationNameValue: "Microsoft.Security/advancedThreatProtectionSettings/write",
+          status: "Succeeded",
+          subStatus: "OK (HTTP Status Code: 200)",
+          category: "Administrative",
+          resourceGroupName: resourceGroup,
+          resourceId: threatProtectionScope,
+          resourceProviderName: "Microsoft.Security",
+          resourceType: "Microsoft.Security/advancedThreatProtectionSettings",
+          authorizationAction: "Microsoft.Security/advancedThreatProtectionSettings/write",
+          authorizationScope: threatProtectionScope
+        }
+      ]
+    }),
+    servicePrincipals: [
+      servicePrincipal({
+        id: "sp-rbac",
+        displayName: "RBAC App",
+        roleAssignments: [
+          roleAssignment({
+            principalId: "sp-rbac",
+            scope: getResourceGroupScope(subscriptionId, resourceGroup),
+            roleDefinitionName: "Contributor",
+            subscriptionId,
+            subscriptionName: "Test"
+          })
+        ]
+      })
+    ]
+  });
+
+  await expect(service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "sp-rbac" })).resolves.toEqual({
+    target: {
+      kind: "servicePrincipal",
+      id: "sp-rbac",
+      displayName: "RBAC App"
+    },
+    evidence: [
+      {
+        key: `application:${callerObjectId}:${callerObjectId}:2026-06-13T14:19:58.4125071Z`,
+        ownerCandidateKey: `application:${callerObjectId}`,
+        ownerDisplayName: callerObjectId,
+        ownerType: "application",
+        confidence: "low",
+        source: "resourceGroupOwner",
+        path: "indirect",
+        discoverySource: "activityLog",
+        rank: 1,
+        evidence: callerObjectId,
+        date: "2026-06-13T14:19:58.4125071Z",
+        relatedScopes: [
+          {
+            subscriptionId,
+            subscriptionName: "Test",
+            resourceGroup,
+            principalId: "sp-rbac",
+            scope: getResourceGroupScope(subscriptionId, resourceGroup),
+            roleDefinitionName: "Contributor"
+          }
+        ]
+      }
+    ]
+  });
+});
+
 test("does not return direct service principal or application owner evidence for a service principal", async () => {
   const service = buildOwnershipEvidenceService({
     azureSnapshot: azureSnapshot({ resourceGroups: [] }),
@@ -796,6 +897,10 @@ function roleAssignment({
   };
 }
 
+function getResourceGroupScope(subscriptionId: string, resourceGroup: string): string {
+  return `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}`;
+}
+
 function activityLog({
   caller,
   eventTimestamp,
@@ -833,6 +938,7 @@ function readTestResourceGroupOwnershipSqlRows(
   targetKey: string;
   kind: "resourceGroup";
   owner: string | null;
+  ownerCandidate: string | null;
   ownerDisplayName: string | null;
   confidence: "high" | "medium" | "low" | "none";
   source: string;
@@ -861,6 +967,7 @@ function readTestResourceGroupOwnershipSqlRows(
           targetKey: `resourceGroup:${group.subscriptionId.toLowerCase()}:${group.resourceGroup.toLowerCase()}`,
           kind: "resourceGroup",
           owner: latestActivity.caller.trim().toLowerCase(),
+          ownerCandidate: `${getActivityOwnerType(latestActivity)}:${latestActivity.caller.trim().toLowerCase()}`,
           ownerDisplayName: latestActivity.caller.trim().toLowerCase(),
           confidence: "low",
           source: "activity.lastModifier",
@@ -875,6 +982,7 @@ function readTestResourceGroupOwnershipSqlRows(
         targetKey: `resourceGroup:${group.subscriptionId.toLowerCase()}:${group.resourceGroup.toLowerCase()}`,
         kind: "resourceGroup",
         owner: null,
+        ownerCandidate: null,
         ownerDisplayName: null,
         confidence: "none",
         source: "none",
@@ -889,12 +997,25 @@ function readTestResourceGroupOwnershipSqlRows(
       targetKey: `resourceGroup:${group.subscriptionId.toLowerCase()}:${group.resourceGroup.toLowerCase()}`,
       kind: "resourceGroup",
       owner: tag.value.trim().toLowerCase(),
+      ownerCandidate: null,
       ownerDisplayName: tag.value.trim().toLowerCase(),
       confidence: tag.confidence,
       source: `tag.${tag.name}`,
       evidence: [{ user: `${tag.name}=${tag.value}`, date: null }]
     }
   ));
+}
+
+function getActivityOwnerType(activity: AzureActivityLog): "application" | "ownerUser" | "unknown" {
+  if (activity.callerIdentityType?.trim().toLowerCase() === "app") {
+    return "application";
+  }
+
+  if (activity.caller?.includes("@")) {
+    return "ownerUser";
+  }
+
+  return "unknown";
 }
 
 function getLatestTestOwnerActivity(

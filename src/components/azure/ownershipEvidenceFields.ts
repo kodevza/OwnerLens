@@ -16,7 +16,12 @@ export const ownershipEvidenceFields: ReportFieldDescriptor<OwnershipEvidenceIte
       kind: "objectFields",
       fields: [
         { id: "owner", label: "Owner candidate", filterColumnId: "ownerDisplayName" },
-        { id: "type", label: "Type", filterColumnId: "ownerType", options: ["ownerUser", "ownerGroup", "ownerTag", "unknown"] }
+        {
+          id: "type",
+          label: "Type",
+          filterColumnId: "ownerType",
+          options: ["ownerUser", "ownerGroup", "ownerTag", "application", "unknown"]
+        }
       ]
     }
   },

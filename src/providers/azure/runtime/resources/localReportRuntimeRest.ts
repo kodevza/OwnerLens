@@ -1,30 +1,57 @@
 import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
 import type { RuntimeRestEndpoint } from "../../../../core/runtime/rest";
-import type { LocalReportRuntime } from "../LocalReportRuntime";
+import {
+  azureRbacQuerySchema,
+  collectionQuerySchema,
+  collectionResponseSchema,
+  runtimeRowSchema
+} from "../../../../core/runtime/restSchemas";
+import type { LocalReportRuntimeRestRuntime } from "../localReportRuntimeRestRuntime";
 import { parseRuntimeCollectionQueryOptions } from "../runtimeRestQuery";
 
 export function defineAzureResourcesLocalReportRuntimeRestEndpoints(
-  runtime: LocalReportRuntime,
+  runtime: LocalReportRuntimeRestRuntime,
   restBasePath: string
 ): RuntimeRestEndpoint[] {
   return [
     {
+      operationId: "queryAzureResourceGroupOwnership",
+      tags: ["Azure Resources"],
+      summary: "Query Azure resource group ownership evidence with runtime table controls.",
       path: `${restBasePath}/azureResources/resourceGroupOwnership`,
+      producesCsv: true,
+      querySchema: collectionQuerySchema,
+      responseSchema: collectionResponseSchema("azureResources.resourceGroupOwnership", runtimeRowSchema),
       handle: ({ url }) =>
         isCsvRequest(url)
           ? runtime.exportAzureResourceGroupOwnershipCsv(parseRuntimeCollectionQueryOptions(url))
           : runtime.queryAzureResourceGroupOwnership(parseRuntimeCollectionQueryOptions(url))
     },
     {
+      operationId: "queryAzureResources",
+      tags: ["Azure Resources"],
+      summary: "Query Azure resources with runtime table controls.",
       path: `${restBasePath}/azureResources/resources`,
+      querySchema: collectionQuerySchema,
+      responseSchema: collectionResponseSchema("azureResources.resources", runtimeRowSchema),
       handle: ({ url }) => runtime.queryAzureResources(parseRuntimeCollectionQueryOptions(url))
     },
     {
+      operationId: "queryAzureRoleAssignments",
+      tags: ["Azure Resources"],
+      summary: "Query Azure role assignments with runtime table controls.",
       path: `${restBasePath}/azureResources/roleAssignments`,
+      querySchema: collectionQuerySchema,
+      responseSchema: collectionResponseSchema("azureResources.roleAssignments", runtimeRowSchema),
       handle: ({ url }) => runtime.queryAzureRoleAssignments(parseRuntimeCollectionQueryOptions(url))
     },
     {
+      operationId: "queryAzureRbac",
+      tags: ["Azure RBAC"],
+      summary: "Query Azure RBAC assignments for a service principal or resource group.",
       path: `${restBasePath}/azureRbac`,
+      querySchema: azureRbacQuerySchema,
+      responseSchema: collectionResponseSchema("azureRbac", runtimeRowSchema),
       handle: ({ url }) =>
         readAzureRbacRestTarget(url).kind === "servicePrincipal"
           ? runtime.queryAzureRbac(

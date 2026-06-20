@@ -1,20 +1,48 @@
 import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
 import type { RuntimeRestEndpoint } from "../../../../core/runtime/rest";
-import type { LocalReportRuntime } from "../LocalReportRuntime";
+import {
+  ownerCandidateStatusQuerySchema,
+  ownerCandidateStatusResponseSchema,
+  ownershipEvidenceQuerySchema,
+  ownershipEvidenceResponseSchema
+} from "../../../../core/runtime/restSchemas";
+import type { LocalReportRuntimeRestRuntime } from "../localReportRuntimeRestRuntime";
 import { parseRuntimeCollectionQueryOptions } from "../runtimeRestQuery";
-import type { OwnershipEvidenceRequest } from "./OwnershipEvidenceQueryService";
+
+type OwnershipEvidenceRequest =
+  | {
+      kind: "servicePrincipal" | "managedIdentity";
+      principalId: string;
+    }
+  | {
+      kind: "resourceGroup";
+      subscriptionId: string;
+      resourceGroup: string;
+      page?: number;
+      pageSize?: number;
+    };
 
 export function defineOwnershipLocalReportRuntimeRestEndpoints(
-  runtime: LocalReportRuntime,
+  runtime: LocalReportRuntimeRestRuntime,
   restBasePath: string
 ): RuntimeRestEndpoint[] {
   return [
     {
+      operationId: "readOwnershipEvidence",
+      tags: ["Ownership"],
+      summary: "Read owner evidence for a service principal, managed identity, or resource group.",
       path: `${restBasePath}/ownership/evidence`,
+      querySchema: ownershipEvidenceQuerySchema,
+      responseSchema: ownershipEvidenceResponseSchema,
       handle: ({ url }) => runtime.readOwnershipEvidence(parseOwnershipEvidenceRequest(url))
     },
     {
+      operationId: "setOwnerCandidateStatus",
+      tags: ["Ownership"],
+      summary: "Set owner candidate evidence status to active or inactive.",
       path: `${restBasePath}/ownership/ownerCandidates/status`,
+      querySchema: ownerCandidateStatusQuerySchema,
+      responseSchema: ownerCandidateStatusResponseSchema,
       handle: async ({ url }) => {
         const key = readRequiredSearchParam(url, "key");
         const status = readEvidenceStatusSearchParam(url);

@@ -1,8 +1,31 @@
 import { defineLocalReportRuntimeRestEndpoints } from "./localReportRuntimeRest";
 import type { LocalReportRuntime } from "./LocalReportRuntime";
-import { createRuntimeRestMiddleware } from "../../../core/runtime/rest";
+import {
+  handleRuntimeRestRequest,
+  type RuntimeRequest,
+  type RuntimeRestEndpoint,
+  type RuntimeRestRequestOptions
+} from "../../../core/runtime/rest";
+import { emptyQuerySchema, runtimeRowSchema } from "../../../core/runtime/restSchemas";
 import type { AzureSnapshot } from "../inputTransferObject/generated/AzureSnapshot";
 import type { EntraSnapshot } from "../inputTransferObject/generated/EntraSnapshot";
+
+type TestRuntimeRestEndpoint = Omit<
+  RuntimeRestEndpoint,
+  "operationId" | "tags" | "summary" | "querySchema" | "responseSchema"
+> &
+  Partial<Pick<RuntimeRestEndpoint, "querySchema" | "responseSchema">>;
+
+function testEndpoint(endpoint: TestRuntimeRestEndpoint): RuntimeRestEndpoint {
+  return {
+    operationId: `test${endpoint.method ?? "GET"}${endpoint.path.replace(/\W+/g, "")}`,
+    tags: ["Test"],
+    summary: "Test endpoint.",
+    querySchema: emptyQuerySchema,
+    responseSchema: runtimeRowSchema,
+    ...endpoint
+  };
+}
 
 function getEndpoint(
   endpoints: ReturnType<typeof defineLocalReportRuntimeRestEndpoints>,
@@ -1036,7 +1059,7 @@ test("returns 201 Created with remediation package id when creating a package", 
       })
     )
   };
-  const middleware = createRuntimeRestMiddleware({
+  const middleware = createTestRuntimeMiddleware({
     basePath: "/api/data",
     endpoints: defineLocalReportRuntimeRestEndpoints(runtime as unknown as LocalReportRuntime),
     getErrorStatusCode: () => 500
@@ -1063,11 +1086,12 @@ test("returns 201 Created with remediation package id when creating a package", 
 });
 
 test("returns CSV runtime export artifacts as downloadable files", async () => {
-  const middleware = createRuntimeRestMiddleware({
+  const middleware = createTestRuntimeMiddleware({
     basePath: "/api/data",
     endpoints: [
-      {
+      testEndpoint({
         path: "/api/data/test",
+        producesCsv: true,
         handle: () => ({
           kind: "csv",
           collectionId: "test.collection",
@@ -1077,7 +1101,7 @@ test("returns CSV runtime export artifacts as downloadable files", async () => {
           columns: ["id"],
           count: 1
         })
-      }
+      })
     ],
     getErrorStatusCode: () => 500
   });
@@ -1101,13 +1125,13 @@ test("returns CSV runtime export artifacts as downloadable files", async () => {
 });
 
 test("rejects runtime API requests without token when token is configured", async () => {
-  const middleware = createRuntimeRestMiddleware({
+  const middleware = createTestRuntimeMiddleware({
     basePath: "/api/data",
     endpoints: [
-      {
+      testEndpoint({
         path: "/api/data/test",
         handle: () => ({ ok: true })
-      }
+      })
     ],
     runtimeToken: "expected-token",
     getErrorStatusCode: (error) => (error instanceof Error && error.message.includes("token") ? 401 : 500)
@@ -1130,13 +1154,13 @@ test("rejects runtime API requests without token when token is configured", asyn
 });
 
 test("accepts runtime API requests with a valid configured token", async () => {
-  const middleware = createRuntimeRestMiddleware({
+  const middleware = createTestRuntimeMiddleware({
     basePath: "/api/data",
     endpoints: [
-      {
+      testEndpoint({
         path: "/api/data/test",
         handle: () => ({ ok: true })
-      }
+      })
     ],
     runtimeToken: "expected-token",
     getErrorStatusCode: (error) => (error instanceof Error && error.message.includes("token") ? 401 : 500)
@@ -1162,13 +1186,13 @@ test("accepts runtime API requests with a valid configured token", async () => {
 });
 
 test("keeps runtime API requests unchanged when no token is configured", async () => {
-  const middleware = createRuntimeRestMiddleware({
+  const middleware = createTestRuntimeMiddleware({
     basePath: "/api/data",
     endpoints: [
-      {
+      testEndpoint({
         path: "/api/data/test",
         handle: () => ({ ok: true })
-      }
+      })
     ],
     getErrorStatusCode: () => 500
   });
@@ -1190,15 +1214,15 @@ test("keeps runtime API requests unchanged when no token is configured", async (
 });
 
 test("returns 400 for malformed JSON request bodies", async () => {
-  const middleware = createRuntimeRestMiddleware({
+  const middleware = createTestRuntimeMiddleware({
     basePath: "/api/data",
     endpoints: [
-      {
+      testEndpoint({
         method: "POST",
         parseJsonBody: true,
         path: "/api/data/test",
         handle: ({ body }) => body
-      }
+      })
     ],
     getErrorStatusCode: (error) => (error instanceof Error && error.message === "Malformed JSON request body." ? 400 : 500)
   });
@@ -1221,7 +1245,7 @@ test("returns 400 for malformed JSON request bodies", async () => {
 });
 
 test("returns JSON 404 for unknown runtime API paths", async () => {
-  const middleware = createRuntimeRestMiddleware({
+  const middleware = createTestRuntimeMiddleware({
     basePath: "/api/data",
     endpoints: [],
     getErrorStatusCode: (error) => (error instanceof Error && error.message === "Runtime API endpoint not found." ? 404 : 500)
@@ -1243,6 +1267,23 @@ test("returns JSON 404 for unknown runtime API paths", async () => {
   expect(response.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
   expect(JSON.parse(response.body)).toEqual({ error: "Runtime API endpoint not found." });
 });
+
+function createTestRuntimeMiddleware(options: RuntimeRestRequestOptions) {
+  return async (req: RuntimeRequest, response: ReturnType<typeof createTestResponse>, next: () => void) => {
+    const result = await handleRuntimeRestRequest(options, req);
+
+    if (!result) {
+      next();
+      return;
+    }
+
+    response.statusCode = result.statusCode;
+    for (const [name, value] of Object.entries(result.headers)) {
+      response.setHeader(name, value);
+    }
+    response.end(result.body);
+  };
+}
 
 function createTestResponse() {
   return {

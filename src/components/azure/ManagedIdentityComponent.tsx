@@ -75,12 +75,20 @@ const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
   {
     id: "azureRbac",
     label: "Azure RBAC",
-    valueType: "text",
-    getValue: (identity) => identity.roleAssignments,
+    valueType: "number",
+    getValue: (identity) => identity.rbacRoleAssignmentCount,
     sortColumnId: "rbacRoleLevel",
-    getFilterValue: (identity) => identity.rbacRoleLevel,
-    filterColumnId: "rbacRoleLevel",
-    filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
+    getFilterValue: (identity) => ({
+      roleLevel: identity.rbacRoleLevel,
+      assignmentCount: identity.rbacRoleAssignmentCount
+    }),
+    filter: {
+      kind: "objectFields",
+      fields: [
+        { id: "roleLevel", label: "Role level", filterColumnId: "rbacRoleLevel", options: permissionRiskLevelOptions },
+        { id: "assignmentCount", label: "Assignment count", filterColumnId: "rbacRoleAssignmentCount" }
+      ]
+    }
   },
   {
     id: "oauthPermissionsCount",

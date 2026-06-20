@@ -1,11 +1,12 @@
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from "vite";
 
+import { getRuntimeRestErrorStatusCode, handleRuntimeRestRequest } from "./src/core/runtime/rest";
 import {
   createLocalReportRuntime,
   createDefaultLocalReportRuntime,
-  installLocalReportRuntimeRest
+  defineLocalReportRuntimeRestEndpoints
 } from "./src/providers/azure/runtime/localReportRuntimeRest";
 
 function localReportRuntimeApi(): Plugin {
@@ -16,10 +17,10 @@ function localReportRuntimeApi(): Plugin {
   return {
     name: "ownerlens-local-report-runtime-api",
     configureServer(server) {
-      installLocalReportRuntimeRest(server, runtime);
+      installViteRuntimeRest(server, runtime);
     },
     configurePreviewServer(server) {
-      installLocalReportRuntimeRest(server, runtime);
+      installViteRuntimeRest(server, runtime);
     }
   };
 }
@@ -27,3 +28,38 @@ function localReportRuntimeApi(): Plugin {
 export default defineConfig({
   plugins: [react(), tailwindcss(), localReportRuntimeApi()]
 });
+
+function installViteRuntimeRest(
+  server: ViteDevServer | PreviewServer,
+  runtime: ReturnType<typeof createLocalReportRuntime>
+): void {
+  server.httpServer?.once("listening", () => {
+    void runtime.initialize();
+  });
+  server.httpServer?.once("close", () => {
+    void runtime.close();
+  });
+
+  server.middlewares.use(async (req, res, next) => {
+    const result = await handleRuntimeRestRequest(
+      {
+        basePath: "/api/data",
+        endpoints: defineLocalReportRuntimeRestEndpoints(runtime),
+        runtimeToken: process.env.OWNERLENS_RUNTIME_TOKEN,
+        getErrorStatusCode: getRuntimeRestErrorStatusCode
+      },
+      req
+    );
+
+    if (!result) {
+      next();
+      return;
+    }
+
+    res.statusCode = result.statusCode;
+    for (const [name, value] of Object.entries(result.headers)) {
+      res.setHeader(name, value);
+    }
+    res.end(result.body);
+  });
+}

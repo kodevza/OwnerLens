@@ -42,7 +42,7 @@ export async function insertEntraServicePrincipalRows(
         loginUrl: servicePrincipal.loginUrl,
         replyUrls: JSON.stringify(servicePrincipal.replyUrls),
         servicePrincipalNames: JSON.stringify(servicePrincipal.servicePrincipalNames),
-        tags: JSON.stringify(servicePrincipal.tags),
+        tags: JSON.stringify(normalizeImportedTags(servicePrincipal.tags)),
         appRoles: JSON.stringify(servicePrincipal.appRoles ?? []),
         servicePrincipalOwners: JSON.stringify(servicePrincipal.servicePrincipalOwners ?? []),
         applicationOwners: JSON.stringify(servicePrincipal.applicationOwners ?? []),
@@ -136,4 +136,8 @@ function parseJsonArray<T>(value: string | null | undefined): T[] {
 
 function parseJsonObject(value: string | null | undefined): Record<string, unknown> {
   return value ? JSON.parse(value) : {};
+}
+
+function normalizeImportedTags(tags: readonly string[] | null | undefined): string[] {
+  return (tags ?? []).map((tag) => tag.replaceAll("=", ":"));
 }

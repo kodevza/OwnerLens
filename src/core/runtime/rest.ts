@@ -1,69 +1,116 @@
 import { RuntimeHttpError } from "./localSnapshotFiles";
 import type { RuntimeCollectionCsvExport } from "./collectionExport";
+import { validateRuntimeRestPayload, type RuntimeRestJsonSchema } from "./restValidation";
 
 export type RuntimeRequest = {
   method?: string;
   url?: string;
   headers?: Record<string, string | string[] | undefined>;
   body?: unknown;
+  readBody?: () => Promise<string>;
   [Symbol.asyncIterator]?: () => AsyncIterator<Uint8Array | string>;
 };
 
-export type RuntimeResponse = {
-  statusCode: number;
-  setHeader(name: string, value: string): void;
-  end(body: string): void;
-};
-
-export type RuntimeNext = () => void;
-
 export type RuntimeRestEndpoint = {
+  operationId: string;
+  tags: string[];
+  summary: string;
   method?: string;
   path: string;
   parseJsonBody?: boolean;
+  querySchema: RuntimeRestJsonSchema;
+  bodySchema?: RuntimeRestJsonSchema;
+  responseSchema: RuntimeRestJsonSchema;
+  producesCsv?: boolean;
   statusCode?: number;
   handle(input: { body?: unknown; req: RuntimeRequest; url: URL }): Promise<unknown> | unknown;
 };
 
-export type RuntimeRestMiddlewareOptions = {
+export type RuntimeRestRequestOptions = {
   basePath: string;
   endpoints: RuntimeRestEndpoint[];
   runtimeToken?: string;
   getErrorStatusCode(error: unknown): number;
 };
 
-export function createRuntimeRestMiddleware(options: RuntimeRestMiddlewareOptions) {
-  return async (req: RuntimeRequest, res: RuntimeResponse, next: RuntimeNext): Promise<void> => {
-    const url = req.url ? new URL(req.url, "http://localhost") : null;
+export type RuntimeRestResult = {
+  body: string;
+  headers: Record<string, string>;
+  statusCode: number;
+};
 
-    if (!url || !isRuntimeApiPath(url.pathname, options.basePath)) {
-      next();
-      return;
+export async function handleRuntimeRestRequest(
+  options: RuntimeRestRequestOptions,
+  req: RuntimeRequest
+): Promise<RuntimeRestResult | null> {
+  const url = req.url ? new URL(req.url, "http://localhost") : null;
+
+  if (!url || !isRuntimeApiPath(url.pathname, options.basePath)) {
+    return null;
+  }
+
+  try {
+    validateRuntimeToken(req, options.runtimeToken);
+
+    const endpoint = options.endpoints.find(
+      (candidate) =>
+        candidate.path === url.pathname &&
+        (!candidate.method || candidate.method.toUpperCase() === (req.method ?? "GET").toUpperCase())
+    );
+
+    if (!endpoint) {
+      throw new RuntimeHttpError("Runtime API endpoint not found.", 404);
     }
 
-    try {
-      validateRuntimeToken(req, options.runtimeToken);
+    validateRuntimeRestPayload(endpoint.querySchema, readRuntimeQuery(url), `${endpoint.operationId} query`);
 
-      const endpoint = options.endpoints.find(
-        (candidate) =>
-          candidate.path === url.pathname &&
-          (!candidate.method || candidate.method.toUpperCase() === (req.method ?? "GET").toUpperCase())
-      );
-
-      if (!endpoint) {
-        throw new RuntimeHttpError("Runtime API endpoint not found.", 404);
-      }
-
-      const body = endpoint.parseJsonBody ? await readJsonBody(req) : undefined;
-      sendRuntimeRestResult(res, await endpoint.handle({ body, req, url }), endpoint.statusCode);
-    } catch (error) {
-      sendJson(
-        res,
-        { error: error instanceof Error ? error.message : "Unknown error" },
-        options.getErrorStatusCode(error)
-      );
+    const body = endpoint.parseJsonBody ? await readJsonBody(req) : undefined;
+    if (endpoint.bodySchema) {
+      validateRuntimeRestPayload(endpoint.bodySchema, body, `${endpoint.operationId} body`);
     }
-  };
+
+    const value = await endpoint.handle({ body, req, url });
+    validateRuntimeRestResponse(endpoint, value);
+    return formatRuntimeRestResult(value, endpoint.statusCode);
+  } catch (error) {
+    return formatJsonResult(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      options.getErrorStatusCode(error)
+    );
+  }
+}
+
+function readRuntimeQuery(url: URL): Record<string, string | string[]> {
+  const query: Record<string, string | string[]> = {};
+
+  for (const [key, value] of url.searchParams) {
+    const existing = query[key];
+    if (existing === undefined) {
+      query[key] = value;
+    } else if (Array.isArray(existing)) {
+      existing.push(value);
+    } else {
+      query[key] = [existing, value];
+    }
+  }
+
+  return query;
+}
+
+function validateRuntimeRestResponse(endpoint: RuntimeRestEndpoint, value: unknown): void {
+  if (isRuntimeCollectionCsvExport(value)) {
+    return;
+  }
+
+  try {
+    validateRuntimeRestPayload(endpoint.responseSchema, value, `${endpoint.operationId} response`);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+export function getRuntimeRestErrorStatusCode(error: unknown): number {
+  return error instanceof RuntimeHttpError ? error.statusCode : 500;
 }
 
 function validateRuntimeToken(req: RuntimeRequest, runtimeToken: string | undefined): void {
@@ -105,6 +152,11 @@ async function readJsonBody(req: RuntimeRequest): Promise<unknown> {
     return req.body;
   }
 
+  if (req.readBody) {
+    const rawBody = await req.readBody();
+    return rawBody.trim() ? parseJson(rawBody) : undefined;
+  }
+
   const iterator = req[Symbol.asyncIterator]?.();
 
   if (!iterator) {
@@ -130,22 +182,29 @@ function parseJson(rawBody: string): unknown {
   }
 }
 
-function sendJson(res: RuntimeResponse, value: unknown, statusCode = 200): void {
-  res.statusCode = statusCode;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.end(JSON.stringify(value));
+function formatJsonResult(value: unknown, statusCode = 200): RuntimeRestResult {
+  return {
+    body: JSON.stringify(value),
+    headers: {
+      "Content-Type": "application/json; charset=utf-8"
+    },
+    statusCode
+  };
 }
 
-function sendRuntimeRestResult(res: RuntimeResponse, value: unknown, statusCode = 200): void {
+function formatRuntimeRestResult(value: unknown, statusCode = 200): RuntimeRestResult {
   if (isRuntimeCollectionCsvExport(value)) {
-    res.statusCode = statusCode;
-    res.setHeader("Content-Type", value.contentType);
-    res.setHeader("Content-Disposition", `attachment; filename="${escapeHeaderValue(value.fileName)}"`);
-    res.end(value.body);
-    return;
+    return {
+      body: value.body,
+      headers: {
+        "Content-Type": value.contentType,
+        "Content-Disposition": `attachment; filename="${escapeHeaderValue(value.fileName)}"`
+      },
+      statusCode
+    };
   }
 
-  sendJson(res, value, statusCode);
+  return formatJsonResult(value, statusCode);
 }
 
 function isRuntimeCollectionCsvExport(value: unknown): value is RuntimeCollectionCsvExport {
