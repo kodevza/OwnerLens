@@ -5,7 +5,7 @@ import type { Tags } from "../../core/azure/tags";
 import type { OwnerConfidence } from "../../core/ownership/types";
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import { azureOwnerColumnHelp } from "./azureReportConfig";
-import { exportResourceGroupsCsv, readResourceGroups } from "./api";
+import { exportResourceGroupsCsv, readResourceGroups, remotePageSize } from "./api";
 import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
 import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
@@ -134,7 +134,9 @@ export function ResourceGroupComponent({
                     target: {
                       kind: "resourceGroup",
                       subscriptionId: group.subscriptionId,
-                      resourceGroup: group.resourceGroup
+                      resourceGroup: group.resourceGroup,
+                      page: initialPage ?? 1,
+                      pageSize: remotePageSize
                     }
                   })
               : undefined
@@ -158,7 +160,7 @@ export function ResourceGroupComponent({
       ),
       tags: (group) => <TagBadges tags={group.tags} />
     }),
-    [onAzureRbacClick, onOwnershipEvidenceClick]
+    [initialPage, onAzureRbacClick, onOwnershipEvidenceClick]
   );
   const loadResourceGroups = useCallback(
     (input: { filters: ColumnFilters; page: number; signal: AbortSignal; sortRules: SortRule[] }) =>

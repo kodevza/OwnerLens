@@ -29,6 +29,7 @@ export type OwnerCandidateScope = {
   subscriptionId?: string;
   subscriptionName?: string;
   resourceGroup?: string;
+  principalId?: string;
   scope?: string;
   roleDefinitionName?: string | null;
 };

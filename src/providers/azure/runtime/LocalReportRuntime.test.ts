@@ -111,7 +111,7 @@ test("defines local report runtime REST endpoints", async () => {
     appRoleAssignments: []
   };
   const disabledOwnerKeys = new Set<string>();
-  const disabledAliceKey = "resourceGroup:sub-1:rg-activity:alice@example.test:2026-06-05T10:00:00.000Z";
+  const disabledAliceKey = "resourceGroup:sub-1:rg-activity:ownerUser:alice@example.test";
   const emptyCollection = (
     collectionId: string,
     options: { page?: number; pageSize?: number }
@@ -407,7 +407,7 @@ test("defines local report runtime REST endpoints", async () => {
       })
     ),
     readDisabledOwnerEvidenceKeys: jest.fn(() => Promise.resolve(new Set(disabledOwnerKeys))),
-    setOwnerEvidenceDisabled: jest.fn((key: string, disabled: boolean) => {
+    setOwnerCandidateDisabled: jest.fn((key: string, disabled: boolean) => {
       if (disabled) {
         disabledOwnerKeys.add(key);
       } else {
@@ -430,7 +430,7 @@ test("defines local report runtime REST endpoints", async () => {
   const oauth2PermissionGrantsEndpoint = getEndpoint(endpoints, "/api/data/entra/oauth2PermissionGrants");
   const appRoleAssignmentsEndpoint = getEndpoint(endpoints, "/api/data/entra/appRoleAssignments");
   const resourceGroupOwnershipEndpoint = getEndpoint(endpoints, "/api/data/azureResources/resourceGroupOwnership");
-  const evidenceStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/evidence/status");
+  const ownerCandidateStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/ownerCandidates/status");
   const resourcesEndpoint = getEndpoint(endpoints, "/api/data/azureResources/resources");
   const roleAssignmentsEndpoint = getEndpoint(endpoints, "/api/data/azureResources/roleAssignments");
   const azureRbacEndpoint = getEndpoint(endpoints, "/api/data/azureRbac");
@@ -462,7 +462,7 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/azureResources/roleAssignments",
     "/api/data/azureRbac",
     "/api/data/ownership/evidence",
-    "/api/data/ownership/evidence/status",
+    "/api/data/ownership/ownerCandidates/status",
     "/api/data/zeroTrustAssessment/report",
     "/api/data/zeroTrustAssessment/remediationPackages",
     "/api/data/remediationPackages",
@@ -597,18 +597,35 @@ test("defines local report runtime REST endpoints", async () => {
     count: 2
   });
   await expect(
-    evidenceStatusEndpoint.handle({
+    ownerCandidateStatusEndpoint.handle({
       req: {},
       url: new URL(
-        "http://localhost/api/data/ownership/evidence/status?key=resourceGroup%3Asub-1%3Arg-activity%3Aalice%40example.test%3A2026-06-05T10%3A00%3A00.000Z&status=unactive"
+        "http://localhost/api/data/ownership/ownerCandidates/status?key=resourceGroup%3Asub-1%3Arg-activity%3AownerUser%3Aalice%40example.test&status=unactive"
       )
     })
   ).resolves.toEqual({
-    key: "resourceGroup:sub-1:rg-activity:alice@example.test:2026-06-05T10:00:00.000Z",
-    status: "unactive",
+    key: "resourceGroup:sub-1:rg-activity:ownerUser:alice@example.test",
+    status: "inactive",
     disabled: true,
     disabledCount: 1
   });
+  await expect(
+    ownerCandidateStatusEndpoint.handle({
+      req: {},
+      url: new URL(
+        "http://localhost/api/data/ownership/ownerCandidates/status?key=resourceGroup%3Asub-1%3Arg-1%3AownerGroup%3Aalice%40example.test&status=inactive"
+      )
+    })
+  ).resolves.toEqual({
+    key: "resourceGroup:sub-1:rg-1:ownerGroup:alice@example.test",
+    status: "inactive",
+    disabled: true,
+    disabledCount: 2
+  });
+  expect(runtime.setOwnerCandidateDisabled).toHaveBeenLastCalledWith(
+    "resourceGroup:sub-1:rg-1:ownerGroup:alice@example.test",
+    true
+  );
   await expect(
     resourceGroupOwnershipEndpoint.handle({
       req: {},
@@ -704,7 +721,7 @@ test("defines local report runtime REST endpoints", async () => {
   await ownershipEvidenceEndpoint.handle({
     req: {},
     url: new URL(
-      "http://localhost/api/data/ownership/evidence?kind=resourceGroup&subscriptionId=sub-1&resourceGroup=rg-1"
+      "http://localhost/api/data/ownership/evidence?kind=resourceGroup&subscriptionId=sub-1&resourceGroup=rg-1&page=1&count=10"
     )
   });
   expect(() =>
@@ -942,7 +959,9 @@ test("defines local report runtime REST endpoints", async () => {
   expect(runtime.readOwnershipEvidence).toHaveBeenCalledWith({
     kind: "resourceGroup",
     subscriptionId: "sub-1",
-    resourceGroup: "rg-1"
+    resourceGroup: "rg-1",
+    page: 1,
+    pageSize: 10
   });
   expect(runtime.queryZeroTrustAssessmentReport).toHaveBeenCalledWith({
     filters: [],

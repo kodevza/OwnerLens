@@ -3,14 +3,12 @@ import type {
   AzureUserAssignedManagedIdentity,
   ResourceGroupOwnershipRow
 } from "../../../core/azure/resources";
-import type { EntraOwner } from "../../../core/azure/entra/types";
 import { rankOwnerCandidates } from "../../../core/ownership/ownerCandidateRanking";
 import type {
   OwnerCandidate,
   OwnerCandidateScope,
   OwnerConfidence,
-  OwnerEvidence,
-  OwnerType
+  OwnerEvidence
 } from "../../../core/ownership/types";
 
 export type PrincipalOwnerProjection = {
@@ -22,7 +20,6 @@ export type PrincipalOwnerProjection = {
 
 type ResourceGroupOwnershipIndex = {
   byResourceGroup: Map<string, ResourceGroupOwnershipRow>;
-  bySubscription: Map<string, ResourceGroupOwnershipRow[]>;
 };
 
 export function projectManagedIdentityOwners(
@@ -62,8 +59,6 @@ export function projectManagedIdentityOwners(
 }
 
 export function projectServicePrincipalOwners(
-  servicePrincipalOwners: EntraOwner[] | undefined,
-  applicationOwners: EntraOwner[] | undefined,
   roleAssignments: AzureRoleAssignment[],
   resourceGroupOwnershipRows: ResourceGroupOwnershipRow[]
 ): PrincipalOwnerProjection {
@@ -71,29 +66,25 @@ export function projectServicePrincipalOwners(
   const ownerRows: ResourceGroupOwnerCandidateInput[] = [];
 
   for (const assignment of roleAssignments) {
-    for (const row of getRoleAssignmentResourceGroupOwners(assignment, ownershipIndex)) {
-      if (row.ownerCandidates.length === 0) {
-        continue;
-      }
-
-      ownerRows.push({
-        row,
-        scope: {
-          subscriptionId: row.subscriptionId,
-          subscriptionName: row.subscriptionName,
-          resourceGroup: row.resourceGroup,
-          scope: assignment.scope,
-          roleDefinitionName: assignment.roleDefinitionName
-        }
-      });
+    const row = getRoleAssignmentResourceGroupOwner(assignment, ownershipIndex);
+    if (!row || row.ownerCandidates.length === 0) {
+      continue;
     }
+
+    ownerRows.push({
+      row,
+      scope: {
+        subscriptionId: row.subscriptionId,
+        subscriptionName: row.subscriptionName,
+        resourceGroup: row.resourceGroup,
+        principalId: assignment.principalId,
+        scope: assignment.scope,
+        roleDefinitionName: assignment.roleDefinitionName
+      }
+    });
   }
 
-  return buildPrincipalOwnerProjection(rankOwnerCandidates([
-    ...buildDirectEntraOwnerCandidates(servicePrincipalOwners ?? [], "entraServicePrincipalOwner"),
-    ...buildDirectEntraOwnerCandidates(applicationOwners ?? [], "entraApplicationOwner"),
-    ...buildOwnerCandidatesFromResourceGroupRows(ownerRows)
-  ]));
+  return buildPrincipalOwnerProjection(rankOwnerCandidates(buildOwnerCandidatesFromResourceGroupRows(ownerRows)));
 }
 
 function emptyPrincipalOwnerProjection(): PrincipalOwnerProjection {
@@ -113,83 +104,6 @@ function buildPrincipalOwnerProjection(ownerCandidates: OwnerCandidate[]): Princ
       "none"
     )
   };
-}
-
-function buildDirectEntraOwnerCandidates(
-  owners: EntraOwner[],
-  source: "entraServicePrincipalOwner" | "entraApplicationOwner"
-): OwnerCandidate[] {
-  const candidates = new Map<string, OwnerCandidate>();
-
-  for (const owner of owners) {
-    const displayName = getOwnerDisplayName(owner);
-    if (!displayName) {
-      continue;
-    }
-
-    const ownerType = inferEntraOwnerType(owner);
-    const key = getOwnerCandidateKey(displayName, ownerType);
-    const evidence: OwnerEvidence = {
-      user: displayName,
-      date: null
-    };
-    const existing = candidates.get(key);
-
-    if (existing) {
-      existing.evidence = mergeOwnerEvidence(existing.evidence, [evidence]);
-      continue;
-    }
-
-    candidates.set(key, {
-      key,
-      displayName,
-      type: ownerType,
-      confidence: "high",
-      source,
-      rank: 0,
-      evidence: [evidence],
-      relatedScopes: []
-    });
-  }
-
-  return [...candidates.values()];
-}
-
-function getOwnerDisplayName(owner: EntraOwner): string | null {
-  return firstNonEmpty([
-    owner.userPrincipalName,
-    owner.mail,
-    owner.displayName,
-    owner.id
-  ]);
-}
-
-function firstNonEmpty(values: Array<string | null | undefined>): string | null {
-  for (const value of values) {
-    const normalized = value?.trim();
-    if (normalized) {
-      return normalized;
-    }
-  }
-
-  return null;
-}
-
-function inferEntraOwnerType(owner: EntraOwner): OwnerType {
-  const ownerType = owner.ownerType?.trim().toLowerCase();
-  if (ownerType === "group") {
-    return "ownerGroup";
-  }
-
-  if (ownerType === "user") {
-    return "ownerUser";
-  }
-
-  return "unknown";
-}
-
-function getOwnerCandidateKey(owner: string, type: OwnerType): string {
-  return `${type}:${owner.trim().toLowerCase()}`;
 }
 
 type ResourceGroupOwnerCandidateInput = {
@@ -227,18 +141,12 @@ function buildOwnerCandidatesFromResourceGroupRows(inputs: ResourceGroupOwnerCan
 
 function buildResourceGroupOwnershipIndex(rows: ResourceGroupOwnershipRow[]): ResourceGroupOwnershipIndex {
   const byResourceGroup = new Map<string, ResourceGroupOwnershipRow>();
-  const bySubscription = new Map<string, ResourceGroupOwnershipRow[]>();
 
   for (const row of rows) {
     byResourceGroup.set(getResourceGroupKey(row.subscriptionId, row.resourceGroup), row);
-
-    const subscriptionKey = row.subscriptionId.toLowerCase();
-    const subscriptionRows = bySubscription.get(subscriptionKey) ?? [];
-    subscriptionRows.push(row);
-    bySubscription.set(subscriptionKey, subscriptionRows);
   }
 
-  return { byResourceGroup, bySubscription };
+  return { byResourceGroup };
 }
 
 function buildManagedIdentityLocationIndex(
@@ -267,24 +175,19 @@ function addManagedIdentityLocation(
   index.set(normalizedKey, identity);
 }
 
-function getRoleAssignmentResourceGroupOwners(
+function getRoleAssignmentResourceGroupOwner(
   assignment: AzureRoleAssignment,
   ownershipIndex: ResourceGroupOwnershipIndex
-): ResourceGroupOwnershipRow[] {
+): ResourceGroupOwnershipRow | null {
   const scope = assignment.scope;
   const subscriptionId = getScopeSubscriptionId(scope) ?? assignment.subscriptionId;
   const resourceGroup = getScopeResourceGroup(scope);
 
-  if (subscriptionId && resourceGroup) {
-    const row = ownershipIndex.byResourceGroup.get(getResourceGroupKey(subscriptionId, resourceGroup));
-    return row ? [row] : [];
+  if (!subscriptionId || !resourceGroup) {
+    return null;
   }
 
-  if (isSubscriptionScope(scope) && subscriptionId) {
-    return ownershipIndex.bySubscription.get(subscriptionId.toLowerCase()) ?? [];
-  }
-
-  return [];
+  return ownershipIndex.byResourceGroup.get(getResourceGroupKey(subscriptionId, resourceGroup)) ?? null;
 }
 
 function getScopeSubscriptionId(scope: string): string | null {
@@ -293,10 +196,6 @@ function getScopeSubscriptionId(scope: string): string | null {
 
 function getScopeResourceGroup(scope: string): string | null {
   return scope.match(/\/resourceGroups\/([^/]+)/i)?.[1] ?? null;
-}
-
-function isSubscriptionScope(scope: string): boolean {
-  return /^\/subscriptions\/[^/]+\/?$/i.test(scope);
 }
 
 function getResourceGroupKey(subscriptionId: string, resourceGroup: string): string {
@@ -336,6 +235,7 @@ function getOwnerCandidateScopeKey(scope: OwnerCandidateScope): string {
     scope.subscriptionId ?? "",
     scope.subscriptionName ?? "",
     scope.resourceGroup ?? "",
+    scope.principalId ?? "",
     scope.scope ?? "",
     scope.roleDefinitionName ?? ""
   ].join(":");

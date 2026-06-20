@@ -23,10 +23,12 @@ import { ownershipEvidenceFields } from "./ownershipEvidenceFields";
 function buildOwnershipEvidenceFieldRenderers({
   onUserGroupsClick,
   onStatusChange,
+  target,
   updatingEvidenceKeys
 }: {
   onUserGroupsClick: (evidence: OwnershipEvidenceItem, event: MouseEvent<HTMLButtonElement>) => void;
   onStatusChange: (evidence: OwnershipEvidenceItem, status: EvidenceStatus) => void;
+  target: OwnershipEvidenceTarget;
   updatingEvidenceKeys: ReadonlySet<string>;
 }): ReportColumnRenderers<OwnershipEvidenceItem> {
   return {
@@ -85,26 +87,28 @@ function buildOwnershipEvidenceFieldRenderers({
       </div>
     ),
     status: (evidence) => {
-      const isUpdating = updatingEvidenceKeys.has(evidence.key);
-      const nextStatus: EvidenceStatus = evidence.disabled ? "active" : "unactive";
+      const statusKey = getOwnerCandidateStatusKey(target, evidence);
+      const isUpdating = statusKey ? updatingEvidenceKeys.has(statusKey) : false;
+      const nextStatus: EvidenceStatus = evidence.disabled ? "active" : "inactive";
       const nextStatusLabel = evidence.disabled ? "Active" : "Inactive";
+      const isEditable = statusKey !== null;
 
       return (
         <Badge
           aria-disabled={isUpdating}
-          aria-label={`Set ${evidence.ownerDisplayName} ownership evidence ${nextStatusLabel}`}
+          aria-label={isEditable ? `Set ${evidence.ownerDisplayName} ownership evidence ${nextStatusLabel}` : undefined}
           className="min-w-20 justify-center"
-          role="button"
-          tabIndex={isUpdating ? -1 : 0}
-          title={`Set ${nextStatusLabel}`}
+          role={isEditable ? "button" : undefined}
+          tabIndex={isEditable && !isUpdating ? 0 : undefined}
+          title={isEditable ? `Set ${nextStatusLabel}` : undefined}
           variant={evidence.disabled ? "riskMedium" : "riskLow"}
           onClick={() => {
-            if (!isUpdating) {
+            if (isEditable && !isUpdating) {
               onStatusChange(evidence, nextStatus);
             }
           }}
           onKeyDown={(event) => {
-            if (!isUpdating && (event.key === "Enter" || event.key === " ")) {
+            if (isEditable && !isUpdating && (event.key === "Enter" || event.key === " ")) {
               event.preventDefault();
               onStatusChange(evidence, nextStatus);
             }
@@ -186,10 +190,15 @@ export function OwnershipEvidenceComponent({
 
   const handleStatusChange = useCallback(
     async (evidence: OwnershipEvidenceItem, status: EvidenceStatus) => {
-      setUpdatingEvidenceKeys((current) => new Set(current).add(evidence.key));
+      const statusKey = getOwnerCandidateStatusKey(target, evidence);
+      if (!statusKey) {
+        return;
+      }
+
+      setUpdatingEvidenceKeys((current) => new Set(current).add(statusKey));
 
       try {
-        await updateEvidenceStatus({ key: evidence.key, status });
+        await updateEvidenceStatus({ key: statusKey, status });
         const controller = new AbortController();
         await loadOwnershipEvidence(controller.signal);
       } catch (error) {
@@ -200,12 +209,12 @@ export function OwnershipEvidenceComponent({
       } finally {
         setUpdatingEvidenceKeys((current) => {
           const next = new Set(current);
-          next.delete(evidence.key);
+          next.delete(statusKey);
           return next;
         });
       }
     },
-    [loadOwnershipEvidence]
+    [loadOwnershipEvidence, target]
   );
 
   const handleUserGroupsClick = useCallback(
@@ -227,9 +236,10 @@ export function OwnershipEvidenceComponent({
       buildOwnershipEvidenceFieldRenderers({
         onUserGroupsClick: handleUserGroupsClick,
         onStatusChange: handleStatusChange,
+        target,
         updatingEvidenceKeys
       }),
-    [handleStatusChange, handleUserGroupsClick, updatingEvidenceKeys]
+    [handleStatusChange, handleUserGroupsClick, target, updatingEvidenceKeys]
   );
 
   if (loadState.status === "loading") {
@@ -243,7 +253,7 @@ export function OwnershipEvidenceComponent({
   return (
     <section className="flex flex-col gap-4">
       <div>
-        <h2 className="text-base font-semibold">{loadState.response.target.displayName ?? displayName}</h2>
+        <h2 className="text-base font-semibold">{displayName}</h2>
         <div className="mt-1 text-sm text-muted-foreground">{formatOwnershipEvidenceTarget(loadState.response)}</div>
       </div>
       <SelectableGenericTable
@@ -266,4 +276,32 @@ export function OwnershipEvidenceComponent({
       ) : null}
     </section>
   );
+}
+
+function getOwnerCandidateStatusKey(
+  target: OwnershipEvidenceTarget,
+  evidence: OwnershipEvidenceItem
+): string | null {
+  if (target.kind === "resourceGroup") {
+    return [
+      "resourceGroup",
+      target.subscriptionId,
+      target.resourceGroup,
+      evidence.ownerCandidateKey
+    ].join(":");
+  }
+
+  const scope = evidence.relatedScopes.find((candidateScope) => candidateScope.subscriptionId && candidateScope.resourceGroup);
+  if (!scope?.subscriptionId || !scope.resourceGroup) {
+    return null;
+  }
+
+  return [
+    "resourceGroup",
+    scope.subscriptionId,
+    scope.resourceGroup,
+    "principal",
+    target.principalId,
+    evidence.ownerCandidateKey
+  ].join(":");
 }

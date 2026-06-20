@@ -2550,8 +2550,133 @@ test("imports Azure resources snapshot into DuckDB and reads it back through the
   });
 });
 
+test("reads resource group ownership evidence through the SQL projection", async () => {
+  const baseAzureSnapshot = minimalAzureSnapshot([]);
+  const baseEntraSnapshot = minimalEntraSnapshot();
+  const azureSnapshot: AzureSnapshot = {
+    ...baseAzureSnapshot,
+    meta: {
+      ...baseAzureSnapshot.meta,
+      resourceGroupCount: 2,
+      activityLogCount: 2
+    },
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-activity",
+        location: "westeurope",
+        tags: null
+      },
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-other",
+        location: "westeurope",
+        tags: null
+      }
+    ],
+    activityLogs: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        eventTimestamp: "2026-06-05T10:00:00.000Z",
+        submissionTimestamp: null,
+        caller: "alice@example.test",
+        operationName: "Update resource group",
+        operationNameValue: "Microsoft.Resources/subscriptions/resourcegroups/write",
+        status: "Succeeded",
+        subStatus: null,
+        category: "Administrative",
+        resourceGroupName: null,
+        resourceId: "/subscriptions/sub-1/resourceGroups/rg-activity/providers/Microsoft.Web/sites/app-a",
+        resourceProviderName: "Microsoft.Resources",
+        resourceType: "Microsoft.Resources/resourceGroups",
+        authorizationAction: "Microsoft.Resources/subscriptions/resourcegroups/write",
+        authorizationScope: "/subscriptions/sub-1/resourceGroups/rg-activity"
+      },
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        eventTimestamp: "2026-06-06T10:00:00.000Z",
+        submissionTimestamp: null,
+        caller: "other@example.test",
+        operationName: "Update resource group",
+        operationNameValue: "Microsoft.Resources/subscriptions/resourcegroups/write",
+        status: "Succeeded",
+        subStatus: null,
+        category: "Administrative",
+        resourceGroupName: "rg-other",
+        resourceId: null,
+        resourceProviderName: "Microsoft.Resources",
+        resourceType: "Microsoft.Resources/resourceGroups",
+        authorizationAction: "Microsoft.Resources/subscriptions/resourcegroups/write",
+        authorizationScope: "/subscriptions/sub-1/resourceGroups/rg-other"
+      }
+    ]
+  };
+  const entraSnapshot: EntraSnapshot = {
+    ...baseEntraSnapshot,
+    meta: {
+      ...baseEntraSnapshot.meta,
+      servicePrincipalCount: 0
+    },
+    servicePrincipals: []
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+
+    await runtime.initialize();
+
+    await expect(
+      runtime.readOwnershipEvidence({
+        kind: "resourceGroup",
+        subscriptionId: "SUB-1",
+        resourceGroup: "RG-ACTIVITY"
+      })
+    ).resolves.toMatchObject({
+      target: {
+        kind: "resourceGroup",
+        id: "resourceGroup:sub-1:rg-activity",
+        resourceGroup: "rg-activity"
+      },
+      evidence: [
+        expect.objectContaining({
+          ownerDisplayName: "alice@example.test",
+          confidence: "low",
+          source: "activity",
+          evidence: "/subscriptions/sub-1/resourceGroups/rg-activity/providers/Microsoft.Web/sites/app-a",
+          date: "2026-06-05T10:00:00.000Z"
+        })
+      ]
+    });
+
+    await runtime.setOwnerCandidateDisabled("resourceGroup:sub-1:rg-activity:ownerUser:alice@example.test", true);
+
+    await expect(
+      runtime.readOwnershipEvidence({
+        kind: "resourceGroup",
+        subscriptionId: "sub-1",
+        resourceGroup: "rg-activity"
+      })
+    ).resolves.toMatchObject({
+      evidence: [
+        expect.objectContaining({
+          ownerDisplayName: "alice@example.test",
+          confidence: "none",
+          evidence: "/subscriptions/sub-1/resourceGroups/rg-activity/providers/Microsoft.Web/sites/app-a",
+          date: "2026-06-05T10:00:00.000Z",
+          disabled: true
+        })
+      ]
+    });
+  });
+});
+
 test("persists disabled owner evidence keys in DuckDB across runtime restarts", async () => {
-  const disabledKey = "resourceGroup:sub-1:rg-activity:alice@example.test:2026-06-05T10:00:00.000Z";
+  const disabledKey = "resourceGroup:sub-1:rg-activity:ownerUser:alice@example.test";
   const azureSnapshot: AzureSnapshot = {
     meta: {
       provider: "azure",
@@ -2642,7 +2767,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
     await firstRuntime.initialize();
     let endpoints = defineLocalReportRuntimeRestEndpoints(firstRuntime);
     let ownershipEndpoint = getEndpoint(endpoints, "/api/data/azureResources/resourceGroupOwnership");
-    let evidenceStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/evidence/status");
+    let ownerCandidateStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/ownerCandidates/status");
 
     await expect(
       ownershipEndpoint.handle({
@@ -2664,13 +2789,13 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
       ]
     });
     await expect(
-      evidenceStatusEndpoint.handle({
+      ownerCandidateStatusEndpoint.handle({
         req: {},
         url: new URL(
-          `http://localhost/api/data/ownership/evidence/status?key=${encodeURIComponent(disabledKey)}&status=unactive`
+          `http://localhost/api/data/ownership/ownerCandidates/status?key=${encodeURIComponent(disabledKey)}&status=unactive`
         )
       })
-    ).resolves.toEqual({ key: disabledKey, status: "unactive", disabled: true, disabledCount: 1 });
+    ).resolves.toEqual({ key: disabledKey, status: "inactive", disabled: true, disabledCount: 1 });
     await expect(
       ownershipEndpoint.handle({
         req: {},
@@ -2698,7 +2823,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
       await secondRuntime.initialize();
       endpoints = defineLocalReportRuntimeRestEndpoints(secondRuntime);
       ownershipEndpoint = getEndpoint(endpoints, "/api/data/azureResources/resourceGroupOwnership");
-      evidenceStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/evidence/status");
+      ownerCandidateStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/ownerCandidates/status");
       await expect(
         ownershipEndpoint.handle({
           req: {},
@@ -2718,10 +2843,10 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
         ]
       });
       await expect(
-        evidenceStatusEndpoint.handle({
+        ownerCandidateStatusEndpoint.handle({
           req: {},
           url: new URL(
-            `http://localhost/api/data/ownership/evidence/status?key=${encodeURIComponent(disabledKey)}&status=active`
+            `http://localhost/api/data/ownership/ownerCandidates/status?key=${encodeURIComponent(disabledKey)}&status=active`
           )
         })
       ).resolves.toEqual({ key: disabledKey, status: "active", disabled: false, disabledCount: 0 });

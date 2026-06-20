@@ -5,7 +5,8 @@ module.exports = {
   testPathIgnorePatterns: [
     "/node_modules/",
     "<rootDir>/src/db/migrate.test.ts",
-    "<rootDir>/src/providers/azure/runtime/LocalReportRuntime.duckdb.test.ts"
+    "<rootDir>/src/providers/azure/runtime/LocalReportRuntime.duckdb.test.ts",
+    "<rootDir>/src/providers/azure/runtime/resources/tables.duckdb.test.ts"
   ],
   transform: {
     "^.+\\.tsx?$": [

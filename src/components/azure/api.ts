@@ -65,12 +65,14 @@ export type OwnershipEvidenceTarget =
       kind: "resourceGroup";
       subscriptionId: string;
       resourceGroup: string;
+      page?: number;
+      pageSize?: number;
     };
 
 type ZeroTrustAssessmentRuntimeResponse = ZtaReport &
   PaginatedCollection<"zeroTrustAssessment.report", ZtaReport["Tests"]>;
 
-const remotePageSize = 20;
+export const remotePageSize = 20;
 
 export type CsvExportSelection = {
   filters: ColumnFilters;
@@ -269,6 +271,12 @@ export async function readOwnershipEvidence({
   } else {
     url.searchParams.set("subscriptionId", target.subscriptionId);
     url.searchParams.set("resourceGroup", target.resourceGroup);
+    if (target.page !== undefined) {
+      url.searchParams.set("page", String(target.page));
+    }
+    if (target.pageSize !== undefined) {
+      url.searchParams.set("count", String(target.pageSize));
+    }
   }
 
   const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
@@ -370,7 +378,7 @@ export async function deleteRemediationTasks(
   );
 }
 
-export type EvidenceStatus = "active" | "unactive";
+export type EvidenceStatus = "active" | "inactive";
 
 export async function updateEvidenceStatus({
   key,
@@ -379,7 +387,7 @@ export async function updateEvidenceStatus({
   key: string;
   status: EvidenceStatus;
 }): Promise<void> {
-  const url = new URL("/api/data/ownership/evidence/status", window.location.origin);
+  const url = new URL("/api/data/ownership/ownerCandidates/status", window.location.origin);
   url.searchParams.set("key", key);
   url.searchParams.set("status", status);
 
