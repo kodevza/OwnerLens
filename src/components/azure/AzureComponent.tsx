@@ -268,6 +268,8 @@ export function AzureComponent() {
     }
   }
 
+  const ownershipEvidenceDisplayName = ownershipEvidenceTab ? getOwnershipEvidenceTabDisplayName(ownershipEvidenceTab) : null;
+
   return (
     <section className="flex flex-col">
       <Tabs className="relative z-10 -mb-px gap-0" value={activeView} onValueChange={(value) => activateView(value as AzureView)}>
@@ -307,8 +309,8 @@ export function AzureComponent() {
           {ownershipEvidenceTab ? (
             <ClosableTab
               active={activeView === "ownershipEvidence"}
-              closeLabel={`Close ${ownershipEvidenceTab.displayName} ownership evidence tab`}
-              label={`${ownershipEvidenceTab.displayName} owners`}
+              closeLabel={`Close ${ownershipEvidenceDisplayName} ownership evidence tab`}
+              label={`${ownershipEvidenceDisplayName} owners`}
               onClose={closeOwnershipEvidence}
               value="ownershipEvidence"
             />
@@ -376,7 +378,7 @@ export function AzureComponent() {
         {activeView === "ownershipEvidence" && ownershipEvidenceTab ? (
           <OwnershipEvidenceComponent
             key={getOwnershipEvidenceTabKey(ownershipEvidenceTab)}
-            displayName={ownershipEvidenceTab.displayName}
+            displayName={ownershipEvidenceDisplayName ?? ownershipEvidenceTab.displayName}
             target={ownershipEvidenceTab.target}
           />
         ) : null}
@@ -450,6 +452,21 @@ function getOwnershipEvidenceTabKey(tab: OwnershipEvidenceTab): string {
   }
 
   return `${tab.target.kind}:${tab.target.principalId}`;
+}
+
+function getOwnershipEvidenceTabDisplayName(tab: OwnershipEvidenceTab): string {
+  const prefixByKind: Record<OwnershipEvidenceTab["target"]["kind"], string> = {
+    managedIdentity: "MI",
+    resourceGroup: "RG",
+    servicePrincipal: "SP"
+  };
+  const prefix = prefixByKind[tab.target.kind];
+
+  if (tab.displayName.startsWith(`${prefix}: `)) {
+    return tab.displayName;
+  }
+
+  return `${prefix}: ${tab.displayName}`;
 }
 
 function getAzureRbacTabKey(tab: AzureRbacTab): string {

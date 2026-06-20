@@ -30,11 +30,14 @@ import {
 } from "./snapshotStore";
 import {
   readAzureActivityLogRows,
+  readAzureResourceGroupOwnershipCollectionSqlRows,
   readAzureResourceGroupRows,
+  readAzureResourceGroupOwnershipSqlRows,
   readAzureResourceRows,
   readAzureRoleAssignmentRows,
   readAzureSubscriptionRows,
-  readAzureUserAssignedManagedIdentityRows
+  readAzureUserAssignedManagedIdentityRows,
+  type AzureResourceGroupOwnershipSqlRow
 } from "./tables";
 
 export type LocalAzureResourcesReportRuntimeOptions = {
@@ -125,6 +128,20 @@ export class LocalAzureResourcesReportRuntime {
   async readAzureActivityLogs(): Promise<AzureActivityLog[]> {
     this.assertImported();
     return readAzureActivityLogRows(this.getConnection());
+  }
+
+  async readAzureResourceGroupOwnershipSqlRows(target: {
+    subscriptionIds: string[];
+    resourceGroups: string[];
+    principalIds?: string[];
+  }, limit = 1): Promise<AzureResourceGroupOwnershipSqlRow[]> {
+    this.assertImported();
+    return readAzureResourceGroupOwnershipSqlRows(this.getConnection(), target, limit);
+  }
+
+  async readAzureResourceGroupOwnershipCollectionSqlRows(limit = 20): Promise<AzureResourceGroupOwnershipSqlRow[]> {
+    this.assertImported();
+    return readAzureResourceGroupOwnershipCollectionSqlRows(this.getConnection(), limit);
   }
 
   private assertImported(): void {

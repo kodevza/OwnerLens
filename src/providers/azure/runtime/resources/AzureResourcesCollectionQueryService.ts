@@ -9,6 +9,7 @@ import {
   type LocalReportCollectionQueryOptions,
   type LocalReportPaginatedCollection
 } from "../../../../core/runtime/collections";
+import type { PageOptions } from "../../../../core/runtime/pagination";
 import type { RuntimeCollectionCsvExport } from "../../../../core/runtime/collectionExport";
 import type { DisabledEvidenceStore } from "../DisabledEvidenceStore";
 import type { ExportService } from "../ExportService";
@@ -148,6 +149,30 @@ export class AzureResourcesCollectionQueryService {
     );
   }
 
+  async readResourceGroupOwnershipRow(
+    target: {
+      subscriptionId: string;
+      resourceGroup: string;
+    },
+    options: PageOptions = {}
+  ): Promise<ResourceGroupOwnershipRow | null> {
+    const ownerRow = await this.azureResources.readAzureResourceGroupOwnershipSqlRows(
+      {
+        subscriptionIds: [target.subscriptionId],
+        resourceGroups: [target.resourceGroup]
+      },
+      getResourceGroupOwnershipLookupLimit(options)
+    ).then((rows) => rows[0]);
+
+    if (!ownerRow) {
+      return null;
+    }
+
+    return buildResourceGroupOwnershipRows([ownerRow], [ownerRow])[0] ?? null;
+  }
+
+
+
   private async readAzureRbacRows(servicePrincipalId: string): Promise<AzureRbac[]> {
     const normalizedServicePrincipalId = servicePrincipalId.trim().toLowerCase();
     const [servicePrincipals, roleAssignments] = await Promise.all([
@@ -206,6 +231,14 @@ export class AzureResourcesCollectionQueryService {
 
     return [...rowsByAssignmentKey.values()];
   }
+}
+
+function getResourceGroupOwnershipLookupLimit(options: PageOptions): number {
+  if (options.page === undefined || options.pageSize === undefined) {
+    return 1;
+  }
+
+  return Math.max(1, Math.trunc(options.page) * Math.trunc(options.pageSize));
 }
 
 function isServicePrincipalRoleAssignment(

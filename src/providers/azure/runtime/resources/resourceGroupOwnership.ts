@@ -112,7 +112,7 @@ function buildResourceGroupOwnerCandidates(
   group: AzureResourceGroup,
   ownerRow: OwnerReportRow
 ): OwnerCandidate[] {
-  const owner = ownerRow.owner?.trim();
+  const owner = ownerRow.owner?.trim() || inferDisabledOwnerFromEvidence(ownerRow);
 
   if (!owner) {
     return [];
@@ -138,18 +138,52 @@ function buildResourceGroupOwnerCandidates(
   ]);
 }
 
+function inferDisabledOwnerFromEvidence(ownerRow: OwnerReportRow): string | null {
+  if (ownerRow.confidence !== "none") {
+    return null;
+  }
+
+  const evidence = ownerRow.evidence.find((entry) => entry.disabled && entry.user.trim());
+  if (!evidence) {
+    return null;
+  }
+
+  if (ownerRow.source.startsWith("tag.")) {
+    return evidence.user.split("=", 2)[1]?.trim() || null;
+  }
+
+  return evidence.user.trim();
+}
+
 export function applyResourceGroupOwnerDisabledEvidence(
   ownerRows: OwnerReportRow[],
   disabledKeys: ReadonlySet<string>
 ): OwnerReportRow[] {
   return ownerRows.map((row) => {
-    if (row.kind !== "resourceGroup" || !row.source.startsWith("activity.")) {
+    if (row.kind !== "resourceGroup") {
       return row;
+    }
+
+    if (!row.source.startsWith("activity.")) {
+      const owner = row.owner?.trim();
+      const disabledCandidate =
+        owner ? disabledKeys.has(getResourceGroupOwnerCandidateDisabledKey(row, owner)) : false;
+      if (!disabledCandidate) {
+        return row;
+      }
+
+      return {
+        ...row,
+        owner: null,
+        confidence: "none",
+        evidence: row.evidence.map((entry) => ({ ...entry, disabled: true }))
+      };
     }
 
     const evidence = row.evidence.map((entry) => ({
       ...entry,
       disabled:
+        disabledKeys.has(getResourceGroupOwnerCandidateDisabledKey(row, entry.user)) ||
         isDefaultDisabledOwnerEvidence(entry) ||
         disabledKeys.has(getResourceGroupOwnerEvidenceKey(row, entry)) ||
         undefined
@@ -247,6 +281,13 @@ function getResourceGroupOwnerEvidenceKey(
   evidence: Pick<OwnerEvidence, "user" | "date">
 ): string {
   return [row.targetKey, evidence.user.trim().toLowerCase(), evidence.date ?? ""].join(":");
+}
+
+function getResourceGroupOwnerCandidateDisabledKey(
+  row: Pick<OwnerReportRow, "targetKey" | "source">,
+  owner: string
+): string {
+  return [row.targetKey, getOwnerCandidateKey(owner, inferOwnerType(owner, row.source))].join(":");
 }
 
 function isDefaultDisabledOwnerEvidence(evidence: Pick<OwnerEvidence, "user">): boolean {

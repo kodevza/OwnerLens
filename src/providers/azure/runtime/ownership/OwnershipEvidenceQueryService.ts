@@ -1,10 +1,15 @@
 import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
 import type { ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
-import type { ResourceGroupOwnershipRow } from "../../../../core/azure/resources";
+import type {
+  AzureRoleAssignment,
+  AzureUserAssignedManagedIdentity,
+  ResourceGroupOwnershipRow
+} from "../../../../core/azure/resources";
 import type {
   OwnerCandidate,
   OwnerCandidateSource,
   OwnerEvidence,
+  OwnerType,
   OwnershipEvidenceDiscoverySource,
   OwnershipEvidenceItem,
   OwnershipEvidencePath,
@@ -12,8 +17,11 @@ import type {
   OwnershipEvidenceTargetKind
 } from "../../../../core/ownership/types";
 import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
+import type { PageOptions } from "../../../../core/runtime/pagination";
+import { projectServicePrincipalOwners } from "../../ownership/principalOwnerProjection";
 import type { EntraCollectionQueryService } from "../entra/EntraCollectionQueryService";
-import type { AzureResourcesCollectionQueryService } from "../resources/AzureResourcesCollectionQueryService";
+import type { AzureResourceGroupOwnershipSqlRow } from "../resources/tables";
+import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
 
 export type OwnershipEvidenceRequest =
   | {
@@ -24,20 +32,25 @@ export type OwnershipEvidenceRequest =
       kind: "resourceGroup";
       subscriptionId: string;
       resourceGroup: string;
+      page?: number;
+      pageSize?: number;
     };
 
 export type OwnershipEvidenceQueryServiceOptions = {
   entraQueries: EntraCollectionQueryService;
-  azureResourcesQueries: AzureResourcesCollectionQueryService;
+  azureResources: LocalAzureResourcesReportRuntime;
 };
+
+type ResourceGroupOwnershipEvidenceRequest = Extract<OwnershipEvidenceRequest, { kind: "resourceGroup" }>;
+const DEFAULT_RESOURCE_GROUP_OWNERSHIP_EVIDENCE_LIMIT = 100;
 
 export class OwnershipEvidenceQueryService {
   private readonly entraQueries: EntraCollectionQueryService;
-  private readonly azureResourcesQueries: AzureResourcesCollectionQueryService;
+  private readonly azureResources: LocalAzureResourcesReportRuntime;
 
   constructor(options: OwnershipEvidenceQueryServiceOptions) {
     this.entraQueries = options.entraQueries;
-    this.azureResourcesQueries = options.azureResourcesQueries;
+    this.azureResources = options.azureResources;
   }
 
   async readOwnershipEvidence(request: OwnershipEvidenceRequest): Promise<OwnershipEvidenceResponse> {
@@ -47,7 +60,7 @@ export class OwnershipEvidenceQueryService {
       case "managedIdentity":
         return this.readManagedIdentityEvidence(request.principalId);
       case "resourceGroup":
-        return this.readResourceGroupEvidence(request.subscriptionId, request.resourceGroup);
+        return this.readResourceGroupEvidence(request);
       default:
         return assertNever(request);
     }
@@ -69,8 +82,46 @@ export class OwnershipEvidenceQueryService {
         id: row.id,
         displayName: row.displayName
       },
-      evidence: flattenCandidateEvidence(row.ownerCandidates ?? [])
+      evidence: flattenCandidateEvidence(await this.readServicePrincipalOwnerCandidates(row))
     };
+  }
+
+  private async readServicePrincipalOwnerCandidates(row: ServicePrincipal): Promise<OwnerCandidate[]> {
+    const roleAssignments = row.roleAssignments ?? [];
+    const target = getRoleAssignmentResourceGroupOwnershipTarget(roleAssignments);
+
+    if (target.subscriptionIds.length === 0 || target.resourceGroups.length === 0) {
+      return row.ownerCandidates ?? projectServicePrincipalOwners(
+        roleAssignments,
+        []
+      ).ownerCandidates;
+    }
+
+    try {
+      const resourceGroupOwnershipRows = mapSqlRowsToResourceGroupOwnershipRows(
+        await this.azureResources.readAzureResourceGroupOwnershipSqlRows(
+          {
+            ...target,
+            principalIds: [row.id]
+          },
+          DEFAULT_RESOURCE_GROUP_OWNERSHIP_EVIDENCE_LIMIT
+        )
+      );
+
+      return projectServicePrincipalOwners(
+        roleAssignments,
+        resourceGroupOwnershipRows
+      ).ownerCandidates;
+    } catch (error) {
+      if (error instanceof RuntimeHttpError && error.statusCode === 404) {
+        return row.ownerCandidates ?? projectServicePrincipalOwners(
+          roleAssignments,
+          []
+        ).ownerCandidates;
+      }
+
+      throw error;
+    }
   }
 
   private async readManagedIdentityEvidence(principalId: string): Promise<OwnershipEvidenceResponse> {
@@ -83,50 +134,254 @@ export class OwnershipEvidenceQueryService {
       throw new RuntimeHttpError("Ownership evidence target was not found.", 404);
     }
 
+    const identityResourceGroup = await this.readManagedIdentityResourceGroup(row);
+    if (identityResourceGroup) {
+      return this.readResourceGroupEvidence({
+        kind: "resourceGroup",
+        subscriptionId: identityResourceGroup.subscriptionId,
+        resourceGroup: identityResourceGroup.resourceGroup
+      });
+    }
+
     return {
       target: {
         kind: "managedIdentity",
         id: row.id,
         displayName: row.displayName
       },
-      evidence: flattenCandidateEvidence(row.ownerCandidates ?? [])
+      evidence: []
     };
   }
 
-  private async readResourceGroupEvidence(
-    subscriptionId: string,
-    resourceGroup: string
-  ): Promise<OwnershipEvidenceResponse> {
-    const normalizedSubscriptionId = normalizeKey(subscriptionId);
-    const normalizedResourceGroup = normalizeKey(resourceGroup);
-    const row = (await this.azureResourcesQueries.readResourceGroupOwnershipRows()).find(
-      (candidate) =>
-        normalizeKey(candidate.subscriptionId) === normalizedSubscriptionId &&
-        normalizeKey(candidate.resourceGroup) === normalizedResourceGroup
-    );
+  private async readManagedIdentityResourceGroup(
+    row: ManagedIdentity
+  ): Promise<Pick<AzureUserAssignedManagedIdentity, "subscriptionId" | "resourceGroup"> | null> {
+    const resourceGroup = row.resourceGroup?.trim();
+    if (!resourceGroup) {
+      return null;
+    }
 
-    if (!row) {
+    const normalizedPrincipalId = normalizeKey(row.id);
+    const normalizedClientId = normalizeKey(row.appId);
+    const normalizedResourceGroup = normalizeKey(resourceGroup);
+    const identities = await this.azureResources.readAzureUserAssignedManagedIdentities();
+
+    return identities.find((identity) => {
+      const identityKeyMatches =
+        normalizeKey(identity.principalId) === normalizedPrincipalId ||
+        normalizeKey(identity.clientId) === normalizedClientId;
+
+      return identityKeyMatches && normalizeKey(identity.resourceGroup) === normalizedResourceGroup;
+    }) ?? null;
+  }
+
+  private async readResourceGroupEvidence(
+    request: ResourceGroupOwnershipEvidenceRequest
+  ): Promise<OwnershipEvidenceResponse> {
+    const ownerRows = await this.azureResources.readAzureResourceGroupOwnershipSqlRows(
+      {
+        subscriptionIds: [request.subscriptionId],
+        resourceGroups: [request.resourceGroup]
+      },
+      getResourceGroupOwnershipLookupLimit(request)
+    );
+    const targetRow = ownerRows[0];
+
+    if (!targetRow) {
       throw new RuntimeHttpError("Ownership evidence target was not found.", 404);
     }
 
     return {
       target: {
         kind: "resourceGroup",
-        id: row.targetKey,
-        displayName: row.resourceGroup,
-        subscriptionId: row.subscriptionId,
-        subscriptionName: row.subscriptionName,
-        resourceGroup: row.resourceGroup
+        id: targetRow.targetKey,
+        displayName: targetRow.resourceGroup,
+        subscriptionId: targetRow.subscriptionId,
+        subscriptionName: targetRow.subscriptionName,
+        resourceGroup: targetRow.resourceGroup
       },
-      evidence: flattenResourceGroupCandidateEvidence(row)
+      evidence: flattenCandidateEvidence(ownerRows.flatMap(mapResourceGroupOwnershipSqlRowToOwnerCandidate))
     };
   }
 }
 
-function flattenResourceGroupCandidateEvidence(
-  row: ResourceGroupOwnershipRow
-): OwnershipEvidenceItem[] {
-  return flattenCandidateEvidence(row.ownerCandidates);
+function getResourceGroupOwnershipLookupLimit(options: PageOptions): number {
+  if (options.page === undefined || options.pageSize === undefined) {
+    return DEFAULT_RESOURCE_GROUP_OWNERSHIP_EVIDENCE_LIMIT;
+  }
+
+  return Math.max(1, Math.trunc(options.page) * Math.trunc(options.pageSize));
+}
+
+function mapResourceGroupOwnershipSqlRowToOwnerCandidate(
+  row: AzureResourceGroupOwnershipSqlRow,
+  index: number
+): OwnerCandidate[] {
+  const owner = row.owner?.trim() || inferDisabledResourceGroupOwner(row);
+
+  if (!owner) {
+    return [];
+  }
+
+  const ownerType = inferResourceGroupOwnerType(owner, row.source);
+
+  return [
+    {
+      key: `${ownerType}:${owner.trim().toLowerCase()}`,
+      displayName: owner,
+      type: ownerType,
+      confidence: row.confidence,
+      source: inferResourceGroupOwnerCandidateSource(row.source),
+      rank: index + 1,
+      evidence: row.evidence,
+      relatedScopes: [
+        {
+          subscriptionId: row.subscriptionId,
+          subscriptionName: row.subscriptionName,
+          resourceGroup: row.resourceGroup,
+          principalId: row.principalId ?? undefined
+        }
+      ]
+    }
+  ];
+}
+
+function mapSqlRowsToResourceGroupOwnershipRows(
+  rows: AzureResourceGroupOwnershipSqlRow[]
+): ResourceGroupOwnershipRow[] {
+  const rowsByTargetKey = new Map<string, ResourceGroupOwnershipRow>();
+
+  for (const row of rows) {
+    const existing = rowsByTargetKey.get(row.targetKey);
+    const ownerCandidates = mapResourceGroupOwnershipSqlRowToOwnerCandidate(row, existing?.ownerCandidates.length ?? 0);
+
+    if (existing) {
+      existing.ownerCandidates.push(...ownerCandidates);
+      continue;
+    }
+
+    rowsByTargetKey.set(row.targetKey, {
+      subscriptionId: row.subscriptionId,
+      subscriptionName: row.subscriptionName,
+      resourceGroup: row.resourceGroup,
+      location: row.location,
+      tags: row.tags,
+      targetKey: row.targetKey,
+      ownerCandidates,
+      owner: row.owner,
+      confidence: row.confidence,
+      source: row.source,
+      evidence: row.evidence,
+      roleAssignments: [],
+      rbacRoleAssignmentCount: 0,
+      rbacRoleLevel: "none"
+    });
+  }
+
+  return [...rowsByTargetKey.values()];
+}
+
+function getRoleAssignmentResourceGroupOwnershipTarget(
+  roleAssignments: AzureRoleAssignment[]
+): { subscriptionIds: string[]; resourceGroups: string[] } {
+  const subscriptionIds = new Map<string, string>();
+  const resourceGroups = new Map<string, string>();
+
+  for (const assignment of roleAssignments) {
+    const subscriptionId = firstNonEmpty([
+      assignment.scopeSubscriptionId,
+      getScopeSubscriptionId(assignment.scope),
+      assignment.subscriptionId
+    ]);
+    const resourceGroup = firstNonEmpty([
+      assignment.scopeResourceGroup,
+      getScopeResourceGroup(assignment.scope)
+    ]);
+
+    if (!subscriptionId || !resourceGroup) {
+      continue;
+    }
+
+    subscriptionIds.set(normalizeKey(subscriptionId), subscriptionId.trim());
+    resourceGroups.set(normalizeKey(resourceGroup), resourceGroup.trim());
+  }
+
+  return {
+    subscriptionIds: [...subscriptionIds.values()],
+    resourceGroups: [...resourceGroups.values()]
+  };
+}
+
+function getScopeSubscriptionId(scope: string): string | null {
+  return scope.match(/\/subscriptions\/([^/]+)/i)?.[1] ?? null;
+}
+
+function getScopeResourceGroup(scope: string): string | null {
+  return scope.match(/\/resourceGroups\/([^/]+)/i)?.[1] ?? null;
+}
+
+function firstNonEmpty(values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+
+  return null;
+}
+
+function inferDisabledResourceGroupOwner(row: AzureResourceGroupOwnershipSqlRow): string | null {
+  if (row.confidence !== "none") {
+    return null;
+  }
+
+  if (row.source.startsWith("activity.")) {
+    return row.ownerDisplayName?.trim() || null;
+  }
+
+  const evidence = row.evidence.find((entry) => entry.disabled && entry.user.trim());
+  if (!evidence) {
+    return null;
+  }
+
+  if (row.source.startsWith("tag.")) {
+    return evidence.user.split("=", 2)[1]?.trim() || null;
+  }
+
+  return evidence.user.trim();
+}
+
+function inferResourceGroupOwnerType(owner: string, source: string): OwnerType {
+  if (source === "tag.ownerGroup") {
+    return "ownerGroup";
+  }
+
+  if (source === "tag.ownerUser") {
+    return "ownerUser";
+  }
+
+  if (source.startsWith("tag.")) {
+    return "ownerTag";
+  }
+
+  if (owner.includes("@")) {
+    return "ownerUser";
+  }
+
+  return "unknown";
+}
+
+function inferResourceGroupOwnerCandidateSource(source: string): OwnerCandidateSource {
+  if (source.startsWith("activity.")) {
+    return "activity";
+  }
+
+  if (source.startsWith("tag.")) {
+    return "tag";
+  }
+
+  return "resourceGroupOwner";
 }
 
 function flattenCandidateEvidence(candidates: OwnerCandidate[]): OwnershipEvidenceItem[] {

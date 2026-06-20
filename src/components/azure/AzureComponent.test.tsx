@@ -976,10 +976,21 @@ test("opens Azure RBAC tab for the selected service principal from its RBAC badg
 });
 
 test("opens selectable ownership evidence table from a service principal owner badge", async () => {
+  let evidenceReadCount = 0;
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);
 
+    if (requestUrl.startsWith("/api/data/ownership/ownerCandidates/status")) {
+      return jsonResponse({
+        key: "resourceGroup:sub-1:rg-app:principal:sp-object-id:ownerUser:alice@example.test",
+        status: "inactive",
+        disabled: true,
+        disabledCount: 1
+      });
+    }
+
     if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      evidenceReadCount += 1;
       return jsonResponse({
         target: {
           kind: "servicePrincipal",
@@ -989,17 +1000,25 @@ test("opens selectable ownership evidence table from a service principal owner b
         evidence: [
           {
             key: "owner-1:alice@example.test:2026-06-05T00:00:00.000Z",
-            ownerCandidateKey: "owner-1",
+            ownerCandidateKey: "ownerUser:alice@example.test",
             ownerDisplayName: "alice@example.test",
             ownerType: "ownerUser",
             confidence: "high",
-            source: "entraApplicationOwner",
-            path: "direct",
-            discoverySource: "applicationOwner",
+            source: "resourceGroupOwner",
+            path: "indirect",
+            discoverySource: "tag",
             rank: 1,
             evidence: "alice@example.test",
             date: "2026-06-05T00:00:00.000Z",
-            relatedScopes: []
+            disabled: evidenceReadCount > 1,
+            relatedScopes: [
+              {
+                subscriptionId: "sub-1",
+                subscriptionName: "Platform",
+                resourceGroup: "rg-app",
+                principalId: "sp-object-id"
+              }
+            ]
           }
         ]
       });
@@ -1062,9 +1081,9 @@ test("opens selectable ownership evidence table from a service principal owner b
 
   await waitForText(container, "Service principal app");
   await clickButton("Open ownership evidence for alice@example.test");
-  await waitForText(container, "Application owner");
+  await waitForText(container, "Resource group owner");
 
-  expect(getButton("Service principal app owners")).toBeDefined();
+  expect(getButton("SP: Service principal app owners")).toBeDefined();
   expect(getCheckbox("Select ownership evidence alice@example.test alice@example.test").checked).toBe(false);
 
   const evidenceRequest = fetchMock.mock.calls
@@ -1076,11 +1095,164 @@ test("opens selectable ownership evidence table from a service principal owner b
   expect(url.searchParams.get("kind")).toBe("servicePrincipal");
   expect(url.searchParams.get("principalId")).toBe("sp-object-id");
 
-  await clickButton("Close Service principal app ownership evidence tab");
+  await clickElementByLabel("Set alice@example.test ownership evidence Inactive");
+  await waitForText(container, "Inactive");
+
+  const statusRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .find((requestUrl) => requestUrl.startsWith("/api/data/ownership/ownerCandidates/status"));
+  expect(statusRequest).toBeDefined();
+
+  const statusUrl = new URL(statusRequest ?? "", window.location.origin);
+  expect(statusUrl.searchParams.get("key")).toBe(
+    "resourceGroup:sub-1:rg-app:principal:sp-object-id:ownerUser:alice@example.test"
+  );
+  expect(statusUrl.searchParams.get("status")).toBe("inactive");
+
+  await clickButton("Close SP: Service principal app ownership evidence tab");
   await waitFor(() => {
-    expect(queryButton("Close Service principal app ownership evidence tab")).toBeNull();
-    expect(container.textContent).not.toContain("Application owner");
+    expect(queryButton("Close SP: Service principal app ownership evidence tab")).toBeNull();
+    expect(container.textContent).not.toContain("Resource group owner");
   });
+
+  act(() => root.unmount());
+});
+
+test("sets resource group owner candidate status to inactive from the evidence table", async () => {
+  let evidenceReadCount = 0;
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/ownership/ownerCandidates/status")) {
+      return jsonResponse({
+        key: "resourceGroup:sub-1:rg-app:ownerUser:alice@example.test",
+        status: "inactive",
+        disabled: true,
+        disabledCount: 1
+      });
+    }
+
+    if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      evidenceReadCount += 1;
+      return jsonResponse({
+        target: {
+          kind: "resourceGroup",
+          id: "resourceGroup:sub-1:rg-app",
+          displayName: "rg-app",
+          subscriptionId: "sub-1",
+          subscriptionName: "Platform",
+          resourceGroup: "rg-app"
+        },
+        evidence: [
+          {
+            key: "ownerUser:alice@example.test:alice@example.test:2026-06-05T00:00:00.000Z",
+            ownerCandidateKey: "ownerUser:alice@example.test",
+            ownerDisplayName: "alice@example.test",
+            ownerType: "ownerUser",
+            confidence: "low",
+            source: "activity",
+            path: "direct",
+            discoverySource: "activityLog",
+            rank: 1,
+            evidence: "alice@example.test",
+            date: "2026-06-05T00:00:00.000Z",
+            disabled: evidenceReadCount > 1,
+            relatedScopes: [
+              {
+                subscriptionId: "sub-1",
+                subscriptionName: "Platform",
+                resourceGroup: "rg-app"
+              }
+            ]
+          }
+        ]
+      });
+    }
+
+    if (requestUrl.startsWith("/api/data/azureResources/resourceGroupOwnership")) {
+      return jsonResponse({
+        collectionId: "azureResources.resourceGroupOwnership",
+        columns: [],
+        count: 1,
+        page: 1,
+        pageSize: 20,
+        rows: [
+          {
+            subscriptionId: "sub-1",
+            subscriptionName: "Platform",
+            resourceGroup: "rg-app",
+            location: "westeurope",
+            tags: null,
+            targetKey: "resourceGroup:sub-1:rg-app",
+            ownerCandidates: [
+              {
+                key: "ownerUser:alice@example.test",
+                displayName: "alice@example.test",
+                type: "ownerUser",
+                confidence: "low",
+                source: "activity",
+                rank: 1,
+                evidence: [{ user: "alice@example.test", date: "2026-06-05T00:00:00.000Z" }],
+                relatedScopes: [
+                  {
+                    subscriptionId: "sub-1",
+                    subscriptionName: "Platform",
+                    resourceGroup: "rg-app"
+                  }
+                ]
+              }
+            ],
+            owner: "alice@example.test",
+            confidence: "low",
+            source: "activity.lastModifier",
+            evidence: [{ user: "alice@example.test", date: "2026-06-05T00:00:00.000Z" }],
+            roleAssignments: [],
+            rbacRoleAssignmentCount: 0,
+            rbacRoleLevel: "none"
+          }
+        ]
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 0,
+      page: 1,
+      pageSize: 20,
+      rows: []
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await clickButton("Resource groups");
+  await waitForText(container, "rg-app");
+  await clickButton("Open ownership evidence for alice@example.test");
+  await waitForText(container, "Activity log");
+
+  const evidenceRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .find((requestUrl) => requestUrl.startsWith("/api/data/ownership/evidence"));
+  expect(evidenceRequest).toBeDefined();
+
+  const evidenceUrl = new URL(evidenceRequest ?? "", window.location.origin);
+  expect(evidenceUrl.searchParams.get("kind")).toBe("resourceGroup");
+  expect(evidenceUrl.searchParams.get("page")).toBe("1");
+  expect(evidenceUrl.searchParams.get("count")).toBe("20");
+
+  await clickElementByLabel("Set alice@example.test ownership evidence Inactive");
+  await waitForText(container, "Inactive");
+
+  const statusRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .find((requestUrl) => requestUrl.startsWith("/api/data/ownership/ownerCandidates/status"));
+  expect(statusRequest).toBeDefined();
+
+  const url = new URL(statusRequest ?? "", window.location.origin);
+  expect(url.searchParams.get("key")).toBe("resourceGroup:sub-1:rg-app:ownerUser:alice@example.test");
+  expect(url.searchParams.get("status")).toBe("inactive");
 
   act(() => root.unmount());
 });
@@ -1828,6 +2000,14 @@ async function clickButton(label: string) {
   });
 }
 
+async function clickElementByLabel(label: string) {
+  await act(async () => {
+    const element = getElementByLabel(label);
+    element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    element.click();
+  });
+}
+
 async function changeInput(label: string, value: string): Promise<void> {
   const input = getInput(label);
 
@@ -1927,7 +2107,7 @@ function servicePrincipalOwnerResponse(owner: { displayName: string; type: strin
   });
 }
 
-function ownershipEvidenceResponse(owner: { displayName: string; type: string }): Response {
+function ownershipEvidenceResponse(owner: { displayName: string; type: string; disabled?: boolean }): Response {
   return jsonResponse({
     target: {
       kind: "servicePrincipal",
@@ -1947,6 +2127,7 @@ function ownershipEvidenceResponse(owner: { displayName: string; type: string })
         rank: 1,
         evidence: owner.displayName,
         date: "2026-06-05T00:00:00.000Z",
+        disabled: owner.disabled,
         relatedScopes: []
       }
     ]
@@ -1982,6 +2163,17 @@ function getInput(label: string): HTMLInputElement {
   }
 
   return input;
+}
+
+function getElementByLabel(label: string): HTMLElement {
+  const element = [...document.querySelectorAll<HTMLElement>("[aria-label]")].find(
+    (candidate) => candidate.getAttribute("aria-label") === label
+  );
+  if (!(element instanceof HTMLElement)) {
+    throw new Error(`Expected element ${label}.`);
+  }
+
+  return element;
 }
 
 function queryButton(label: string): HTMLButtonElement | null {

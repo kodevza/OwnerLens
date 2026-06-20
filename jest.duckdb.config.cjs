@@ -5,7 +5,8 @@ module.exports = {
   ...baseConfig,
   testMatch: [
     "<rootDir>/src/db/migrate.test.ts",
-    "<rootDir>/src/providers/azure/runtime/LocalReportRuntime.duckdb.test.ts"
+    "<rootDir>/src/providers/azure/runtime/LocalReportRuntime.duckdb.test.ts",
+    "<rootDir>/src/providers/azure/runtime/resources/tables.duckdb.test.ts"
   ],
   testPathIgnorePatterns: ["/node_modules/"]
 };

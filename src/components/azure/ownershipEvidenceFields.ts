@@ -22,7 +22,7 @@ export const ownershipEvidenceFields: ReportFieldDescriptor<OwnershipEvidenceIte
   },
   {
     id: "status",
-    label: "Status",
+    label: "Evidence Status",
     valueType: "text",
     getValue: (evidence) => getEvidenceStatusLabel(evidence),
     filter: { kind: "multiSelect", options: ["Active", "Inactive"] }

@@ -1,7 +1,10 @@
 import type { EntraServicePrincipal, ServicePrincipalType } from "../../../../core/azure/entra/types";
 import type { AzureResourceGroup, AzureRoleAssignment } from "../../../../core/azure/resources";
 import type { OwnerReportRow } from "../../ownership/azureOwnerReportTypes";
-import { buildResourceGroupOwnershipRows } from "./resourceGroupOwnership";
+import {
+  applyResourceGroupOwnerDisabledEvidence,
+  buildResourceGroupOwnershipRows
+} from "./resourceGroupOwnership";
 
 test("classifies configured non-principal owner tags as ownerTag", () => {
   const [row] = buildResourceGroupOwnershipRows(
@@ -60,6 +63,47 @@ test("summarizes service principal and managed identity RBAC assignments scoped 
   expect(row.rbacRoleAssignmentCount).toBe(2);
   expect(row.rbacRoleLevel).toBe("high");
   expect(row.roleAssignments.map((assignment) => assignment.principalId)).toEqual(["sp-app", "mi-app"]);
+});
+
+test("blocks a resource group owner candidate", () => {
+  const [row] = applyResourceGroupOwnerDisabledEvidence(
+    [ownerRow("rg-platform", "tag.ownerGroup", "platform-team", "high")],
+    new Set(["resourceGroup:sub-1:rg-platform:ownerGroup:platform-team"])
+  );
+
+  expect(row).toEqual(
+    expect.objectContaining({
+      owner: null,
+      confidence: "none",
+      evidence: [{ user: "ownerGroup=platform-team", date: null, disabled: true }]
+    })
+  );
+});
+
+test("falls back to the next activity owner when the current candidate is blocked", () => {
+  const [row] = applyResourceGroupOwnerDisabledEvidence(
+    [
+      {
+        ...ownerRow("rg-activity", "activity.lastModifier", "alice@example.test", "low"),
+        evidence: [
+          { user: "alice@example.test", date: "2026-06-05T10:00:00.000Z" },
+          { user: "bob@example.test", date: "2026-06-04T10:00:00.000Z" }
+        ]
+      }
+    ],
+    new Set(["resourceGroup:sub-1:rg-activity:ownerUser:alice@example.test"])
+  );
+
+  expect(row).toEqual(
+    expect.objectContaining({
+      owner: "bob@example.test",
+      confidence: "low",
+      evidence: [
+        { user: "alice@example.test", date: "2026-06-05T10:00:00.000Z", disabled: true },
+        { user: "bob@example.test", date: "2026-06-04T10:00:00.000Z" }
+      ]
+    })
+  );
 });
 
 function resourceGroup(resourceGroupName: string): AzureResourceGroup {

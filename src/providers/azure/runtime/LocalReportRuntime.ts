@@ -130,7 +130,7 @@ export class LocalReportRuntime {
     });
     this.ownershipEvidenceQueries = new OwnershipEvidenceQueryService({
       entraQueries: this.entraQueries,
-      azureResourcesQueries: this.azureResourcesQueries
+      azureResources: this.azureResources
     });
   }
 
@@ -201,7 +201,7 @@ export class LocalReportRuntime {
     await this.enrichmentService.recalculate();
   }
 
-  async setOwnerEvidenceDisabled(key: DisabledOwnerKey, disabled: boolean): Promise<number> {
+  async setOwnerCandidateDisabled(key: DisabledOwnerKey, disabled: boolean): Promise<number> {
     await this.initialize();
     return this.disabledEvidenceStore.setDisabled(key, disabled);
   }
