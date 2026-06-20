@@ -4,21 +4,23 @@ import type {
   EntraPrincipalOwnerSummary,
   EntraPrincipalPermissionSummary,
   EntraPrincipalRbacSummary
-} from "../../core/azure/entra/servicePrincipal";
-import type { OwnerCandidate, OwnerConfidence } from "../../core/ownership/types";
-import type { PermissionRiskLevel } from "../../core/risk/types";
-import type { ZtaRemediationSummary } from "../../core/azure/ztaReport";
-import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
-import { Badge, type BadgeProps } from "../../report/components/ui/badge";
-import type { OwnershipEvidenceTarget } from "./api";
+} from "../../../core/azure/entra/servicePrincipal";
+import type { AzureRoleAssignment } from "../../../core/azure/resources";
+import type { OwnerCandidate, OwnerConfidence } from "../../../core/ownership/types";
+import type { PermissionRiskLevel } from "../../../core/risk/types";
+import type { ZtaRemediationSummary } from "../../../core/azure/ztaReport";
+import type { ReportColumnRenderers } from "../../../report/buildCollectionColumns";
+import { Badge, type BadgeProps } from "../../../report/components/ui/badge";
+import type { OwnershipEvidenceTarget } from "../api";
 import { EntraLinkBadge, buildEntraEnterpriseApplicationPortalUrl } from "./EntraLinkBadge";
-import { ZtaRemediationBadge } from "./ZtaRemediationBadge";
+import { ZtaRemediationBadge } from "../ZtaRemediationBadge";
 
 type EntraPrincipalSummaryRow = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & ZtaRemediationSummary & {
   accountEnabled?: boolean;
   appId?: string;
   displayName: string;
   id: string;
+  roleAssignments?: AzureRoleAssignment[];
 };
 
 type EntraPrincipalIdentitySummary = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & {
@@ -26,6 +28,7 @@ type EntraPrincipalIdentitySummary = EntraPrincipalPermissionSummary & EntraPrin
   appId?: string;
   displayName: string;
   id: string;
+  roleAssignments?: AzureRoleAssignment[];
   servicePrincipalType?: string;
 };
 
@@ -73,7 +76,6 @@ export function buildServicePrincipalFieldRenderers<TRow>({
   return {
     displayName: (row) => {
       const sp = readPrincipalSummary(row);
-
       return sp ? (
         <PrincipalDisplayName appId={sp.appId} disabled={sp.accountEnabled === false} displayName={sp.displayName} objectId={sp.id} />
       ) : (
@@ -232,17 +234,25 @@ function RbacSummaryBadge({
 
 export function formatAzureRbacSummary({
   rbacRoleAssignmentCount,
-  rbacRoleLevel,
-  rbacSubscriptionCount
-}: EntraPrincipalRbacSummary): string {
-  if (rbacRoleAssignmentCount === 0) {
+  roleAssignments = []
+}: Pick<EntraPrincipalRbacSummary, "rbacRoleAssignmentCount"> & {
+  roleAssignments?: AzureRoleAssignment[];
+}): string {
+  if (rbacRoleAssignmentCount === 0 || roleAssignments.length === 0) {
     return "No Azure RBAC assignments";
   }
 
-  const assignmentLabel = rbacRoleAssignmentCount === 1 ? "assignment" : "assignments";
-  const subscriptionLabel = rbacSubscriptionCount === 1 ? "subscription" : "subscriptions";
+  return roleAssignments
+    .map((assignment) => `${assignment.roleDefinitionName ?? "Role"} on ${assignment.scope}${formatRoleAssignmentSource(assignment)}`)
+    .join(", ");
+}
 
-  return `${rbacRoleAssignmentCount} Azure RBAC ${assignmentLabel}, ${rbacRoleLevel} risk, ${rbacSubscriptionCount} ${subscriptionLabel}`;
+function formatRoleAssignmentSource(assignment: AzureRoleAssignment): string {
+  if (assignment.assignmentSource !== "group") {
+    return "";
+  }
+
+  return ` via group ${assignment.inheritedFromGroupDisplayName ?? assignment.inheritedFromGroupId ?? "group"}`;
 }
 
 export function OwnerBadge({

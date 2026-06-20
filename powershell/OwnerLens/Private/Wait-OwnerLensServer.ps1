@@ -20,7 +20,7 @@ function Wait-OwnerLensServer {
 
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
   $headers = @{ "X-OwnerLens-Runtime-Token" = $Token }
-  $runtimeUrl = "$ServerUrl/api/data/runtime"
+  $runtimeUrl = "$ServerUrl/api/data"
 
   do {
     try {

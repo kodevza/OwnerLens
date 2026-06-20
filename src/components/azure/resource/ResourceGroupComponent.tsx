@@ -1,20 +1,20 @@
 import { useCallback, useMemo } from "react";
 
-import type { ResourceGroupOwnershipRow } from "../../core/azure/resources";
-import type { Tags } from "../../core/azure/tags";
-import type { OwnerConfidence } from "../../core/ownership/types";
-import type { PermissionRiskLevel } from "../../core/risk/types";
-import { azureOwnerColumnHelp } from "./azureReportConfig";
-import { exportResourceGroupsCsv, readResourceGroups, remotePageSize } from "./api";
-import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
-import type { ColumnFilters, SortRule } from "../../core/collectionControls";
-import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
-import type { ReportFieldDescriptor } from "../../report/reportTypes";
-import { Badge, type BadgeProps } from "../../report/components/ui/badge";
-import { OwnerBadge, type OwnershipEvidenceSelection } from "./ServicePrincipalFieldRenderers";
-import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
-import { TagBadges } from "./TagBadges";
-import { AzureLinkBadge, buildAzureResourceGroupPortalUrl } from "./AzureLinkBadge";
+import type { ResourceGroupOwnershipRow } from "../../../core/azure/resources";
+import type { Tags } from "../../../core/azure/tags";
+import type { OwnerConfidence } from "../../../core/ownership/types";
+import type { PermissionRiskLevel } from "../../../core/risk/types";
+import { azureOwnerColumnHelp } from "../azureReportConfig";
+import { exportResourceGroupsCsv, readResourceGroups, remotePageSize } from "../api";
+import { SelectableGenericTable } from "../../../report/components/SelectableGenericTable";
+import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
+import type { ReportColumnRenderers } from "../../../report/buildCollectionColumns";
+import type { ReportFieldDescriptor } from "../../../report/reportTypes";
+import { Badge, type BadgeProps } from "../../../report/components/ui/badge";
+import { OwnerBadge, type OwnershipEvidenceSelection } from "../identity/ServicePrincipalFieldRenderers";
+import { CsvSelectionActionBar } from "../CsvSelectionActionBar";
+import { TagBadges } from "../TagBadges";
+import { AzureLinkBadge, buildAzureResourceGroupPortalUrl } from "../AzureLinkBadge";
 
 export type AzureRbacResourceGroupSelection = {
   displayName: string;

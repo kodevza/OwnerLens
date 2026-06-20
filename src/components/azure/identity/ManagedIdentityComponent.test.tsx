@@ -5,8 +5,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import { ManagedIdentityComponent } from "./ManagedIdentityComponent";
-import type { ManagedIdentity } from "../../core/azure/entra/managedIdentity";
-import type { AzureRoleAssignment } from "../../core/azure/resources";
+import type { ManagedIdentity } from "../../../core/azure/entra/managedIdentity";
+import type { AzureRoleAssignment } from "../../../core/azure/resources";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;

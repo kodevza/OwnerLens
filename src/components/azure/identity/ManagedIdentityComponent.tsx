@@ -1,44 +1,37 @@
 import { useCallback, useMemo, useState } from "react";
 
-import type { EntraServicePrincipalType } from "../../core/azure/entra/types";
-import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
-import type { OwnerConfidence } from "../../core/ownership/types";
-import type { PermissionRiskLevel } from "../../core/risk/types";
-import type { RemediationPackage } from "../../core/runtime/remediation";
-import { getTagNames } from "../../core/azure/tags";
-import { azureServicePrincipalColumnHelp } from "./azureReportConfig";
-import { exportServicePrincipalsCsv, readRemediationPackage, readServicePrincipals } from "./api";
-import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
-import type { ColumnFilters, SortRule } from "../../core/collectionControls";
-import type { ReportFieldDescriptor } from "../../report/reportTypes";
-import { CsvSelectionActionBar } from "./CsvSelectionActionBar";
+import type { ManagedIdentity } from "../../../core/azure/entra/managedIdentity";
+import type { OwnerConfidence } from "../../../core/ownership/types";
+import type { PermissionRiskLevel } from "../../../core/risk/types";
+import type { RemediationPackage } from "../../../core/runtime/remediation";
+import { getTagNames } from "../../../core/azure/tags";
+import { azureManagedIdentityColumnHelp } from "../azureReportConfig";
+import { exportManagedIdentitiesCsv, readManagedIdentities, readRemediationPackage } from "../api";
+import { SelectableGenericTable } from "../../../report/components/SelectableGenericTable";
+import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
+import type { ReportFieldDescriptor } from "../../../report/reportTypes";
+import { CsvSelectionActionBar } from "../CsvSelectionActionBar";
 import {
   buildServicePrincipalFieldRenderers,
   type AzureRbacPrincipalSelection,
   type EntraPermissionsPrincipalSelection,
   type OwnershipEvidenceSelection
 } from "./ServicePrincipalFieldRenderers";
-import { TagBadges } from "./TagBadges";
-import { ZtaRemediationPackageBadges } from "./ZtaRemediationPackageBadges";
+import { TagBadges } from "../TagBadges";
+import { ZtaRemediationPackageBadges } from "../remediation/ZtaRemediationPackageBadges";
 
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];
-const servicePrincipalTypeOptions: Array<Exclude<EntraServicePrincipalType, "ManagedIdentity">> = [
-  "Application",
-  "ServiceIdentity",
-  "SocialIdp",
-  "Legacy"
-];
 
-const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
+const managedIdentityFields: ReportFieldDescriptor<ManagedIdentity>[] = [
   {
     id: "displayName",
     label: "Display name",
     valueType: "text",
-    getValue: (sp) => sp.displayName,
-    getFilterValue: (sp) => ({
-      displayName: sp.displayName,
-      id: sp.id
+    getValue: (identity) => identity.displayName,
+    getFilterValue: (identity) => ({
+      displayName: identity.displayName,
+      id: identity.id
     }),
     filter: {
       kind: "objectFields",
@@ -49,20 +42,20 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     }
   },
   {
-    id: "servicePrincipalType",
-    label: "Type",
-    valueType: "text",
-    getValue: (sp) => sp.servicePrincipalType,
-    filter: { kind: "multiSelect", options: servicePrincipalTypeOptions }
+    id: "assignedResourceGroups",
+    label: "Resource group",
+    valueType: "list",
+    getValue: (identity) => identity.resourceGroup ? [identity.resourceGroup] : identity.assignedResourceGroups,
+    filter: { kind: "text" }
   },
   {
     id: "potentialOwners",
     label: "Owner candidates",
     valueType: "text",
-    getValue: (sp) => sp.potentialOwners?.join(", ") ?? "",
-    getFilterValue: (sp) => ({
-      owner: sp.potentialOwners ?? [],
-      confidence: sp.ownerConfidence ?? "none"
+    getValue: (identity) => identity.potentialOwners?.join(", ") ?? "",
+    getFilterValue: (identity) => ({
+      owner: identity.potentialOwners ?? [],
+      confidence: identity.ownerConfidence ?? "none"
     }),
     filter: {
       kind: "objectFields",
@@ -76,18 +69,18 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
     id: "permissionRisk",
     label: "Risk",
     valueType: "riskLevel",
-    getValue: (sp) => sp.permissionRisk,
+    getValue: (identity) => identity.permissionRisk,
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
   {
     id: "azureRbac",
     label: "Azure RBAC",
     valueType: "number",
-    getValue: (sp) => sp.rbacRoleAssignmentCount,
+    getValue: (identity) => identity.rbacRoleAssignmentCount,
     sortColumnId: "rbacRoleLevel",
-    getFilterValue: (sp) => ({
-      roleLevel: sp.rbacRoleLevel,
-      assignmentCount: sp.rbacRoleAssignmentCount
+    getFilterValue: (identity) => ({
+      roleLevel: identity.rbacRoleLevel,
+      assignmentCount: identity.rbacRoleAssignmentCount
     }),
     filter: {
       kind: "objectFields",
@@ -100,30 +93,23 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
   {
     id: "oauthPermissionsCount",
     label: "API Permissions",
-    valueType: "text",
-    getValue: (sp) => sp.oauthPermissionsCount,
-    getFilterValue: (sp) => sp.entraPermissionRisk,
+    valueType: "number",
+    getValue: (identity) => identity.oauthPermissionsCount,
+    getFilterValue: (identity) => identity.entraPermissionRisk,
     filterColumnId: "entraPermissionRisk",
     filter: { kind: "multiSelect", options: permissionRiskLevelOptions }
   },
-  {
-    id: "publisherName",
-    label: "Publisher",
-    valueType: "text",
-    getValue: (sp) => sp.publisherName,
-    filter: { kind: "text" }
-  },
+
   {
     id: "tags",
     label: "Tags",
     valueType: "list",
-    getValue: (sp) => getTagNames(sp.tags),
+    getValue: (identity) => getTagNames(identity.tags),
     filter: { kind: "text" }
-  }
+  },
 ];
 
-
-export function ServicePrincipalComponent({
+export function ManagedIdentityComponent({
   initialFilters,
   initialPage,
   initialSortRules,
@@ -170,19 +156,19 @@ export function ServicePrincipalComponent({
   );
   const fieldRenderers = useMemo(
     () => ({
-      ...buildServicePrincipalFieldRenderers<ServicePrincipal>({
+      ...buildServicePrincipalFieldRenderers<ManagedIdentity>({
         onAzureRbacClick,
         onEntraPermissionsClick,
         onOwnershipEvidenceClick,
         onZtaRemediationsClick
       }),
-      RemediationPackages: (servicePrincipal: ServicePrincipal) => (
+      RemediationPackages: (identity: ManagedIdentity) => (
         <ZtaRemediationPackageBadges
-          packages={servicePrincipal.RemediationPackages ?? []}
+          packages={identity.RemediationPackages ?? []}
           onRemediationPackageClick={onRemediationPackageClick ? openRemediationPackage : undefined}
         />
       ),
-      tags: (servicePrincipal: ServicePrincipal) => <TagBadges tags={servicePrincipal.tags} />
+      tags: (identity: ManagedIdentity) => <TagBadges tags={identity.tags} />
     }),
     [
       onAzureRbacClick,
@@ -200,28 +186,28 @@ export function ServicePrincipalComponent({
         <div className="text-sm text-destructive">{openPackageState.message}</div>
       ) : null}
       <SelectableGenericTable
-        columnHelp={azureServicePrincipalColumnHelp}
-        emptyMessage="No service principals match the filter."
+        columnHelp={azureManagedIdentityColumnHelp}
+        emptyMessage="No managed identities match the filter."
         fieldRenderers={fieldRenderers}
-        fields={servicePrincipalFields}
+        fields={managedIdentityFields}
         getRowKey={(row) => row.id}
         initialFilters={initialFilters}
         initialPage={initialPage}
         initialSortRules={initialSortRules}
-        loadPage={readServicePrincipals}
-        loadingMessage="Loading service principals..."
-        minWidthClassName="min-w-[2380px]"
+        loadPage={readManagedIdentities}
+        loadingMessage="Loading managed identities..."
+        minWidthClassName="min-w-[2140px]"
         onFiltersChange={onFiltersChange}
         onPageChange={onPageChange}
         onSortRulesChange={onSortRulesChange}
         renderSelectionOverlay={({ filters, selectAllMatchingFilters, selectedRowKeys, sortRules }) => (
           <CsvSelectionActionBar
             filters={filters}
-            itemLabel="service principals"
+            itemLabel="managed identities"
             selectAllMatchingFilters={selectAllMatchingFilters}
             selectedRowKeys={selectedRowKeys}
             sortRules={sortRules}
-            onExportCsv={exportServicePrincipalsCsv}
+            onExportCsv={exportManagedIdentitiesCsv}
           />
         )}
       />

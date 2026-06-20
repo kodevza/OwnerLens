@@ -1,12 +1,16 @@
 import type { SnapshotImportStatus } from "../../../core/runtime/snapshotImportRegistry";
 import { LocalEntraReportRuntime } from "./entra/LocalEntraReportRuntime";
 import { LocalAzureResourcesReportRuntime } from "./resources/LocalAzureResourcesReportRuntime";
-import { LocalZeroTrustAssessmentReportRuntime } from "./zta/LocalZeroTrustAssessmentReportRuntime";
+
+export type SnapshotImportRuntime = {
+  getStatus(): SnapshotImportStatus;
+  importSnapshot(): Promise<void>;
+};
 
 export type SnapshotImporterOptions = {
   entra: LocalEntraReportRuntime;
   azureResources: LocalAzureResourcesReportRuntime;
-  zeroTrustAssessment: LocalZeroTrustAssessmentReportRuntime;
+  zeroTrustAssessment: SnapshotImportRuntime;
 };
 
 export type SnapshotImporterStatus = {
@@ -18,7 +22,7 @@ export type SnapshotImporterStatus = {
 export class SnapshotImporter {
   private readonly entra: LocalEntraReportRuntime;
   private readonly azureResources: LocalAzureResourcesReportRuntime;
-  private readonly zeroTrustAssessment: LocalZeroTrustAssessmentReportRuntime;
+  private readonly zeroTrustAssessment: SnapshotImportRuntime;
 
   constructor(options: SnapshotImporterOptions) {
     this.entra = options.entra;

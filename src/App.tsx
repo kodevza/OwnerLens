@@ -1,5 +1,4 @@
 import { AzureComponent } from "./components/azure/AzureComponent";
-import { AzureInventoryStats } from "./components/azure/AzureInventoryStats";
 
 export default function App() {
   return (
@@ -10,7 +9,6 @@ export default function App() {
             <h1 className="text-3xl font-semibold tracking-tight">OwnerLens</h1>
             <p className="mt-1 text-sm text-muted-foreground">Azure inventory</p>
           </div>
-          <AzureInventoryStats />
         </header>
 
         <AzureComponent />

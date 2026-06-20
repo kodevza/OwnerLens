@@ -6,7 +6,6 @@ import type {
 
 export type LocalReportRuntimeRestRuntime = {
   listSnapshots(): Promise<unknown> | unknown;
-  readSnapshot(name: string): Promise<unknown> | unknown;
   queryEntraServicePrincipals(options: LocalReportCollectionQueryOptions): Promise<unknown> | unknown;
   exportEntraServicePrincipalsCsv(options: LocalReportCollectionQueryOptions): Promise<unknown> | unknown;
   queryEntraManagedIdentities(options: LocalReportCollectionQueryOptions): Promise<unknown> | unknown;
@@ -32,7 +31,4 @@ export type LocalReportRuntimeRestRuntime = {
   readRemediationPackage(packageId: string): Promise<unknown> | unknown;
   exportRemediationPackageTasksCsv(packageId: string, options: LocalReportCollectionQueryOptions): Promise<unknown> | unknown;
   deleteRemediationTasks(request: DeleteRuntimeRemediationTasksRequest): Promise<unknown> | unknown;
-  recalculateEnrichment(): Promise<void> | void;
-  getStatus(): { enrichment: unknown };
-  readInventoryStats(): Promise<unknown> | unknown;
 };

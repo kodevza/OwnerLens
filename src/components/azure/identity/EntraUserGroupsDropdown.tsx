@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { EntraUserGroupMembershipResponse } from "../../core/azure/entra/types";
-import { readEntraUserGroups } from "./api";
+import type { EntraUserGroupMembershipResponse } from "../../../core/azure/entra/types";
+import { readEntraUserGroups } from "../api";
 
 type EntraUserGroupsDropdownState =
   | { status: "loading" }

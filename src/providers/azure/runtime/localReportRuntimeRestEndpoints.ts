@@ -6,15 +6,10 @@ import {
   csvCollectionQuerySchema,
   deleteRemediationTasksBodySchema,
   emptyQuerySchema,
-  rawSnapshotResponseSchema,
   remediationPackageQuerySchema,
   remediationPackageResponseSchema,
-  runtimeEnrichmentStatusResponseSchema,
-  runtimeInventoryStatsResponseSchema,
   runtimeRowSchema,
-  runtimeStatusResponseSchema,
-  snapshotListResponseSchema,
-  snapshotReadQuerySchema
+  snapshotListResponseSchema
 } from "../../../core/runtime/restSchemas";
 import { defineEntraLocalReportRuntimeRestEndpoints } from "./entra/localReportRuntimeRest";
 import type { LocalReportRuntimeRestRuntime } from "./localReportRuntimeRestRuntime";
@@ -35,15 +30,6 @@ export function defineLocalReportRuntimeRestEndpoints(runtime: LocalReportRuntim
       querySchema: emptyQuerySchema,
       responseSchema: snapshotListResponseSchema,
       handle: () => runtime.listSnapshots()
-    },
-    {
-      operationId: "readRuntimeSnapshot",
-      tags: ["Snapshots"],
-      summary: "Read a local snapshot file by name.",
-      path: `${restBasePath}/read`,
-      querySchema: snapshotReadQuerySchema,
-      responseSchema: rawSnapshotResponseSchema,
-      handle: ({ url }) => runtime.readSnapshot(url.searchParams.get("name") ?? "")
     },
     ...defineEntraLocalReportRuntimeRestEndpoints(runtime, restBasePath),
     ...defineAzureResourcesLocalReportRuntimeRestEndpoints(runtime, restBasePath),
@@ -90,37 +76,6 @@ export function defineLocalReportRuntimeRestEndpoints(runtime: LocalReportRuntim
       responseSchema: remediationPackageResponseSchema,
       handle: ({ body }) => runtime.deleteRemediationTasks(parseDeleteRemediationTasksRequest(body))
     },
-    {
-      operationId: "recalculateRuntimeEnrichment",
-      tags: ["Runtime"],
-      summary: "Recalculate local identity enrichment state.",
-      method: "POST",
-      path: `${restBasePath}/runtime/enrichment/recalculate`,
-      querySchema: emptyQuerySchema,
-      responseSchema: runtimeEnrichmentStatusResponseSchema,
-      handle: async () => {
-        await runtime.recalculateEnrichment();
-        return runtime.getStatus().enrichment;
-      }
-    },
-    {
-      operationId: "readRuntimeInventoryStats",
-      tags: ["Runtime"],
-      summary: "Read runtime inventory counters.",
-      path: `${restBasePath}/runtime/stats`,
-      querySchema: emptyQuerySchema,
-      responseSchema: runtimeInventoryStatsResponseSchema,
-      handle: () => runtime.readInventoryStats()
-    },
-    {
-      operationId: "readRuntimeStatus",
-      tags: ["Runtime"],
-      summary: "Read runtime initialization, import, and enrichment status.",
-      path: `${restBasePath}/runtime`,
-      querySchema: emptyQuerySchema,
-      responseSchema: runtimeStatusResponseSchema,
-      handle: () => runtime.getStatus()
-    }
   ];
 }
 

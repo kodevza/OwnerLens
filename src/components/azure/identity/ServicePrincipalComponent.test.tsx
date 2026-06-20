@@ -5,8 +5,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import { ServicePrincipalComponent } from "./ServicePrincipalComponent";
-import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
-import type { AzureRoleAssignment } from "../../core/azure/resources";
+import type { ServicePrincipal } from "../../../core/azure/entra/servicePrincipal";
+import type { AzureRoleAssignment } from "../../../core/azure/resources";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;

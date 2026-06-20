@@ -1,6 +1,6 @@
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 
-import { cn } from "../../lib/utils";
+import { cn } from "../../../lib/utils";
 
 type EntraLinkBadgeProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "children"> & {
   children: ReactNode;

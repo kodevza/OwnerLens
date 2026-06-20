@@ -21,7 +21,7 @@ const port = Number(process.argv[portIndex + 1]);
 const token = process.env.OWNERLENS_RUNTIME_TOKEN ?? "";
 
 const server = http.createServer((req, res) => {
-  if (req.url === "/api/data/runtime") {
+  if (req.url === "/api/data") {
     if (token && req.headers["x-ownerlens-runtime-token"] !== token) {
       res.writeHead(401, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Runtime API token is missing or invalid." }));
