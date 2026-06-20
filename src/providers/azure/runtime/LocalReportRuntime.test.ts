@@ -417,6 +417,14 @@ test("defines local report runtime REST endpoints", async () => {
       return Promise.resolve(disabledOwnerKeys.size);
     }),
     recalculateEnrichment: jest.fn().mockResolvedValue(undefined),
+    readInventoryStats: jest.fn().mockResolvedValue({
+      users: 3,
+      groups: 2,
+      servicePrincipals: 5,
+      managedIdentities: 1,
+      resourceGroups: 4,
+      rbacAssignments: 8
+    }),
     getStatus: jest.fn().mockReturnValue({ initialized: true })
   };
 
@@ -444,6 +452,7 @@ test("defines local report runtime REST endpoints", async () => {
   const remediationTaskExportEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages/tasks", "GET");
   const remediationTasksEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages/tasks", "DELETE");
   const enrichmentRecalculateEndpoint = getEndpoint(endpoints, "/api/data/runtime/enrichment/recalculate");
+  const runtimeStatsEndpoint = getEndpoint(endpoints, "/api/data/runtime/stats");
   const runtimeEndpoint = getEndpoint(endpoints, "/api/data/runtime");
 
   expect(enrichmentRecalculateEndpoint.method).toBe("POST");
@@ -469,6 +478,7 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/remediationPackages/tasks",
     "/api/data/remediationPackages/tasks",
     "/api/data/runtime/enrichment/recalculate",
+    "/api/data/runtime/stats",
     "/api/data/runtime"
   ]);
   await expect(listEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data") })).resolves.toEqual({
@@ -853,6 +863,16 @@ test("defines local report runtime REST endpoints", async () => {
       url: new URL("http://localhost/api/data/runtime/enrichment/recalculate")
     })
   ).resolves.toBeUndefined();
+  await expect(
+    runtimeStatsEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data/runtime/stats") })
+  ).resolves.toEqual({
+    users: 3,
+    groups: 2,
+    servicePrincipals: 5,
+    managedIdentities: 1,
+    resourceGroups: 4,
+    rbacAssignments: 8
+  });
   expect(runtimeEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data/runtime") })).toEqual({
     initialized: true
   });
