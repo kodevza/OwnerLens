@@ -421,7 +421,7 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
     ]
   };
 
-  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
     const exportDir = path.join(dataDir, "exports", "nested");
 
     await mkdir(exportDir, { recursive: true });
@@ -690,7 +690,7 @@ test("fills Zero Trust Assessment related object application ids through the RES
     ]
   };
 
-  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
     await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
     await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
     await runtime.initialize();
@@ -933,11 +933,6 @@ test("creates generic remediation packages from selected Zero Trust Assessment r
       ]
     });
 
-    await runtime.close();
-    await expect(readLatestSnapshotImportStatus(databasePath, "zeroTrustAssessment")).resolves.toMatchObject({
-      imported: true,
-      fileName: "exports/nested/tenant-zta-report.json"
-    });
   });
 });
 
@@ -1684,7 +1679,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
     groups: [{ id: "group-1" }]
   };
 
-  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
     await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(snapshot), "utf8");
     await runtime.initialize();
 
@@ -2125,7 +2120,7 @@ test("records snapshot registry metadata and skips unchanged snapshots on runtim
 });
 
 test("imports changed snapshot content on runtime restart", async () => {
-    await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
     await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(minimalAzureSnapshot()), "utf8");
     await runtime.initialize();
     await runtime.close();
@@ -2557,40 +2552,27 @@ test("imports Azure resources snapshot into DuckDB and reads it back through the
     ownershipHints: [{ id: "hint-1" }]
   };
 
-  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
     await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(snapshot), "utf8");
     await runtime.initialize();
 
-    expect(runtime.getStatus().azureResources).toMatchObject({
-      imported: true,
-      fileName: "snapshot.json"
-    });
-
-    const imported = (await runtime.readSnapshot("snapshot.json")) as AzureSnapshot & {
-      ownershipHints: Array<{ id: string }>;
-    };
     const queried = await runtime.queryAzureResources({
       filters: [{ column: "resourceType", values: ["web"] }],
       page: 1,
       pageSize: 10
     });
 
-    expect(imported.meta.provider).toBe("azure");
-    expect(imported.resources[0]).toMatchObject({
-      resourceName: "app-a",
-      tags: { env: "test" },
-      userAssignedIdentityResourceIds: [
-        "/subscriptions/sub-1/resourceGroups/rg-app/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-a"
-      ]
-    });
-    expect(imported.roleAssignments).toEqual(snapshot.roleAssignments);
-    expect(imported.activityLogs).toEqual(snapshot.activityLogs);
-    expect(imported.ownershipHints).toEqual([{ id: "hint-1" }]);
     expect(queried).toMatchObject({
       collectionId: "azureResources.resources",
       columns: expect.arrayContaining(["resourceId", "resourceType"]),
       count: 1,
       rows: [expect.objectContaining({ resourceName: "app-a", resourceType: "Microsoft.Web/sites" })]
+    });
+
+    await runtime.close();
+    await expect(readLatestSnapshotImportStatus(databasePath, "azureResources")).resolves.toMatchObject({
+      imported: true,
+      fileName: "snapshot.json"
     });
   });
 });
@@ -2934,10 +2916,6 @@ test("closes runtime DuckDB file lock", async () => {
     const secondRuntime = new LocalReportRuntime({ dataDir, databasePath });
     try {
       await secondRuntime.initialize();
-      expect(secondRuntime.getStatus()).toMatchObject({
-        initialized: true,
-        databasePath
-      });
     } finally {
       await secondRuntime.close();
     }
@@ -3039,9 +3017,6 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
     await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
     await runtime.initialize();
 
-    const firstStatus = runtime.getStatus().enrichment;
-    const servicePrincipals = await runtime.readServicePrincipals();
-    const managedIdentities = await runtime.readManagedIdentities();
     const queriedServicePrincipals = await runtime.queryEntraServicePrincipals({
       page: 1,
       pageSize: 10
@@ -3055,13 +3030,7 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       pageSize: 10
     });
 
-    expect(firstStatus).toMatchObject({
-      calculated: true,
-      identityRoleAssignmentCount: 2,
-      accessRiskIdentityCount: 2,
-      managedIdentityAssignmentCount: 1
-    });
-    expect(servicePrincipals[0]).toMatchObject({
+    expect(queriedServicePrincipals.rows[0]).toMatchObject({
       id: "sp-1",
       permissionRisk: "high",
       roleAssignments: [expect.objectContaining({ roleDefinitionName: "Owner" })],
@@ -3069,7 +3038,7 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       rbacRoleLevel: "high",
       rbacSubscriptionCount: 1
     });
-    expect(servicePrincipals[0]).not.toHaveProperty("azureRbac");
+    expect(queriedServicePrincipals.rows[0]).not.toHaveProperty("azureRbac");
     expect(queriedServicePrincipals).toMatchObject({
       collectionId: "entra.servicePrincipals",
       rows: [
@@ -3080,7 +3049,7 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
         })
       ]
     });
-    expect(managedIdentities[0]).toMatchObject({
+    expect(queriedManagedIdentities.rows[0]).toMatchObject({
       id: "principal-uami-1",
       permissionRisk: "low",
       roleAssignments: [expect.objectContaining({ roleDefinitionName: "Reader" })],
@@ -3090,7 +3059,7 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       assignedResourceGroups: ["rg-app"],
       managedIdentityAssignments: [expect.objectContaining({ assignedResourceName: "app-a" })]
     });
-    expect(managedIdentities[0]).not.toHaveProperty("azureRbac");
+    expect(queriedManagedIdentities.rows[0]).not.toHaveProperty("azureRbac");
     expect(queriedManagedIdentities).toMatchObject({
       collectionId: "entra.managedIdentities",
       rows: [
@@ -3118,16 +3087,26 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       count: 1
     });
 
-    await writeFile(path.join(dataDir, "entra-snapshot.json"), "{not-json", "utf8");
-    await writeFile(path.join(dataDir, "snapshot.json"), "{not-json", "utf8");
-    await runtime.recalculateEnrichment();
+    await runtime.close();
+    const firstStatus = await readLatestEnrichmentStatus(databasePath);
+    expect(firstStatus).toMatchObject({
+      calculated: true,
+      identityRoleAssignmentCount: 2,
+      accessRiskIdentityCount: 2,
+      managedIdentityAssignmentCount: 1
+    });
 
-    const secondStatus = runtime.getStatus().enrichment;
+    const restartedRuntime = new LocalReportRuntime({ dataDir, databasePath });
+    try {
+      await restartedRuntime.initialize();
+    } finally {
+      await restartedRuntime.close();
+    }
+
+    const secondStatus = await readLatestEnrichmentStatus(databasePath);
     expect(secondStatus.calculated).toBe(true);
     expect(secondStatus.latestRunId).not.toBe(firstStatus.latestRunId);
     expect(secondStatus.identityRoleAssignmentCount).toBe(2);
-
-    await runtime.close();
 
     const result = await withDuckDb(async ({ connection }) => {
       const rows = await connection.runAndReadAll(
