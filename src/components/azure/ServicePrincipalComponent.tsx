@@ -82,18 +82,18 @@ const servicePrincipalFields: ReportFieldDescriptor<ServicePrincipal>[] = [
   {
     id: "azureRbac",
     label: "Azure RBAC",
-    valueType: "text",
-    getValue: (sp) => sp.roleAssignments,
+    valueType: "number",
+    getValue: (sp) => sp.rbacRoleAssignmentCount,
     sortColumnId: "rbacRoleLevel",
     getFilterValue: (sp) => ({
       roleLevel: sp.rbacRoleLevel,
-      summary: sp.roleAssignments
+      assignmentCount: sp.rbacRoleAssignmentCount
     }),
     filter: {
       kind: "objectFields",
       fields: [
         { id: "roleLevel", label: "Role level", filterColumnId: "rbacRoleLevel", options: permissionRiskLevelOptions },
-        { id: "summary", label: "Summary", filterColumnId: "roleAssignments" }
+        { id: "assignmentCount", label: "Assignment count", filterColumnId: "rbacRoleAssignmentCount" }
       ]
     }
   },

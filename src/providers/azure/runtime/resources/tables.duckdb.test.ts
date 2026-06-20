@@ -284,6 +284,7 @@ test("enriches activity owner display name for service principal callers", async
   expect(rows).toEqual([
     expect.objectContaining({
       owner: "Deployment Bot (app-client-1)",
+      ownerCandidate: "application:app-client-1",
       confidence: "low",
       source: "activity.lastModifier",
       evidence: [

@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "allowImportingTsExtensions": false,
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "noEmit": false,
+    "outDir": ".tmp/openapi",
+    "rootDir": "."
+  },
+  "include": ["src/server/generateRuntimeOpenApi.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+}

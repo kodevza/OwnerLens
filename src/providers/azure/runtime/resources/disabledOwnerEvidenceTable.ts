@@ -96,7 +96,9 @@ type DisabledOwnerEvidenceKeyCountRow = {
 };
 
 function parseResourceGroupOwnerCandidateKey(key: DisabledOwnerKey): DisabledResourceGroupOwnerCandidate | null {
-  const match = key.match(/^resourceGroup:([^:]+):([^:]+)(?::principal:([^:]+))?:(ownerUser|ownerGroup|ownerTag|unknown):(.+)$/);
+  const match = key.match(
+    /^resourceGroup:([^:]+):([^:]+)(?::principal:([^:]+))?:(ownerUser|ownerGroup|ownerTag|application|unknown):(.+)$/
+  );
   if (!match) {
     return null;
   }

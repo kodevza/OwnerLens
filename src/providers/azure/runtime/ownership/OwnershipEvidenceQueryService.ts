@@ -223,11 +223,11 @@ function mapResourceGroupOwnershipSqlRowToOwnerCandidate(
     return [];
   }
 
-  const ownerType = inferResourceGroupOwnerType(owner, row.source);
+  const ownerType = inferResourceGroupOwnerType(owner, row.source, row.ownerCandidate);
 
   return [
     {
-      key: `${ownerType}:${owner.trim().toLowerCase()}`,
+      key: getResourceGroupOwnerCandidateKey(row.ownerCandidate, ownerType, owner),
       displayName: owner,
       type: ownerType,
       confidence: row.confidence,
@@ -244,6 +244,22 @@ function mapResourceGroupOwnershipSqlRowToOwnerCandidate(
       ]
     }
   ];
+}
+
+function getResourceGroupOwnerCandidateKey(
+  ownerCandidate: string | null | undefined,
+  ownerType: OwnerType,
+  owner: string
+): string {
+  if (parseOwnerCandidateType(ownerCandidate) && ownerCandidate) {
+    const separatorIndex = ownerCandidate.indexOf(":");
+    return [
+      ownerCandidate.slice(0, separatorIndex).trim(),
+      ownerCandidate.slice(separatorIndex + 1).trim().toLowerCase()
+    ].join(":");
+  }
+
+  return `${ownerType}:${owner.trim().toLowerCase()}`;
 }
 
 function mapSqlRowsToResourceGroupOwnershipRows(
@@ -352,7 +368,12 @@ function inferDisabledResourceGroupOwner(row: AzureResourceGroupOwnershipSqlRow)
   return evidence.user.trim();
 }
 
-function inferResourceGroupOwnerType(owner: string, source: string): OwnerType {
+function inferResourceGroupOwnerType(owner: string, source: string, ownerCandidate?: string | null): OwnerType {
+  const ownerCandidateType = parseOwnerCandidateType(ownerCandidate);
+  if (ownerCandidateType) {
+    return ownerCandidateType;
+  }
+
   if (source === "tag.ownerGroup") {
     return "ownerGroup";
   }
@@ -370,6 +391,27 @@ function inferResourceGroupOwnerType(owner: string, source: string): OwnerType {
   }
 
   return "unknown";
+}
+
+function parseOwnerCandidateType(ownerCandidate: string | null | undefined): OwnerType | null {
+  const separatorIndex = ownerCandidate?.indexOf(":") ?? -1;
+  if (separatorIndex <= 0) {
+    return null;
+  }
+
+  const type = ownerCandidate?.slice(0, separatorIndex);
+
+  if (
+    type === "ownerUser" ||
+    type === "ownerGroup" ||
+    type === "ownerTag" ||
+    type === "application" ||
+    type === "unknown"
+  ) {
+    return type;
+  }
+
+  return null;
 }
 
 function inferResourceGroupOwnerCandidateSource(source: string): OwnerCandidateSource {

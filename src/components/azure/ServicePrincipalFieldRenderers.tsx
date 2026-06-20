@@ -5,7 +5,6 @@ import type {
   EntraPrincipalPermissionSummary,
   EntraPrincipalRbacSummary
 } from "../../core/azure/entra/servicePrincipal";
-import type { AzureRoleAssignment } from "../../core/azure/resources";
 import type { OwnerCandidate, OwnerConfidence } from "../../core/ownership/types";
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import type { ZtaRemediationSummary } from "../../core/azure/ztaReport";
@@ -20,7 +19,6 @@ type EntraPrincipalSummaryRow = EntraPrincipalPermissionSummary & EntraPrincipal
   appId?: string;
   displayName: string;
   id: string;
-  roleAssignments?: AzureRoleAssignment[];
 };
 
 type EntraPrincipalIdentitySummary = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & {
@@ -28,7 +26,6 @@ type EntraPrincipalIdentitySummary = EntraPrincipalPermissionSummary & EntraPrin
   appId?: string;
   displayName: string;
   id: string;
-  roleAssignments?: AzureRoleAssignment[];
   servicePrincipalType?: string;
 };
 
@@ -235,25 +232,17 @@ function RbacSummaryBadge({
 
 export function formatAzureRbacSummary({
   rbacRoleAssignmentCount,
-  roleAssignments = []
-}: Pick<EntraPrincipalRbacSummary, "rbacRoleAssignmentCount"> & {
-  roleAssignments?: AzureRoleAssignment[];
-}): string {
-  if (rbacRoleAssignmentCount === 0 || roleAssignments.length === 0) {
+  rbacRoleLevel,
+  rbacSubscriptionCount
+}: EntraPrincipalRbacSummary): string {
+  if (rbacRoleAssignmentCount === 0) {
     return "No Azure RBAC assignments";
   }
 
-  return roleAssignments
-    .map((assignment) => `${assignment.roleDefinitionName ?? "Role"} on ${assignment.scope}${formatRoleAssignmentSource(assignment)}`)
-    .join(", ");
-}
+  const assignmentLabel = rbacRoleAssignmentCount === 1 ? "assignment" : "assignments";
+  const subscriptionLabel = rbacSubscriptionCount === 1 ? "subscription" : "subscriptions";
 
-function formatRoleAssignmentSource(assignment: AzureRoleAssignment): string {
-  if (assignment.assignmentSource !== "group") {
-    return "";
-  }
-
-  return ` via group ${assignment.inheritedFromGroupDisplayName ?? assignment.inheritedFromGroupId ?? "group"}`;
+  return `${rbacRoleAssignmentCount} Azure RBAC ${assignmentLabel}, ${rbacRoleLevel} risk, ${rbacSubscriptionCount} ${subscriptionLabel}`;
 }
 
 export function OwnerBadge({

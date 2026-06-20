@@ -6,7 +6,7 @@ export type OwnerEvidence = {
   disabled?: boolean;
 };
 
-export type OwnerType = "ownerUser" | "ownerGroup" | "ownerTag" | "unknown";
+export type OwnerType = "ownerUser" | "ownerGroup" | "ownerTag" | "application" | "unknown";
 
 export type OwnerCandidateSource =
   | "resourceGroupOwner"

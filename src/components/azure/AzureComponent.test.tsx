@@ -1336,6 +1336,65 @@ test("opens direct Entra user groups dropdown from ownership evidence", async ()
   act(() => root.unmount());
 });
 
+test("opens ownership evidence for application owner evidence", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      const url = new URL(requestUrl, window.location.origin);
+      if (url.searchParams.get("principalId") === "application-object-id") {
+        return jsonResponse({
+          target: {
+            kind: "servicePrincipal",
+            id: "application-object-id",
+            displayName: "Application owner app"
+          },
+          evidence: []
+        });
+      }
+
+      return ownershipEvidenceResponse({
+        candidateKey: "application:application-object-id",
+        displayName: "Application owner app",
+        type: "application"
+      });
+    }
+
+    return servicePrincipalOwnerResponse({
+      displayName: "Application owner app",
+      type: "application"
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await waitForText(container, "Service principal app");
+  await clickButton("Open ownership evidence for Application owner app");
+  await waitForText(container, "Application owner");
+  await clickButton("Open application ownership evidence for Application owner app");
+  await waitForText(container, "No ownership evidence was found.");
+
+  const applicationEvidenceRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .find((requestUrl) => {
+      if (!requestUrl.startsWith("/api/data/ownership/evidence")) {
+        return false;
+      }
+
+      const url = new URL(requestUrl, window.location.origin);
+      return url.searchParams.get("principalId") === "application-object-id";
+    });
+  expect(applicationEvidenceRequest).toBeDefined();
+
+  const url = new URL(applicationEvidenceRequest ?? "", window.location.origin);
+  expect(url.searchParams.get("kind")).toBe("servicePrincipal");
+  expect(url.searchParams.get("principalId")).toBe("application-object-id");
+  expect(getButton("SP: Application owner app owners")).toBeDefined();
+
+  act(() => root.unmount());
+});
+
 test("renders empty and failed direct Entra user group dropdown states", async () => {
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);
@@ -2107,7 +2166,7 @@ function servicePrincipalOwnerResponse(owner: { displayName: string; type: strin
   });
 }
 
-function ownershipEvidenceResponse(owner: { displayName: string; type: string; disabled?: boolean }): Response {
+function ownershipEvidenceResponse(owner: { candidateKey?: string; displayName: string; type: string; disabled?: boolean }): Response {
   return jsonResponse({
     target: {
       kind: "servicePrincipal",
@@ -2117,7 +2176,7 @@ function ownershipEvidenceResponse(owner: { displayName: string; type: string; d
     evidence: [
       {
         key: `owner-1:${owner.displayName}:2026-06-05T00:00:00.000Z`,
-        ownerCandidateKey: "owner-1",
+        ownerCandidateKey: owner.candidateKey ?? "owner-1",
         ownerDisplayName: owner.displayName,
         ownerType: owner.type,
         confidence: "high",

@@ -1,17 +1,12 @@
-import { createReadStream, existsSync, statSync } from "node:fs";
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { serve, type ServerType } from "@hono/node-server";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { RuntimeHttpError } from "../core/runtime/localSnapshotFiles";
-import { createRuntimeRestMiddleware } from "../core/runtime/rest";
-import {
-  createLocalReportRuntime,
-  defineLocalReportRuntimeRestEndpoints
-} from "../providers/azure/runtime/localReportRuntimeRest";
+import { createLocalReportRuntime } from "../providers/azure/runtime/localReportRuntimeRest";
+import { createOwnerLensApp } from "./createOwnerLensApp";
 
-const restBasePath = "/api/data";
 const defaultHost = "127.0.0.1";
+const defaultPort = 4173;
 
 export type OwnerLensServerOptions = {
   appRoot?: string;
@@ -22,7 +17,7 @@ export type OwnerLensServerOptions = {
 };
 
 export type StartedOwnerLensServer = {
-  server: Server;
+  server: ServerType;
   url: string;
   close(): Promise<void>;
 };
@@ -31,33 +26,14 @@ export async function startOwnerLensServer(options: OwnerLensServerOptions): Pro
   const appRoot = options.appRoot ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const distRoot = path.join(appRoot, "dist");
   const runtime = createLocalReportRuntime(options.dataDir);
-  const runtimeMiddleware = createRuntimeRestMiddleware({
-    basePath: restBasePath,
-    endpoints: defineLocalReportRuntimeRestEndpoints(runtime),
-    runtimeToken: options.runtimeToken,
-    getErrorStatusCode: (error) => (error instanceof RuntimeHttpError ? error.statusCode : 500)
+  const app = createOwnerLensApp({
+    distRoot,
+    runtime,
+    runtimeToken: options.runtimeToken
   });
-
-  const server = createServer((req, res) => {
-    void runtimeMiddleware(req, res, () => {
-      serveStaticDist(req, res, distRoot);
-    });
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    const onError = (error: Error) => {
-      server.off("listening", onListening);
-      reject(error);
-    };
-    const onListening = () => {
-      server.off("error", onError);
-      resolve();
-    };
-
-    server.once("error", onError);
-    server.once("listening", onListening);
-    server.listen(options.port ?? 4173, options.host ?? defaultHost);
-  });
+  const host = options.host ?? defaultHost;
+  const requestedPort = options.port ?? defaultPort;
+  const server = await listen(app.fetch, host, requestedPort);
 
   try {
     await runtime.initialize();
@@ -67,8 +43,7 @@ export async function startOwnerLensServer(options: OwnerLensServerOptions): Pro
   }
 
   const address = server.address();
-  const port = typeof address === "object" && address ? address.port : options.port ?? 4173;
-  const host = options.host ?? defaultHost;
+  const port = typeof address === "object" && address ? address.port : requestedPort;
 
   return {
     server,
@@ -80,98 +55,30 @@ export async function startOwnerLensServer(options: OwnerLensServerOptions): Pro
   };
 }
 
-function serveStaticDist(req: IncomingMessage, res: ServerResponse, distRoot: string): void {
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    sendText(res, "Method Not Allowed", 405);
-    return;
-  }
-
-  const requestUrl = new URL(req.url ?? "/", "http://localhost");
-  const filePath = resolveDistFile(distRoot, requestUrl.pathname);
-  if (!filePath) {
-    sendText(res, "Not Found", 404);
-    return;
-  }
-
-  res.statusCode = 200;
-  res.setHeader("Content-Type", contentType(filePath));
-  if (req.method === "HEAD") {
-    res.end("");
-    return;
-  }
-
-  createReadStream(filePath)
-    .on("error", () => {
-      if (!res.headersSent) {
-        sendText(res, "Could not read file", 500);
-        return;
-      }
-      res.destroy();
-    })
-    .pipe(res);
-}
-
-function resolveDistFile(distRoot: string, pathname: string): string | null {
-  const decodedPath = safeDecodePath(pathname);
-  if (!decodedPath) {
-    return null;
-  }
-
-  const relativePath = decodedPath === "/" ? "index.html" : decodedPath.replace(/^\/+/, "");
-  const candidate = path.resolve(distRoot, relativePath);
-
-  if (!isInside(distRoot, candidate)) {
-    return null;
-  }
-
-  if (existsSync(candidate) && statSync(candidate).isFile()) {
-    return candidate;
-  }
-
-  const indexPath = path.join(distRoot, "index.html");
-  return existsSync(indexPath) ? indexPath : null;
-}
-
-function safeDecodePath(pathname: string): string | null {
-  try {
-    return decodeURIComponent(pathname);
-  } catch {
-    return null;
-  }
-}
-
-function isInside(root: string, candidate: string): boolean {
-  const relative = path.relative(root, candidate);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
-function sendText(res: ServerResponse, body: string, statusCode: number): void {
-  res.statusCode = statusCode;
-  res.setHeader("Content-Type", "text/plain; charset=utf-8");
-  res.end(body);
-}
-
-function contentType(filePath: string): string {
-  const extension = path.extname(filePath).toLowerCase();
-  switch (extension) {
-    case ".css":
-      return "text/css; charset=utf-8";
-    case ".html":
-      return "text/html; charset=utf-8";
-    case ".js":
-      return "text/javascript; charset=utf-8";
-    case ".json":
-      return "application/json; charset=utf-8";
-    case ".svg":
-      return "image/svg+xml";
-    default:
-      return "application/octet-stream";
-  }
-}
-
-function closeServer(server: Server): Promise<void> {
+function listen(fetch: ServeFetch, hostname: string, port: number): Promise<ServerType> {
   return new Promise((resolve, reject) => {
-    server.close((error) => {
+    const server = serve(
+      {
+        fetch,
+        hostname,
+        port
+      },
+      () => {
+        server.off("error", onError);
+        resolve(server);
+      }
+    );
+    const onError = (error: Error) => {
+      reject(error);
+    };
+
+    server.once("error", onError);
+  });
+}
+
+function closeServer(server: ServerType): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((error?: Error) => {
       if (error) {
         reject(error);
         return;
@@ -180,3 +87,5 @@ function closeServer(server: Server): Promise<void> {
     });
   });
 }
+
+type ServeFetch = Parameters<typeof serve>[0]["fetch"];
