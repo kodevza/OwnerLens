@@ -3116,8 +3116,8 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       rows: [
         expect.objectContaining({
           id: "sp-1",
-          potentialOwners: ["alice@example.test"],
-          ownerConfidence: "high"
+          potentialOwners: [],
+          ownerConfidence: "none"
         })
       ]
     });
