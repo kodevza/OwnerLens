@@ -1,4 +1,4 @@
-import type { DuckDBConnection } from "@duckdb/node-api";
+import type { DuckDBConnection, DuckDBValue } from "@duckdb/node-api";
 
 import type { EntraServicePrincipal } from "../../inputTransferObject/generated/EntraSnapshot";
 
@@ -80,6 +80,39 @@ export async function readEntraServicePrincipalRows(connection: DuckDBConnection
   return rows.map(mapServicePrincipalRow);
 }
 
+export async function readEntraServicePrincipalRowById(
+  connection: DuckDBConnection,
+  principalId: string
+): Promise<EntraServicePrincipal | null> {
+  const rows = await readRows<EntraServicePrincipalRow>(
+    connection,
+    `select
+      id,
+      app_id,
+      display_name,
+      app_display_name,
+      service_principal_type,
+      publisher_name,
+      account_enabled,
+      app_owner_organization_id,
+      homepage,
+      login_url,
+      reply_urls,
+      service_principal_names,
+      tags,
+      app_roles,
+      service_principal_owners,
+      application_owners,
+      metadata
+    from entra_service_principals
+    where id = lower(trim($principalId))
+    limit 1`,
+    { principalId }
+  );
+
+  return rows[0] ? mapServicePrincipalRow(rows[0]) : null;
+}
+
 type EntraServicePrincipalRow = {
   id: string;
   app_id: string;
@@ -124,9 +157,10 @@ function mapServicePrincipalRow(row: EntraServicePrincipalRow): EntraServicePrin
 
 async function readRows<Row extends Record<string, unknown>>(
   connection: DuckDBConnection,
-  sql: string
+  sql: string,
+  params?: Record<string, DuckDBValue>
 ): Promise<Row[]> {
-  const reader = await connection.runAndReadAll(sql);
+  const reader = await connection.runAndReadAll(sql, params);
   return reader.getRowObjectsJson() as Row[];
 }
 

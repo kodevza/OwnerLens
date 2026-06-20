@@ -1,4 +1,7 @@
+import type { DuckDBConnection } from "@duckdb/node-api";
+
 import type { SnapshotImportStatus } from "../../../core/runtime/snapshotImportRegistry";
+import { migrate } from "../../../db/migrate";
 import { LocalEntraReportRuntime } from "./entra/LocalEntraReportRuntime";
 import { LocalAzureResourcesReportRuntime } from "./resources/LocalAzureResourcesReportRuntime";
 
@@ -18,6 +21,10 @@ export type SnapshotImporterStatus = {
   azureResources: SnapshotImportStatus;
   zeroTrustAssessment: SnapshotImportStatus;
 };
+
+export async function prepareRuntimeSqlSchema(connection: DuckDBConnection): Promise<void> {
+  await migrate(connection, "migrations", process.env.NODE_ENV === "test" ? null : console);
+}
 
 export class SnapshotImporter {
   private readonly entra: LocalEntraReportRuntime;

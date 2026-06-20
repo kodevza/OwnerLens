@@ -13,12 +13,9 @@ import {
   snapshotImportStatusFromRecord,
   type SnapshotImportStatus
 } from "../../../../core/runtime/snapshotImportRegistry";
-import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
-import type { ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
 import type {
   EntraAppRoleAssignment,
-  EntraOAuth2PermissionGrant,
-  EntraUserGroupMembershipResponse
+  EntraOAuth2PermissionGrant
 } from "../../../../core/azure/entra/types";
 import type { EntraServicePrincipal, EntraSnapshot } from "../../inputTransferObject/generated/EntraSnapshot";
 import {
@@ -27,9 +24,13 @@ import {
   readOAuth2PermissionGrants,
   readPrincipalPermissions,
   readRawServicePrincipals,
+  findServicePrincipalById,
   readServicePrincipals,
   readUserGroupMembership,
-  type EntraPrincipalPermissions
+  type EntraPrincipalPermissions,
+  type EntraUserGroupMembershipResponse,
+  type ManagedIdentity,
+  type ServicePrincipal
 } from "./EntraReadModel";
 import {
   entraSnapshotFileName,
@@ -106,6 +107,11 @@ export class LocalEntraReportRuntime {
   async readServicePrincipals(): Promise<ServicePrincipal[]> {
     this.assertImported();
     return readServicePrincipals(this.getConnection());
+  }
+
+  async findServicePrincipalById(principalId: string): Promise<ServicePrincipal | null> {
+    this.assertImported();
+    return findServicePrincipalById(this.getConnection(), principalId);
   }
 
   async readManagedIdentities(): Promise<ManagedIdentity[]> {

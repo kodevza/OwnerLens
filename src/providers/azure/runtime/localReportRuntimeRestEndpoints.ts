@@ -8,6 +8,7 @@ import {
   emptyQuerySchema,
   remediationPackageQuerySchema,
   remediationPackageResponseSchema,
+  runtimeInventoryStatsResponseSchema,
   runtimeRowSchema,
   snapshotListResponseSchema
 } from "../../../core/runtime/restSchemas";
@@ -35,6 +36,15 @@ export function defineLocalReportRuntimeRestEndpoints(runtime: LocalReportRuntim
     ...defineAzureResourcesLocalReportRuntimeRestEndpoints(runtime, restBasePath),
     ...defineOwnershipLocalReportRuntimeRestEndpoints(runtime, restBasePath),
     ...defineZeroTrustAssessmentLocalReportRuntimeRestEndpoints(runtime, restBasePath),
+    {
+      operationId: "readRuntimeInventoryStats",
+      tags: ["Runtime"],
+      summary: "Read runtime inventory counters.",
+      path: `${restBasePath}/runtime/stats`,
+      querySchema: emptyQuerySchema,
+      responseSchema: runtimeInventoryStatsResponseSchema,
+      handle: () => runtime.readInventoryStats()
+    },
     {
       operationId: "readRemediationPackage",
       tags: ["Remediation"],
@@ -75,7 +85,7 @@ export function defineLocalReportRuntimeRestEndpoints(runtime: LocalReportRuntim
       bodySchema: deleteRemediationTasksBodySchema,
       responseSchema: remediationPackageResponseSchema,
       handle: ({ body }) => runtime.deleteRemediationTasks(parseDeleteRemediationTasksRequest(body))
-    },
+    }
   ];
 }
 

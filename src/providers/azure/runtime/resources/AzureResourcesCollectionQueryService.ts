@@ -20,6 +20,7 @@ import {
   buildResourceGroupOwnershipRows
 } from "./resourceGroupOwnership";
 import { mapEntraServicePrincipalsToCore } from "../entra/entraServicePrincipalMapper";
+import type { AzureResourceGroupOwnershipSqlRow } from "./tables";
 
 export type AzureResourcesCollectionQueryServiceOptions = {
   entra: LocalEntraReportRuntime;
@@ -132,7 +133,15 @@ export class AzureResourcesCollectionQueryService {
     );
   }
 
-  async readResourceGroupOwnershipRows(): Promise<ResourceGroupOwnershipRow[]> {
+  async readResourceGroupOwnershipRows(options: PageOptions = {}): Promise<ResourceGroupOwnershipRow[]> {
+    if (options.page !== undefined && options.pageSize !== undefined) {
+      const ownerRows = await this.azureResources.readAzureResourceGroupOwnershipCollectionSqlRows(
+        getResourceGroupOwnershipLookupLimit(options)
+      );
+
+      return buildResourceGroupOwnershipRows(ownerRows, ownerRows as AzureResourceGroupOwnershipSqlRow[]);
+    }
+
     const [resourceSnapshot, entraSnapshot, disabledKeys] = await Promise.all([
       this.azureResources.readSnapshot(),
       this.entra.readSnapshot(),
@@ -175,13 +184,10 @@ export class AzureResourcesCollectionQueryService {
 
   private async readAzureRbacRows(servicePrincipalId: string): Promise<AzureRbac[]> {
     const normalizedServicePrincipalId = servicePrincipalId.trim().toLowerCase();
-    const [servicePrincipals, roleAssignments] = await Promise.all([
-      this.entra.readServicePrincipals(),
+    const [servicePrincipal, roleAssignments] = await Promise.all([
+      this.entra.findServicePrincipalById(servicePrincipalId),
       this.azureResources.readAzureRoleAssignments()
     ]);
-    const servicePrincipal = servicePrincipals.find(
-      (candidate) => candidate.id.toLowerCase() === normalizedServicePrincipalId
-    );
     const rowsByAssignmentKey = new Map<string, AzureRbac>();
 
     for (const assignment of roleAssignments) {

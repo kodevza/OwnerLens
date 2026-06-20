@@ -67,10 +67,7 @@ export class OwnershipEvidenceQueryService {
   }
 
   private async readServicePrincipalEvidence(principalId: string): Promise<OwnershipEvidenceResponse> {
-    const normalizedPrincipalId = normalizeKey(principalId);
-    const row = (await this.entraQueries.readServicePrincipalRows()).find(
-      (candidate) => normalizeKey(String(candidate.id ?? "")) === normalizedPrincipalId
-    ) as ServicePrincipal | undefined;
+    const row = await this.entraQueries.findServicePrincipalById(principalId);
 
     if (!row) {
       throw new RuntimeHttpError("Ownership evidence target was not found.", 404);

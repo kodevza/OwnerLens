@@ -320,7 +320,7 @@ test("reads resource group owner evidence for distinct Azure RBAC resource group
   ]);
   const service = new OwnershipEvidenceQueryService({
     entraQueries: {
-      readServicePrincipalRows: jest.fn().mockResolvedValue([
+      findServicePrincipalById: jest.fn().mockResolvedValue(
         servicePrincipal({
           id: "sp-rbac",
           displayName: "RBAC App",
@@ -344,7 +344,7 @@ test("reads resource group owner evidence for distinct Azure RBAC resource group
             })
           ]
         })
-      ])
+      )
     },
     azureResources: {
       readAzureResourceGroupOwnershipSqlRows,
@@ -681,6 +681,9 @@ function buildOwnershipEvidenceService({
     readSnapshot: jest.fn().mockResolvedValue(entraSnapshotValue),
     readEntraServicePrincipals: jest.fn().mockResolvedValue(entraSnapshotValue.servicePrincipals),
     readServicePrincipals: jest.fn().mockResolvedValue(servicePrincipals),
+    findServicePrincipalById: jest.fn((principalId: string) => Promise.resolve(
+      servicePrincipals.find((candidate) => candidate.id.toLowerCase() === principalId.toLowerCase()) ?? null
+    )),
     readManagedIdentities: jest.fn().mockResolvedValue(managedIdentities)
   };
   const azureResourcesRuntime = {

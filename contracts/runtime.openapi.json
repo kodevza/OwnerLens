@@ -2661,6 +2661,133 @@
         }
       }
     },
+    "/api/data/runtime/stats": {
+      "get": {
+        "operationId": "readRuntimeInventoryStats",
+        "tags": [
+          "Runtime"
+        ],
+        "summary": "Read runtime inventory counters.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful runtime response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "users",
+                    "groups",
+                    "servicePrincipals",
+                    "managedIdentities",
+                    "resourceGroups",
+                    "rbacAssignments"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "users": {
+                      "type": "integer"
+                    },
+                    "groups": {
+                      "type": "integer"
+                    },
+                    "servicePrincipals": {
+                      "type": "integer"
+                    },
+                    "managedIdentities": {
+                      "type": "integer"
+                    },
+                    "resourceGroups": {
+                      "type": "integer"
+                    },
+                    "rbacAssignments": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Runtime error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Runtime error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Runtime error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Runtime error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/data/remediationPackages": {
       "get": {
         "operationId": "readRemediationPackage",

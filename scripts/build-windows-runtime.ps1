@@ -41,7 +41,7 @@ try {
 
   $rootPackage = Get-Content -LiteralPath (Join-Path $repoRoot "package.json") -Raw | ConvertFrom-Json
   $runtimeDependencies = [ordered]@{}
-  foreach ($dependencyName in @("@duckdb/node-api", "ajv", "ajv-formats")) {
+  foreach ($dependencyName in @("@duckdb/node-api", "@hono/node-server", "hono", "ajv", "ajv-formats")) {
     $dependencyVersion = $rootPackage.dependencies.PSObject.Properties[$dependencyName].Value
     if (-not $dependencyVersion) {
       throw "Runtime dependency '$dependencyName' was not found in package.json dependencies."
@@ -110,7 +110,7 @@ try {
         throw "Runtime verification process exited early with code $($process.ExitCode). $stderr"
       }
       try {
-        Invoke-RestMethod -Uri "http://127.0.0.1:$VerifyPort/api/data/runtime" -Headers @{ "X-OwnerLens-Runtime-Token" = $token } -TimeoutSec 2 | Out-Null
+        Invoke-RestMethod -Uri "http://127.0.0.1:$VerifyPort/api/data" -Headers @{ "X-OwnerLens-Runtime-Token" = $token } -TimeoutSec 2 | Out-Null
         Write-Host "Verified OwnerLens runtime at $outputRoot"
         return
       } catch {

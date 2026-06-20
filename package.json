@@ -18,13 +18,12 @@
     "bin",
     "dist",
     "dist-server",
-    "index.html",
+    "contracts",
     "migrations",
     "powershell",
-    "src",
-    "tools",
-    "contracts",
-    "vite.config.ts"
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
   ],
   "keywords": [
     "azure",
