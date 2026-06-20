@@ -25,6 +25,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Build OwnerLens
+        run: npm run build
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 

@@ -15,3 +15,12 @@ test("validation workflow uses the supported Graph access token parameter set", 
   expect(workflow).toContain("GRAPH_ACCESS_TOKEN=$plainToken");
   expect(workflow).toContain('-AccessToken "$GRAPH_ACCESS_TOKEN" -SkipLogin');
 });
+
+test("validation workflow builds the app before starting the Playwright web server", () => {
+  const buildStepIndex = workflow.indexOf("run: npm run build");
+  const validationStepIndex = workflow.indexOf("run: npm run test:e2e:validation");
+
+  expect(buildStepIndex).toBeGreaterThanOrEqual(0);
+  expect(validationStepIndex).toBeGreaterThanOrEqual(0);
+  expect(buildStepIndex).toBeLessThan(validationStepIndex);
+});
