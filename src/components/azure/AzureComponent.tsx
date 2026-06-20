@@ -7,19 +7,19 @@ import type { RemediationPackage } from "../../core/runtime/remediation";
 import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import { ClosableTab } from "../../report/components/ClosableTab";
 import { Tabs, TabsList, TabsTrigger } from "../../report/components/ui/tabs";
-import { AzureRbacComponent } from "./AzureRbacComponent";
-import { EntraPermissionsComponent } from "./EntraPermissionsComponent";
-import { ManagedIdentityComponent } from "./ManagedIdentityComponent";
-import { OwnershipEvidenceComponent } from "./OwnershipEvidenceComponent";
+import { AzureRbacComponent } from "./resource/AzureRbacComponent";
+import { EntraPermissionsComponent } from "./identity/EntraPermissionsComponent";
+import { ManagedIdentityComponent } from "./identity/ManagedIdentityComponent";
+import { OwnershipEvidenceComponent } from "./identity/OwnershipEvidenceComponent";
 import { RemediationPackageComponent } from "./RemediationPackageComponent";
-import { ResourceGroupComponent, type AzureRbacResourceGroupSelection } from "./ResourceGroupComponent";
-import { ServicePrincipalComponent } from "./ServicePrincipalComponent";
+import { ResourceGroupComponent, type AzureRbacResourceGroupSelection } from "./resource/ResourceGroupComponent";
+import { ServicePrincipalComponent } from "./identity/ServicePrincipalComponent";
 import type {
   AzureRbacPrincipalSelection,
   EntraPermissionsPrincipalSelection,
   OwnershipEvidenceSelection
-} from "./ServicePrincipalFieldRenderers";
-import { ZtaComponent } from "./ZtaComponent";
+} from "./identity/ServicePrincipalFieldRenderers";
+import { ZtaComponent } from "./remediation/ZtaComponent";
 
 type AzureView =
   | "servicePrincipals"

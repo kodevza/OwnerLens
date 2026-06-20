@@ -439,21 +439,10 @@ test("defines local report runtime REST endpoints", async () => {
 
       return Promise.resolve(disabledOwnerKeys.size);
     }),
-    recalculateEnrichment: jest.fn().mockResolvedValue(undefined),
-    readInventoryStats: jest.fn().mockResolvedValue({
-      users: 3,
-      groups: 2,
-      servicePrincipals: 5,
-      managedIdentities: 1,
-      resourceGroups: 4,
-      rbacAssignments: 8
-    }),
-    getStatus: jest.fn().mockReturnValue({ initialized: true })
   };
 
   const endpoints = defineLocalReportRuntimeRestEndpoints(runtime as unknown as LocalReportRuntime);
   const listEndpoint = getEndpoint(endpoints, "/api/data");
-  const readEndpoint = getEndpoint(endpoints, "/api/data/read");
   const servicePrincipalsEndpoint = getEndpoint(endpoints, "/api/data/entra/servicePrincipals");
   const managedIdentitiesEndpoint = getEndpoint(endpoints, "/api/data/entra/managedIdentities");
   const entraPermissionsEndpoint = getEndpoint(endpoints, "/api/data/entra/permissions");
@@ -474,15 +463,9 @@ test("defines local report runtime REST endpoints", async () => {
   const remediationPackagesEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages");
   const remediationTaskExportEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages/tasks", "GET");
   const remediationTasksEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages/tasks", "DELETE");
-  const enrichmentRecalculateEndpoint = getEndpoint(endpoints, "/api/data/runtime/enrichment/recalculate");
-  const runtimeStatsEndpoint = getEndpoint(endpoints, "/api/data/runtime/stats");
-  const runtimeEndpoint = getEndpoint(endpoints, "/api/data/runtime");
-
-  expect(enrichmentRecalculateEndpoint.method).toBe("POST");
 
   expect(endpoints.map((endpoint) => endpoint.path)).toEqual([
     "/api/data",
-    "/api/data/read",
     "/api/data/entra/servicePrincipals",
     "/api/data/entra/managedIdentities",
     "/api/data/entra/permissions",
@@ -499,17 +482,11 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/zeroTrustAssessment/remediationPackages",
     "/api/data/remediationPackages",
     "/api/data/remediationPackages/tasks",
-    "/api/data/remediationPackages/tasks",
-    "/api/data/runtime/enrichment/recalculate",
-    "/api/data/runtime/stats",
-    "/api/data/runtime"
+    "/api/data/remediationPackages/tasks"
   ]);
   await expect(listEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data") })).resolves.toEqual({
     files: []
   });
-  await expect(
-    readEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data/read?name=entra-snapshot.json") })
-  ).resolves.toEqual(entraSnapshot);
   await expect(
     servicePrincipalsEndpoint.handle({
       req: {},
@@ -880,28 +857,7 @@ test("defines local report runtime REST endpoints", async () => {
       url: new URL("http://localhost/api/data/zeroTrustAssessment/remediationPackages")
     })
   ).rejects.toThrow("Invalid Zero Trust Assessment remediation package request.");
-  await expect(
-    enrichmentRecalculateEndpoint.handle({
-      req: {},
-      url: new URL("http://localhost/api/data/runtime/enrichment/recalculate")
-    })
-  ).resolves.toBeUndefined();
-  await expect(
-    runtimeStatsEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data/runtime/stats") })
-  ).resolves.toEqual({
-    users: 3,
-    groups: 2,
-    servicePrincipals: 5,
-    managedIdentities: 1,
-    resourceGroups: 4,
-    rbacAssignments: 8
-  });
-  expect(runtimeEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data/runtime") })).toEqual({
-    initialized: true
-  });
-  expect(runtime.recalculateEnrichment).toHaveBeenCalledTimes(1);
   expect(runtime.readZeroTrustAssessmentReport).not.toHaveBeenCalled();
-  expect(runtime.readSnapshot).toHaveBeenCalledWith("entra-snapshot.json");
   expect(runtime.queryEntraServicePrincipals).toHaveBeenCalledWith({
     filters: [
       { column: "displayName", values: ["app", "api"] },

@@ -1,4 +1,4 @@
-import type { OwnershipEvidenceItem, OwnershipEvidenceResponse } from "../../core/ownership/types";
+import type { OwnershipEvidenceItem, OwnershipEvidenceResponse } from "../../../core/ownership/types";
 
 export function getEvidenceStatusLabel(evidence: Pick<OwnershipEvidenceItem, "disabled">): "Active" | "Inactive" {
   return evidence.disabled ? "Inactive" : "Active";

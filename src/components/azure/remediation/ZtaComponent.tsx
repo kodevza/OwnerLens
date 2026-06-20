@@ -1,24 +1,24 @@
 import { useCallback, useMemo, useState } from "react";
 
-import type { RemediationPackage } from "../../core/runtime/remediation";
+import type { RemediationPackage } from "../../../core/runtime/remediation";
 import type {
   ZtaRelatedObject,
   ZtaReportMeta,
   ZtaReportTest
-} from "../../core/azure/ztaReport";
-import { formatDate, formatValue } from "../../lib/utils";
-import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
-import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
-import { SelectionActionBar } from "../../report/components/SelectionActionBar";
-import type { ColumnFilters, SortRule } from "../../core/collectionControls";
-import { Button } from "../../report/components/ui/button";
-import { Card } from "../../report/components/ui/card";
-import type { ReportFieldDescriptor } from "../../report/reportTypes";
+} from "../../../core/azure/ztaReport";
+import { formatDate, formatValue } from "../../../lib/utils";
+import type { ReportColumnRenderers } from "../../../report/buildCollectionColumns";
+import { SelectableGenericTable } from "../../../report/components/SelectableGenericTable";
+import { SelectionActionBar } from "../../../report/components/SelectionActionBar";
+import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
+import { Button } from "../../../report/components/ui/button";
+import { Card } from "../../../report/components/ui/card";
+import type { ReportFieldDescriptor } from "../../../report/reportTypes";
 import {
   createZeroTrustAssessmentRemediationPackage,
   readRemediationPackage,
   readZeroTrustAssessmentReport
-} from "./api";
+} from "../api";
 import {
   getRemediationPackageSearchValues,
   ZtaRemediationPackageBadges

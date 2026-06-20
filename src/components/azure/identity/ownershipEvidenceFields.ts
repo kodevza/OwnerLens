@@ -1,5 +1,5 @@
-import type { OwnershipEvidenceItem } from "../../core/ownership/types";
-import type { ReportFieldDescriptor } from "../../report/reportTypes";
+import type { OwnershipEvidenceItem } from "../../../core/ownership/types";
+import type { ReportFieldDescriptor } from "../../../report/reportTypes";
 import { formatOwnershipEvidenceScope, getEvidenceStatusLabel } from "./ownershipEvidenceFormatters";
 
 export const ownershipEvidenceFields: ReportFieldDescriptor<OwnershipEvidenceItem>[] = [

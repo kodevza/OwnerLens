@@ -31,7 +31,7 @@ function Test-OwnerLensTrackedProcess {
   }
 
   try {
-    Invoke-RestMethod -Uri "$($State.ServerUrl)/api/data/runtime" -Headers @{ "X-OwnerLens-Runtime-Token" = $State.Token } -Method Get -TimeoutSec 2 | Out-Null
+    Invoke-RestMethod -Uri "$($State.ServerUrl)/api/data" -Headers @{ "X-OwnerLens-Runtime-Token" = $State.Token } -Method Get -TimeoutSec 2 | Out-Null
     return $true
   } catch {
     return $false

@@ -1,12 +1,12 @@
 import { FingerprintPattern, UsersRound } from "lucide-react";
 import type { MouseEvent } from "react";
 
-import type { OwnershipEvidenceItem } from "../../core/ownership/types";
-import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
-import { ConfidenceBadge } from "../../report/components/ConfidenceBadge";
-import { Badge } from "../../report/components/ui/badge";
-import { AzureLinkBadge, buildAzureResourceGroupPortalUrl } from "./AzureLinkBadge";
-import type { EvidenceStatus, OwnershipEvidenceTarget } from "./api";
+import type { OwnershipEvidenceItem } from "../../../core/ownership/types";
+import type { ReportColumnRenderers } from "../../../report/buildCollectionColumns";
+import { ConfidenceBadge } from "../../../report/components/ConfidenceBadge";
+import { Badge } from "../../../report/components/ui/badge";
+import { AzureLinkBadge, buildAzureResourceGroupPortalUrl } from "../AzureLinkBadge";
+import type { EvidenceStatus, OwnershipEvidenceTarget } from "../api";
 import {
   formatOwnershipEvidenceDiscoverySource,
   formatOwnershipEvidencePath,

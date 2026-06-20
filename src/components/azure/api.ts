@@ -35,15 +35,6 @@ type ResourceGroupRuntimeResponse = LocalReportPaginatedCollection<
 
 type AzureRbacRuntimeResponse = LocalReportPaginatedCollection<"azureRbac", AzureRbac>;
 
-export type AzureInventoryStats = {
-  users: number;
-  groups: number;
-  servicePrincipals: number;
-  managedIdentities: number;
-  resourceGroups: number;
-  rbacAssignments: number;
-};
-
 export type AzureRbacTarget =
   | {
       kind: "servicePrincipal";
@@ -82,15 +73,6 @@ type ZeroTrustAssessmentRuntimeResponse = ZtaReport &
   PaginatedCollection<"zeroTrustAssessment.report", ZtaReport["Tests"]>;
 
 export const remotePageSize = 20;
-
-export async function readAzureInventoryStats({ signal }: { signal: AbortSignal }): Promise<AzureInventoryStats> {
-  const response = await runtimeFetch("/api/data/runtime/stats", { signal });
-  if (!response.ok) {
-    throw new Error(`Inventory stats read failed: ${response.status}`);
-  }
-
-  return readJsonResponse<AzureInventoryStats>(response, "/api/data/runtime/stats", "Inventory stats read failed");
-}
 
 export type CsvExportSelection = {
   filters: ColumnFilters;

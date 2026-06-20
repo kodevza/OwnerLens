@@ -8,6 +8,10 @@ import type {
   AzureUserAssignedManagedIdentity,
   ResourceGroupOwnershipRow
 } from "../../../../core/azure/resources";
+import type {
+  ZtaRemediationPackageSummary,
+  ZtaRemediationSummary
+} from "../../../../core/azure/ztaReport";
 
 import {
   buildPaginatedCollection,
@@ -17,7 +21,6 @@ import {
 import type { RuntimeCollectionCsvExport } from "../../../../core/runtime/collectionExport";
 import type { AzureResourcesCollectionQueryService } from "../resources/AzureResourcesCollectionQueryService";
 import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
-import type { ZeroTrustAssessmentQueryService } from "../zta/ZeroTrustAssessmentQueryService";
 import type { ExportService } from "../ExportService";
 import type { LocalEntraReportRuntime } from "./LocalEntraReportRuntime";
 import {
@@ -25,11 +28,16 @@ import {
   projectServicePrincipalOwners
 } from "../../ownership/principalOwnerProjection";
 
+export type EntraZeroTrustAssessmentQueries = {
+  readRemediationSummaries(): Promise<Map<string, ZtaRemediationSummary>>;
+  readRemediationPackageSummariesByPrincipalId(): Promise<Map<string, ZtaRemediationPackageSummary[]>>;
+};
+
 export type EntraCollectionQueryServiceOptions = {
   entra: LocalEntraReportRuntime;
   azureResources: LocalAzureResourcesReportRuntime;
   azureResourcesQueries: AzureResourcesCollectionQueryService;
-  zeroTrustAssessmentQueries: ZeroTrustAssessmentQueryService;
+  zeroTrustAssessmentQueries: EntraZeroTrustAssessmentQueries;
   exportService: ExportService;
 };
 
@@ -37,7 +45,7 @@ export class EntraCollectionQueryService {
   private readonly entra: LocalEntraReportRuntime;
   private readonly azureResources: LocalAzureResourcesReportRuntime;
   private readonly azureResourcesQueries: AzureResourcesCollectionQueryService;
-  private readonly zeroTrustAssessmentQueries: ZeroTrustAssessmentQueryService;
+  private readonly zeroTrustAssessmentQueries: EntraZeroTrustAssessmentQueries;
   private readonly exportService: ExportService;
 
   constructor(options: EntraCollectionQueryServiceOptions) {

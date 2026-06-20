@@ -1,6 +1,6 @@
-import type { ZtaRemediationPackageSummary } from "../../core/azure/ztaReport";
-import { formatDate, formatValue } from "../../lib/utils";
-import { Badge } from "../../report/components/ui/badge";
+import type { ZtaRemediationPackageSummary } from "../../../core/azure/ztaReport";
+import { formatDate, formatValue } from "../../../lib/utils";
+import { Badge } from "../../../report/components/ui/badge";
 
 export function ZtaRemediationPackageBadges({
   packages,

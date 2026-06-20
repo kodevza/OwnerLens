@@ -20,7 +20,7 @@ function Get-OwnerLensStatus {
 
   if ($running) {
     try {
-      Invoke-RestMethod -Uri "$($state.ServerUrl)/api/data/runtime" -Headers @{ "X-OwnerLens-Runtime-Token" = $state.Token } -Method Get -TimeoutSec 2 | Out-Null
+      Invoke-RestMethod -Uri "$($state.ServerUrl)/api/data" -Headers @{ "X-OwnerLens-Runtime-Token" = $state.Token } -Method Get -TimeoutSec 2 | Out-Null
       $health = "Healthy"
     } catch {
       $health = "RuntimeUnavailable"

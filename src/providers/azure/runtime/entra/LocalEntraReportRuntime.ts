@@ -14,37 +14,29 @@ import {
   type SnapshotImportStatus
 } from "../../../../core/runtime/snapshotImportRegistry";
 import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
-import type { EntraPrincipalPermissionSummary, ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
+import type { ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
 import type {
   EntraAppRoleAssignment,
   EntraOAuth2PermissionGrant,
   EntraUserGroupMembershipResponse
 } from "../../../../core/azure/entra/types";
-import type { PermissionRiskLevel } from "../../../../core/risk/types";
-import type {
-  EntraOAuth2PermissionGrant as InputEntraOAuth2PermissionGrant,
-  EntraServicePrincipal,
-  EntraSnapshot
-} from "../../inputTransferObject/generated/EntraSnapshot";
-import { readEntraAppRoleAssignmentRows } from "./appRoleAssignmentsTable";
-import { readEntraOAuth2PermissionGrantRows } from "./oauth2PermissionGrantsTable";
-import { readLatestAzureIdentityEnrichment } from "../enrichment/azureIdentityEnrichment";
-import { readEntraServicePrincipalRows } from "./servicePrincipalsTable";
-import { readEntraUserGroupMembership } from "./groupMembersTable";
+import type { EntraServicePrincipal, EntraSnapshot } from "../../inputTransferObject/generated/EntraSnapshot";
+import {
+  readAppRoleAssignments,
+  readManagedIdentities,
+  readOAuth2PermissionGrants,
+  readPrincipalPermissions,
+  readRawServicePrincipals,
+  readServicePrincipals,
+  readUserGroupMembership,
+  type EntraPrincipalPermissions
+} from "./EntraReadModel";
 import {
   entraSnapshotFileName,
   importEntraSnapshotToDuckDb,
   readEntraSnapshotFromDuckDb
 } from "./snapshotStore";
-import { mapEntraServicePrincipalsToCore } from "./entraServicePrincipalMapper";
 import { normalizeEntraSnapshot } from "./normalizeEntraSnapshot";
-import { toManagedIdentities, toServicePrincipals } from "./principalProjection";
-
-export type EntraPrincipalPermissions = {
-  principalId: string;
-  oauth2PermissionGrants: EntraOAuth2PermissionGrant[];
-  appRoleAssignments: EntraAppRoleAssignment[];
-};
 
 export type LocalEntraReportRuntimeOptions = {
   dataDir: string;
@@ -108,65 +100,37 @@ export class LocalEntraReportRuntime {
 
   async readEntraServicePrincipals(): Promise<EntraServicePrincipal[]> {
     this.assertImported();
-    return readEntraServicePrincipalRows(this.getConnection());
+    return readRawServicePrincipals(this.getConnection());
   }
 
   async readServicePrincipals(): Promise<ServicePrincipal[]> {
     this.assertImported();
-    const connection = this.getConnection();
-    const permissionsByPrincipalId = await this.readPrincipalPermissionSummary(connection);
-
-    return toServicePrincipals(
-      mapEntraServicePrincipalsToCore(await readEntraServicePrincipalRows(connection)),
-      await readLatestAzureIdentityEnrichment(connection),
-      permissionsByPrincipalId
-    );
+    return readServicePrincipals(this.getConnection());
   }
 
   async readManagedIdentities(): Promise<ManagedIdentity[]> {
     this.assertImported();
-    const connection = this.getConnection();
-    const permissionsByPrincipalId = await this.readPrincipalPermissionSummary(connection);
-
-    return toManagedIdentities(
-      mapEntraServicePrincipalsToCore(await readEntraServicePrincipalRows(connection)),
-      await readLatestAzureIdentityEnrichment(connection),
-      permissionsByPrincipalId
-    );
+    return readManagedIdentities(this.getConnection());
   }
 
   async readEntraOAuth2PermissionGrants(): Promise<EntraOAuth2PermissionGrant[]> {
     this.assertImported();
-    return (await readEntraOAuth2PermissionGrantRows(this.getConnection())).map(toCoreEntraOAuth2PermissionGrant);
+    return readOAuth2PermissionGrants(this.getConnection());
   }
 
   async readEntraAppRoleAssignments(): Promise<EntraAppRoleAssignment[]> {
     this.assertImported();
-    return readEntraAppRoleAssignmentRows(this.getConnection());
+    return readAppRoleAssignments(this.getConnection());
   }
 
   async readEntraPrincipalPermissions(principalId: string): Promise<EntraPrincipalPermissions> {
     this.assertImported();
-    const normalizedPrincipalId = principalId.toLowerCase();
-    const [oauth2PermissionGrants, appRoleAssignments] = await Promise.all([
-      readEntraOAuth2PermissionGrantRows(this.getConnection()),
-      readEntraAppRoleAssignmentRows(this.getConnection())
-    ]);
-
-    return {
-      principalId,
-      oauth2PermissionGrants: oauth2PermissionGrants.filter(
-        (grant) => grant.clientId.toLowerCase() === normalizedPrincipalId
-      ).map(toCoreEntraOAuth2PermissionGrant),
-      appRoleAssignments: appRoleAssignments.filter(
-        (assignment) => assignment.principalId.toLowerCase() === normalizedPrincipalId
-      )
-    };
+    return readPrincipalPermissions(this.getConnection(), principalId);
   }
 
   async readUserGroupMembership(user: string): Promise<EntraUserGroupMembershipResponse> {
     this.assertImported();
-    return readEntraUserGroupMembership(this.getConnection(), user);
+    return readUserGroupMembership(this.getConnection(), user);
   }
 
   private assertImported(): void {
@@ -174,89 +138,4 @@ export class LocalEntraReportRuntime {
       throw new RuntimeHttpError(`Snapshot file ./data/${entraSnapshotFileName} was not found.`, 404);
     }
   }
-
-  private async readPrincipalPermissionSummary(
-    connection: DuckDBConnection
-  ): Promise<Map<string, EntraPrincipalPermissionSummary>> {
-    const [oauth2PermissionGrants, appRoleAssignments] = await Promise.all([
-      readEntraOAuth2PermissionGrantRows(connection),
-      readEntraAppRoleAssignmentRows(connection)
-    ]);
-    const permissionsByPrincipalId = new Map<string, EntraPrincipalPermissionSummary>();
-
-    for (const grant of oauth2PermissionGrants) {
-      const summary = getOrCreatePrincipalPermissionSummary(permissionsByPrincipalId, grant.clientId);
-      const scopeCount = countOAuthPermissionScopes(grant.scope);
-      summary.oauthPermissionsCount += scopeCount;
-      if (scopeCount > 0) {
-        summary.entraPermissionRisk = maxPermissionRisk(
-          summary.entraPermissionRisk,
-          grant.consentType === "AllPrincipals" ? "high" : "medium"
-        );
-      }
-    }
-
-    for (const assignment of appRoleAssignments) {
-      const summary = getOrCreatePrincipalPermissionSummary(permissionsByPrincipalId, assignment.principalId);
-      summary.appRolesPermissionCount += 1;
-      summary.entraPermissionRisk = maxPermissionRisk(summary.entraPermissionRisk, "medium");
-    }
-
-    return permissionsByPrincipalId;
-  }
-}
-
-function getOrCreatePrincipalPermissionSummary(
-  permissionsByPrincipalId: Map<string, EntraPrincipalPermissionSummary>,
-  principalId: string
-): EntraPrincipalPermissionSummary {
-  const normalizedPrincipalId = principalId.toLowerCase();
-  const existing = permissionsByPrincipalId.get(normalizedPrincipalId);
-
-  if (existing) {
-    return existing;
-  }
-
-  const summary = {
-    oauthPermissionsCount: 0,
-    appRolesPermissionCount: 0,
-    entraPermissionRisk: "none" as PermissionRiskLevel
-  };
-
-  permissionsByPrincipalId.set(normalizedPrincipalId, summary);
-  return summary;
-}
-
-function countOAuthPermissionScopes(scope: string): number {
-  return scope.split(/\s+/).filter(Boolean).length;
-}
-
-function toCoreEntraOAuth2PermissionGrant(grant: InputEntraOAuth2PermissionGrant): EntraOAuth2PermissionGrant {
-  return {
-    ...grant,
-    risk: getOAuth2PermissionGrantRisk(grant)
-  };
-}
-
-function getOAuth2PermissionGrantRisk(grant: Pick<InputEntraOAuth2PermissionGrant, "consentType">): PermissionRiskLevel {
-  if (grant.consentType === "AllPrincipals") {
-    return "high";
-  }
-
-  if (grant.consentType === "Principal") {
-    return "low";
-  }
-
-  return "medium";
-}
-
-const permissionRiskRank: Record<PermissionRiskLevel, number> = {
-  none: 0,
-  low: 1,
-  medium: 2,
-  high: 3
-};
-
-function maxPermissionRisk(left: PermissionRiskLevel, right: PermissionRiskLevel): PermissionRiskLevel {
-  return permissionRiskRank[left] >= permissionRiskRank[right] ? left : right;
 }

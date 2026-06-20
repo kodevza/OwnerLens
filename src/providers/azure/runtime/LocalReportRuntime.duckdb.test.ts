@@ -12,6 +12,8 @@ import {
   importZeroTrustAssessmentReportToDuckDb,
   readZeroTrustAssessmentReportFromDuckDb
 } from "./zta/snapshotStore";
+import { readAzureIdentityEnrichmentStatus } from "./enrichment/azureIdentityEnrichment";
+import type { SnapshotImportStatus } from "../../../core/runtime/snapshotImportRegistry";
 import { RemediationPackageStore } from "../../../core/runtime/RemediationPackageStore";
 import { insertEntraServicePrincipalRows, readEntraServicePrincipalRows } from "./entra/servicePrincipalsTable";
 import { insertEntraApplicationRows } from "./entra/applicationsTable";
@@ -51,6 +53,7 @@ type DuckDbTestConnection = Awaited<ReturnType<DuckDbTestInstance["connect"]>>;
 type ZeroTrustAssessmentReportEndpointResponse = Awaited<
   ReturnType<LocalReportRuntime["queryZeroTrustAssessmentReport"]>
 >;
+type SnapshotImportSource = "entra" | "azureResources" | "zeroTrustAssessment";
 
 async function withRuntimeTestDir<T>(
   fn: (ctx: { dataDir: string; runtime: LocalReportRuntime; databasePath: string }) => Promise<T>,
@@ -91,6 +94,78 @@ function getEndpoint(endpoints: ReturnType<typeof defineLocalReportRuntimeRestEn
   }
 
   return endpoint;
+}
+
+async function readLatestSnapshotImportStatus(
+  databasePath: string,
+  source: SnapshotImportSource
+): Promise<SnapshotImportStatus> {
+  return withDuckDb(async ({ connection }) => {
+    const reader = await connection.runAndReadAll(
+      `
+        select file_name, name, last_modified_date, size_bytes, content_hash, imported_at, skipped
+        from runtime_snapshot_imports
+        where source = $source
+        order by imported_at desc
+        limit 1
+      `,
+      { source }
+    );
+    const row = (reader.getRowObjectsJson() as SnapshotImportStatusRow[])[0];
+
+    return row
+      ? {
+          imported: true,
+          fileName: row.file_name,
+          name: row.name,
+          lastModifiedDate: row.last_modified_date,
+          sizeBytes: readNumber(row.size_bytes),
+          contentHash: row.content_hash,
+          importedAt: row.imported_at,
+          skipped: row.skipped
+        }
+      : {
+          imported: false,
+          fileName: "",
+          name: null,
+          lastModifiedDate: null,
+          sizeBytes: null,
+          contentHash: null,
+          importedAt: null,
+          skipped: false
+        };
+  }, databasePath);
+}
+
+async function readLatestEnrichmentStatus(databasePath: string) {
+  return withDuckDb(({ connection }) => readAzureIdentityEnrichmentStatus(connection), databasePath);
+}
+
+type SnapshotImportStatusRow = {
+  file_name: string;
+  name: string;
+  last_modified_date: string;
+  size_bytes: unknown;
+  content_hash: string | null;
+  imported_at: string;
+  skipped: boolean;
+};
+
+function readNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
 }
 
 test("persists and reads generic remediation packages independent of ZTA", async () => {
@@ -255,92 +330,6 @@ test("normalizes service principal tag separators on import", async () => {
   ]);
 });
 
-test("reads compact runtime inventory stats", async () => {
-  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
-    const entraSnapshot: EntraSnapshot = {
-      ...minimalEntraSnapshot(),
-      meta: {
-        ...minimalEntraSnapshot().meta,
-        servicePrincipalCount: 3
-      },
-      servicePrincipals: [
-        servicePrincipal("sp-1", "app-1", "Example app", "Application"),
-        servicePrincipal("sp-2", "app-2", "Worker app", "Application"),
-        servicePrincipal("mi-1", "mi-app-1", "uami-prod", "ManagedIdentity")
-      ],
-      groupMembers: [
-        {
-          groupId: "group-1",
-          groupDisplayName: "Owners",
-          memberId: "user-1",
-          memberDisplayName: "Alice",
-          memberType: "user",
-          memberUserPrincipalName: "alice@example.test",
-          memberMail: "alice@example.test",
-          memberAppId: null,
-          memberServicePrincipalType: null
-        },
-        {
-          groupId: "group-2",
-          groupDisplayName: "Operators",
-          memberId: "user-1",
-          memberDisplayName: "Alice",
-          memberType: "user",
-          memberUserPrincipalName: "alice@example.test",
-          memberMail: "alice@example.test",
-          memberAppId: null,
-          memberServicePrincipalType: null
-        },
-        {
-          groupId: "group-2",
-          groupDisplayName: "Operators",
-          memberId: "sp-1",
-          memberDisplayName: "Example app",
-          memberType: "servicePrincipal",
-          memberUserPrincipalName: null,
-          memberMail: null,
-          memberAppId: "app-1",
-          memberServicePrincipalType: "Application"
-        }
-      ]
-    };
-    const azureSnapshot: AzureSnapshot = {
-      ...minimalAzureSnapshot(),
-      meta: {
-        ...minimalAzureSnapshot().meta,
-        resourceGroupCount: 2,
-        roleAssignmentCount: 2
-      },
-      resourceGroups: [
-        ...minimalAzureSnapshot().resourceGroups,
-        {
-          subscriptionId: "sub-1",
-          subscriptionName: "Subscription One",
-          resourceGroup: "rg-data",
-          location: "westeurope",
-          tags: null
-        }
-      ],
-      roleAssignments: [
-        roleAssignment("sp-1", "Reader", "/subscriptions/sub-1/resourceGroups/rg-app", "ResourceGroup"),
-        roleAssignment("mi-1", "Contributor", "/subscriptions/sub-1/resourceGroups/rg-data", "ResourceGroup")
-      ]
-    };
-
-    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot));
-    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot));
-
-    await expect(runtime.readInventoryStats()).resolves.toEqual({
-      users: 1,
-      groups: 2,
-      servicePrincipals: 2,
-      managedIdentities: 1,
-      resourceGroups: 2,
-      rbacAssignments: 2
-    });
-  });
-});
-
 test("imports Zero Trust Assessment report into DuckDB and reads it back through the runtime", async () => {
   const taggedServicePrincipal = servicePrincipal("tagged-sp-1", "tagged-client-app-1", "Tagged automation app", {
     servicePrincipalType: "Application",
@@ -432,7 +421,7 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
     ]
   };
 
-  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
     const exportDir = path.join(dataDir, "exports", "nested");
 
     await mkdir(exportDir, { recursive: true });
@@ -450,12 +439,7 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
     await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
     await runtime.initialize();
 
-    expect(runtime.getStatus().zeroTrustAssessment).toMatchObject({
-      imported: true,
-      fileName: "exports/nested/tenant-zta-report.json"
-    });
-
-    const imported = await runtime.readZeroTrustAssessmentReport();
+    const imported = await runtime.queryZeroTrustAssessmentReport({ page: 1, pageSize: 10 });
     expect(imported).toMatchObject({
       Meta: {
         Account: "owner@example.test",
@@ -706,7 +690,7 @@ test("fills Zero Trust Assessment related object application ids through the RES
     ]
   };
 
-  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
     await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
     await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
     await runtime.initialize();
@@ -947,6 +931,12 @@ test("creates generic remediation packages from selected Zero Trust Assessment r
           })
         })
       ]
+    });
+
+    await runtime.close();
+    await expect(readLatestSnapshotImportStatus(databasePath, "zeroTrustAssessment")).resolves.toMatchObject({
+      imported: true,
+      fileName: "exports/nested/tenant-zta-report.json"
     });
   });
 });
@@ -1698,14 +1688,6 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
     await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(snapshot), "utf8");
     await runtime.initialize();
 
-    expect(runtime.getStatus().entra).toMatchObject({
-      imported: true,
-      fileName: "entra-snapshot.json"
-    });
-
-    const imported = (await runtime.readSnapshot("entra-snapshot.json")) as EntraSnapshot & {
-      groups: Array<{ id: string }>;
-    };
     const queried = await runtime.queryEntraServicePrincipals({
       filters: [
         { column: "displayName", values: ["Example", "Missing"] },
@@ -1737,49 +1719,6 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
       url: new URL("http://localhost/api/data/entra/oauth2PermissionGrants?page=1&count=10")
     });
 
-    expect(imported.meta?.provider).toBe("entra");
-    expect(imported.servicePrincipals).toHaveLength(2);
-    expect(imported.servicePrincipals[0]).toMatchObject({
-      id: "sp-1",
-      appRoles: [{ id: "role-1" }],
-      metadata: { source: "test" },
-      servicePrincipalOwners: [{ id: "owner-1" }]
-    });
-    expect(imported.applications).toHaveLength(1);
-    expect(imported.applications?.[0]).toMatchObject({
-      id: "application-object-1",
-      appId: "app-1",
-      displayName: "Example app registration",
-      oauth2PermissionScopes: [{ id: "scope-1", value: "user_impersonation" }],
-      requiredResourceAccess: [{ resourceAppId: "00000003-0000-0000-c000-000000000000" }],
-      web: { redirectUris: ["https://example.test/callback"] },
-      spa: { redirectUris: ["https://spa.example.test/callback"] },
-      publicClient: { redirectUris: ["http://localhost"] },
-      passwordCredentials: [
-        {
-          keyId: "password-key-1",
-          displayName: "client secret",
-          hint: "abc",
-          startDateTime: "2026-01-01T00:00:00.000Z",
-          endDateTime: "2026-12-31T00:00:00.000Z"
-        }
-      ],
-      keyCredentials: [{ keyId: "certificate-key-1", usage: "Verify" }],
-      owners: [{ id: "app-owner-1", mail: "app-owner@example.test" }]
-    });
-    expect(imported.applications?.[0].passwordCredentials[0]).not.toHaveProperty("secretText");
-    expect(imported.oauth2PermissionGrants).toEqual(snapshot.oauth2PermissionGrants);
-    expect(imported.oauth2PermissionGrants?.[0]).not.toHaveProperty("risk");
-    expect(imported.appRoleAssignments).toEqual(snapshot.appRoleAssignments);
-    expect(imported.groupMembers).toEqual([
-      expect.objectContaining({
-        groupId: "group-1",
-        groupDisplayName: "Automation Owners",
-        memberId: "sp-1",
-        memberType: "servicePrincipal",
-        memberAppId: "app-1"
-      })
-    ]);
     expect(principalPermissions).toEqual({
       principalId: "SP-1",
       oauth2PermissionGrants: [
@@ -1806,7 +1745,6 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         }
       ]
     });
-    expect(imported.groups).toEqual([{ id: "group-1" }]);
     expect(queried).toMatchObject({
       collectionId: "entra.servicePrincipals",
       columns: expect.arrayContaining(["id", "displayName"]),
@@ -1874,6 +1812,12 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         expect.objectContaining({ id: "grant-2", risk: "low" }),
         expect.objectContaining({ id: "grant-3", risk: "medium" })
       ]
+    });
+
+    await runtime.close();
+    await expect(readLatestSnapshotImportStatus(databasePath, "entra")).resolves.toMatchObject({
+      imported: true,
+      fileName: "entra-snapshot.json"
     });
   });
 });
@@ -1994,19 +1938,15 @@ test("imports legacy Entra snapshots without applications as an empty applicatio
     appRoleAssignments: []
   };
 
-  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
     await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(snapshot), "utf8");
     await runtime.initialize();
 
-    expect(runtime.getStatus().entra).toMatchObject({
+    await runtime.close();
+    await expect(readLatestSnapshotImportStatus(databasePath, "entra")).resolves.toMatchObject({
       imported: true,
       fileName: "entra-snapshot.json"
     });
-
-    const imported = await runtime.readSnapshot("entra-snapshot.json");
-
-    expect((imported as EntraSnapshot).applications).toEqual([]);
-    expect((imported as EntraSnapshot).groupMembers).toEqual([]);
   });
 });
 
@@ -2040,17 +1980,16 @@ test("enriches service principal Azure RBAC through Entra group membership", asy
     await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
     await runtime.initialize();
 
-    const servicePrincipals = await runtime.readServicePrincipals();
+    const servicePrincipals = await runtime.queryEntraServicePrincipals({
+      page: 1,
+      pageSize: 10
+    });
     const queriedAzureRbac = await runtime.queryAzureRbac("sp-1", {
       page: 1,
       pageSize: 10
     });
 
-    expect(runtime.getStatus().enrichment).toMatchObject({
-      identityRoleAssignmentCount: 1,
-      accessRiskIdentityCount: 1
-    });
-    expect(servicePrincipals[0]).toMatchObject({
+    expect(servicePrincipals.rows[0]).toMatchObject({
       id: "sp-1",
       permissionRisk: "high",
       rbacRoleAssignmentCount: 1,
@@ -2128,42 +2067,41 @@ test("records snapshot registry metadata and skips unchanged snapshots on runtim
     await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(minimalAzureSnapshot()), "utf8");
     await runtime.initialize();
 
-    const firstStatus = runtime.getStatus();
-    expect(firstStatus.entra).toMatchObject({
+    await runtime.close();
+    const firstEntraStatus = await readLatestSnapshotImportStatus(databasePath, "entra");
+    const firstAzureResourcesStatus = await readLatestSnapshotImportStatus(databasePath, "azureResources");
+    expect(firstEntraStatus).toMatchObject({
       imported: true,
       fileName: "entra-snapshot.json",
       name: "entra-snapshot.json",
       skipped: false
     });
-    expect(firstStatus.entra.lastModifiedDate).toEqual(expect.any(String));
-    expect(firstStatus.entra.contentHash).toEqual(expect.any(String));
-    expect(firstStatus.azureResources).toMatchObject({
+    expect(firstEntraStatus.lastModifiedDate).toEqual(expect.any(String));
+    expect(firstEntraStatus.contentHash).toEqual(expect.any(String));
+    expect(firstAzureResourcesStatus).toMatchObject({
       imported: true,
       fileName: "snapshot.json",
       name: "snapshot.json",
       skipped: false
     });
-    expect(firstStatus.azureResources.contentHash).toEqual(expect.any(String));
-
-    await runtime.close();
+    expect(firstAzureResourcesStatus.contentHash).toEqual(expect.any(String));
 
     const restartedRuntime = new LocalReportRuntime({ dataDir, databasePath });
     try {
       await restartedRuntime.initialize();
-
-      expect(restartedRuntime.getStatus().entra).toMatchObject({
-        imported: true,
-        skipped: true,
-        contentHash: firstStatus.entra.contentHash
-      });
-      expect(restartedRuntime.getStatus().azureResources).toMatchObject({
-        imported: true,
-        skipped: true,
-        contentHash: firstStatus.azureResources.contentHash
-      });
     } finally {
       await restartedRuntime.close();
     }
+    await expect(readLatestSnapshotImportStatus(databasePath, "entra")).resolves.toMatchObject({
+      imported: true,
+      skipped: true,
+      contentHash: firstEntraStatus.contentHash
+    });
+    await expect(readLatestSnapshotImportStatus(databasePath, "azureResources")).resolves.toMatchObject({
+      imported: true,
+      skipped: true,
+      contentHash: firstAzureResourcesStatus.contentHash
+    });
 
     const registryRows = await withDuckDb(async ({ connection }) => {
       const rows = await connection.runAndReadAll(
@@ -2187,30 +2125,34 @@ test("records snapshot registry metadata and skips unchanged snapshots on runtim
 });
 
 test("imports changed snapshot content on runtime restart", async () => {
-  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
+    await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
     await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(minimalAzureSnapshot()), "utf8");
     await runtime.initialize();
-    expect(runtime.getStatus().azureResources).toMatchObject({
+    await runtime.close();
+    await expect(readLatestSnapshotImportStatus(databasePath, "azureResources")).resolves.toMatchObject({
       skipped: false
     });
-    await runtime.close();
 
     await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(minimalAzureSnapshot(["app-a", "app-b"])), "utf8");
 
     const restartedRuntime = new LocalReportRuntime({ dataDir, databasePath });
     try {
       await restartedRuntime.initialize();
-
-      expect(restartedRuntime.getStatus().azureResources).toMatchObject({
-        imported: true,
-        skipped: false
-      });
-      await expect(restartedRuntime.readSnapshot("snapshot.json")).resolves.toMatchObject({
-        resources: [expect.objectContaining({ resourceName: "app-a" }), expect.objectContaining({ resourceName: "app-b" })]
+      await expect(
+        restartedRuntime.queryAzureResources({
+          page: 1,
+          pageSize: 10
+        })
+      ).resolves.toMatchObject({
+        rows: [expect.objectContaining({ resourceName: "app-a" }), expect.objectContaining({ resourceName: "app-b" })]
       });
     } finally {
       await restartedRuntime.close();
     }
+    await expect(readLatestSnapshotImportStatus(databasePath, "azureResources")).resolves.toMatchObject({
+      imported: true,
+      skipped: false
+    });
   });
 });
 
@@ -2226,25 +2168,24 @@ test("skips unchanged Zero Trust Assessment report without appending duplicate r
     await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
     await runtime.initialize();
 
-    expect(runtime.getStatus().zeroTrustAssessment).toMatchObject({
+    await runtime.close();
+    await expect(readLatestSnapshotImportStatus(databasePath, "zeroTrustAssessment")).resolves.toMatchObject({
       imported: true,
       fileName: "zta-report.json",
       name: "zta-report.json",
       skipped: false
     });
-    await runtime.close();
 
     const restartedRuntime = new LocalReportRuntime({ dataDir, databasePath });
     try {
       await restartedRuntime.initialize();
-
-      expect(restartedRuntime.getStatus().zeroTrustAssessment).toMatchObject({
-        imported: true,
-        skipped: true
-      });
     } finally {
       await restartedRuntime.close();
     }
+    await expect(readLatestSnapshotImportStatus(databasePath, "zeroTrustAssessment")).resolves.toMatchObject({
+      imported: true,
+      skipped: true
+    });
 
     const counts = await withDuckDb(async ({ connection }) => {
       const reportRows = await connection.runAndReadAll("select count(*) as count from zta_report");

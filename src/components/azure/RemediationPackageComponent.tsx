@@ -19,13 +19,13 @@ import {
   type AzureRbacPrincipalSelection,
   type EntraPermissionsPrincipalSelection,
   formatAzureRbacSummary
-} from "./ServicePrincipalFieldRenderers";
+} from "./identity/ServicePrincipalFieldRenderers";
 import {
   getRelatedObjectId,
   getRelatedObjectLabel,
   getRelatedObjectSearchValuesForObject,
   ztaRelatedObjectFieldFilter
-} from "./ztaRelatedObjects";
+} from "./remediation/ztaRelatedObjects";
 
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 const ownerConfidenceOptions: OwnerConfidence[] = ["high", "medium", "low", "none"];

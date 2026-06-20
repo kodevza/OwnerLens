@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { GenericTable } from "../../report/components/GenericTable";
-import type { ReportFieldDescriptor } from "../../report/reportTypes";
-import type { PermissionRiskLevel } from "../../core/risk/types";
-import { readEntraPermissions, type EntraPrincipalPermissionsResponse } from "./api";
+import { GenericTable } from "../../../report/components/GenericTable";
+import type { ReportFieldDescriptor } from "../../../report/reportTypes";
+import type { PermissionRiskLevel } from "../../../core/risk/types";
+import { readEntraPermissions, type EntraPrincipalPermissionsResponse } from "../api";
 
 type EntraPermissionRow = {
   id: string;

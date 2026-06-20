@@ -1,11 +1,11 @@
 import { useCallback } from "react";
 
-import type { AzureRbac } from "../../core/azure/azureRbac";
-import { GenericTable } from "../../report/components/GenericTable";
-import type { ColumnFilters, SortRule } from "../../core/collectionControls";
-import type { ReportFieldDescriptor } from "../../report/reportTypes";
-import type { PermissionRiskLevel } from "../../core/risk/types";
-import { readAzureRbac, type AzureRbacTarget } from "./api";
+import type { AzureRbac } from "../../../core/azure/azureRbac";
+import { GenericTable } from "../../../report/components/GenericTable";
+import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
+import type { ReportFieldDescriptor } from "../../../report/reportTypes";
+import type { PermissionRiskLevel } from "../../../core/risk/types";
+import { readAzureRbac, type AzureRbacTarget } from "../api";
 
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 const azureScopeTypeOptions = ["ManagementGroup", "Subscription", "ResourceGroup", "Resource", "Unknown"];

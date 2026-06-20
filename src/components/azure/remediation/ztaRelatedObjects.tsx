@@ -1,6 +1,6 @@
-import type { ZtaRelatedObject, ZtaReportTest } from "../../core/azure/ztaReport";
-import { Badge } from "../../report/components/ui/badge";
-import type { ReportFilterDescriptor, ReportObjectFieldFilterDescriptor } from "../../report/reportTypes";
+import type { ZtaRelatedObject, ZtaReportTest } from "../../../core/azure/ztaReport";
+import { Badge } from "../../../report/components/ui/badge";
+import type { ReportFilterDescriptor, ReportObjectFieldFilterDescriptor } from "../../../report/reportTypes";
 
 const ztaRelatedObjectFilterFields: ReportObjectFieldFilterDescriptor[] = [
   { id: "id", label: "ID" },

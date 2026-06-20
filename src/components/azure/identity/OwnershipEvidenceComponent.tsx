@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 
-import type { OwnershipEvidenceItem, OwnershipEvidenceResponse } from "../../core/ownership/types";
-import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
-import { Card } from "../../report/components/ui/card";
+import type { OwnershipEvidenceItem, OwnershipEvidenceResponse } from "../../../core/ownership/types";
+import { SelectableGenericTable } from "../../../report/components/SelectableGenericTable";
+import { Card } from "../../../report/components/ui/card";
 import { EntraUserGroupsDropdown } from "./EntraUserGroupsDropdown";
-import { readOwnershipEvidence, updateEvidenceStatus, type EvidenceStatus, type OwnershipEvidenceTarget } from "./api";
+import { readOwnershipEvidence, updateEvidenceStatus, type EvidenceStatus, type OwnershipEvidenceTarget } from "../api";
 import { formatOwnershipEvidenceTarget } from "./ownershipEvidenceFormatters";
 import { ownershipEvidenceFields } from "./ownershipEvidenceFields";
 import { buildOwnershipEvidenceFieldRenderers, getOwnerCandidateStatusKey } from "./OwnershipEvidenceRenderers";
