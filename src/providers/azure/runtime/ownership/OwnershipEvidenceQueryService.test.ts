@@ -679,7 +679,6 @@ function buildOwnershipEvidenceService({
   const entraSnapshotValue = entraSnapshot({ servicePrincipals: [] });
   const entraRuntime = {
     readSnapshot: jest.fn().mockResolvedValue(entraSnapshotValue),
-    readEntraServicePrincipals: jest.fn().mockResolvedValue(entraSnapshotValue.servicePrincipals),
     readServicePrincipals: jest.fn().mockResolvedValue(servicePrincipals),
     findServicePrincipalById: jest.fn((principalId: string) => Promise.resolve(
       servicePrincipals.find((candidate) => candidate.id.toLowerCase() === principalId.toLowerCase()) ?? null
@@ -690,6 +689,12 @@ function buildOwnershipEvidenceService({
     readSnapshot: jest.fn().mockResolvedValue(azureSnapshot),
     readAzureResourceGroupOwnershipSqlRows: jest.fn(({ subscriptionIds, resourceGroups }, limit) =>
       Promise.resolve(readTestResourceGroupOwnershipSqlRows(azureSnapshot, { subscriptionIds, resourceGroups }, limit))
+    ),
+    readAzureResourceGroupOwnershipCollectionSqlRows: jest.fn((limit) =>
+      Promise.resolve(readTestResourceGroupOwnershipSqlRows(azureSnapshot, {
+        subscriptionIds: azureSnapshot.resourceGroups.map((group) => group.subscriptionId),
+        resourceGroups: azureSnapshot.resourceGroups.map((group) => group.resourceGroup)
+      }, limit))
     ),
     readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue(azureSnapshot.userAssignedManagedIdentities)
   };

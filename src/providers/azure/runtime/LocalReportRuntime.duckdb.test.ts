@@ -356,6 +356,90 @@ test("reads a single service principal row by id", async () => {
   expect(rows.missing).toBeNull();
 });
 
+test("filters Entra service principals in DuckDB before page lookup limits", async () => {
+  const snapshot: EntraSnapshot = {
+    meta: {
+      provider: "entra",
+      snapshotVersion: "0.4",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      tenantId: "tenant-1",
+      account: "owner@example.test",
+      scopes: ["Application.Read.All"],
+      servicePrincipalCount: 2,
+      applicationCount: 0,
+      oauth2PermissionGrantCount: 1,
+      appRoleAssignmentCount: 0
+    },
+    servicePrincipals: [
+      servicePrincipal("sp-first", "app-first", "First app", "Application"),
+      servicePrincipal("sp-target", "app-target", "Target app", "Application")
+    ],
+    applications: [],
+    oauth2PermissionGrants: [
+      {
+        id: "grant-target",
+        clientId: "sp-target",
+        consentType: "AllPrincipals",
+        principalId: null,
+        resourceId: "graph",
+        scope: "User.Read"
+      }
+    ],
+    appRoleAssignments: [],
+    groupMembers: []
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(snapshot), "utf8");
+    await runtime.initialize();
+
+    const unfilteredFirstPage = await runtime.queryEntraServicePrincipals({
+      page: 1,
+      pageSize: 1
+    });
+    const queried = await runtime.queryEntraServicePrincipals({
+      filters: [{ column: "displayName", values: ["Target"] }],
+      page: 1,
+      pageSize: 1
+    });
+    const queriedByComputedPermissionRisk = await runtime.queryEntraServicePrincipals({
+      filters: [{ column: "entraPermissionRisk", values: ["high"] }],
+      page: 1,
+      pageSize: 1
+    });
+
+    expect(unfilteredFirstPage).toMatchObject({
+      count: 2,
+      rows: [
+        expect.objectContaining({
+          id: "sp-first"
+        })
+      ]
+    });
+    expect(queried).toMatchObject({
+      collectionId: "entra.servicePrincipals",
+      count: 1,
+      rows: [
+        expect.objectContaining({
+          id: "sp-target",
+          displayName: "Target app"
+        })
+      ]
+    });
+    expect(queriedByComputedPermissionRisk).toMatchObject({
+      collectionId: "entra.servicePrincipals",
+      count: 1,
+      rows: [
+        expect.objectContaining({
+          id: "sp-target",
+          displayName: "Target app",
+          entraPermissionRisk: "high"
+        })
+      ]
+    });
+  });
+});
+
 test("imports Zero Trust Assessment report into DuckDB and reads it back through the runtime", async () => {
   const taggedServicePrincipal = servicePrincipal("tagged-sp-1", "tagged-client-app-1", "Tagged automation app", {
     servicePrincipalType: "Application",

@@ -141,7 +141,8 @@ export async function readAzureIdentityEnrichmentStatus(
 }
 
 export async function readLatestAzureIdentityEnrichment(
-  connection: DuckDBConnection
+  connection: DuckDBConnection,
+  principalIds?: string[]
 ): Promise<LatestAzureIdentityEnrichment> {
   const status = await readAzureIdentityEnrichmentStatus(connection);
   if (!status.latestRunId) {
@@ -153,25 +154,44 @@ export async function readLatestAzureIdentityEnrichment(
     };
   }
 
+  const normalizedPrincipalIds = principalIds ? normalizeKeys(principalIds) : null;
+  if (normalizedPrincipalIds?.length === 0) {
+    return {
+      status,
+      roleAssignmentsByPrincipalId: new Map(),
+      accessRiskByPrincipalId: new Map(),
+      managedIdentityAssignmentsByServicePrincipalId: new Map()
+    };
+  }
+  const principalIdFilter = normalizedPrincipalIds ? toSqlStringList(normalizedPrincipalIds) : null;
+  const identityAssignmentFilter = normalizedPrincipalIds ? toSqlStringList(normalizedPrincipalIds) : null;
+
   const roleRows = await readRows<AzureIdentityRoleAssignmentEnrichmentRow>(
     connection,
     `select principal_id, assignment_count, role_assignments
     from azure_identity_role_assignment_enrichment
-    where run_id = '${status.latestRunId}'`
+    where run_id = '${status.latestRunId}'
+    ${principalIdFilter ? `and lower(principal_id) in (${principalIdFilter})` : ""}`
   );
   const riskRows = await readRows<AzureIdentityAccessRiskEnrichmentRow>(
     connection,
     `select principal_id, risk_level, assignment_count, high_risk_assignment_count,
       broad_scope_assignment_count, role_assignments
     from azure_identity_access_risk_enrichment
-    where run_id = '${status.latestRunId}'`
+    where run_id = '${status.latestRunId}'
+    ${principalIdFilter ? `and lower(principal_id) in (${principalIdFilter})` : ""}`
   );
   const managedIdentityRows = await readRows<AzureManagedIdentityAssignmentEnrichmentRow>(
     connection,
     `select service_principal_id, principal_id, client_id, assignment_count, assigned_resource_groups,
       managed_identity_assignments
     from azure_managed_identity_assignment_enrichment
-    where run_id = '${status.latestRunId}'`
+    where run_id = '${status.latestRunId}'
+    ${identityAssignmentFilter ? `and (
+      lower(service_principal_id) in (${identityAssignmentFilter})
+      or lower(principal_id) in (${identityAssignmentFilter})
+      or lower(client_id) in (${identityAssignmentFilter})
+    )` : ""}`
   );
 
   return {
@@ -562,6 +582,14 @@ function uniqueSorted(values: string[]): string[] {
 
 function normalizeKey(value: string): string {
   return value.toLowerCase();
+}
+
+function normalizeKeys(values: string[]): string[] {
+  return [...new Set(values.map((value) => normalizeKey(value.trim())).filter(Boolean))];
+}
+
+function toSqlStringList(values: string[]): string {
+  return values.map((value) => `'${value.replaceAll("'", "''")}'`).join(", ");
 }
 
 async function readRows<Row extends Record<string, unknown>>(

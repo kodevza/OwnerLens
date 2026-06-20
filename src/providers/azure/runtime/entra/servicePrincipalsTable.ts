@@ -1,6 +1,13 @@
 import type { DuckDBConnection, DuckDBValue } from "@duckdb/node-api";
 
+import type { LocalReportCollectionFilter } from "../../../../core/runtime/collections";
+import type { PageOptions } from "../../../../core/runtime/pagination";
 import type { EntraServicePrincipal } from "../../inputTransferObject/generated/EntraSnapshot";
+
+export type EntraServicePrincipalRowsQueryOptions = PageOptions & {
+  filters?: LocalReportCollectionFilter[];
+  principalKind?: "servicePrincipal" | "managedIdentity";
+};
 
 export async function insertEntraServicePrincipalRows(
   connection: DuckDBConnection,
@@ -52,7 +59,12 @@ export async function insertEntraServicePrincipalRows(
   }
 }
 
-export async function readEntraServicePrincipalRows(connection: DuckDBConnection): Promise<EntraServicePrincipal[]> {
+export async function readEntraServicePrincipalRows(
+  connection: DuckDBConnection,
+  options: EntraServicePrincipalRowsQueryOptions = {}
+): Promise<EntraServicePrincipal[]> {
+  const lookupLimit = getServicePrincipalRowsLookupLimit(options);
+  const query = buildServicePrincipalRowsQuery(options);
   const rows = await readRows<EntraServicePrincipalRow>(
     connection,
     `select
@@ -74,10 +86,44 @@ export async function readEntraServicePrincipalRows(connection: DuckDBConnection
       application_owners,
       metadata
     from entra_service_principals
-    order by ordinal`
+    ${query.whereSql}
+    order by ordinal
+    ${lookupLimit === null ? "" : "limit $limit"}`,
+    {
+      ...query.params,
+      ...(lookupLimit === null ? {} : { limit: lookupLimit })
+    }
   );
 
   return rows.map(mapServicePrincipalRow);
+}
+
+export async function countEntraServicePrincipalRows(
+  connection: DuckDBConnection,
+  options: EntraServicePrincipalRowsQueryOptions = {}
+): Promise<number> {
+  const query = buildServicePrincipalRowsQuery(options);
+  const rows = await readRows<{ count: number | string }>(
+    connection,
+    `select count(*) as count
+    from entra_service_principals
+    ${query.whereSql}`,
+    query.params
+  );
+
+  return Number(rows[0]?.count ?? 0);
+}
+
+export function getDuckDbServicePrincipalFilters(
+  filters: LocalReportCollectionFilter[] = []
+): LocalReportCollectionFilter[] {
+  return filters.filter(isDuckDbServicePrincipalFilter);
+}
+
+export function getRuntimeServicePrincipalFilters(
+  filters: LocalReportCollectionFilter[] = []
+): LocalReportCollectionFilter[] {
+  return filters.filter((filter) => !isDuckDbServicePrincipalFilter(filter));
 }
 
 export async function readEntraServicePrincipalRowById(
@@ -175,3 +221,69 @@ function parseJsonObject(value: string | null | undefined): Record<string, unkno
 function normalizeImportedTags(tags: readonly string[] | null | undefined): string[] {
   return (tags ?? []).map((tag) => tag.replaceAll("=", ":"));
 }
+
+function getServicePrincipalRowsLookupLimit(options: PageOptions): number | null {
+  if (options.page === undefined || options.pageSize === undefined) {
+    return null;
+  }
+
+  return Math.max(1, Math.trunc(options.page) * Math.trunc(options.pageSize));
+}
+
+function buildServicePrincipalRowsQuery(options: EntraServicePrincipalRowsQueryOptions): {
+  whereSql: string;
+  params: Record<string, DuckDBValue>;
+} {
+  const clauses: string[] = [];
+  const params: Record<string, DuckDBValue> = {};
+
+  if (options.principalKind === "servicePrincipal") {
+    clauses.push("service_principal_type <> 'ManagedIdentity'");
+  }
+
+  if (options.principalKind === "managedIdentity") {
+    clauses.push("service_principal_type = 'ManagedIdentity'");
+  }
+
+  for (const [filterIndex, filter] of getDuckDbServicePrincipalFilters(options.filters).entries()) {
+    const values = filter.values.map((value) => value.trim()).filter(Boolean);
+
+    if (values.length === 0) {
+      continue;
+    }
+
+    const columnSql = duckDbServicePrincipalFilterColumns[filter.column];
+    const valueClauses = values.map((value, valueIndex) => {
+      const paramName = `filter_${filterIndex}_${valueIndex}`;
+      params[paramName] = value;
+      return `regexp_matches(${columnSql}, $${paramName}, 'i')`;
+    });
+
+    clauses.push(`(${valueClauses.join(" or ")})`);
+  }
+
+  return {
+    whereSql: clauses.length > 0 ? `where ${clauses.join(" and ")}` : "",
+    params
+  };
+}
+
+function isDuckDbServicePrincipalFilter(filter: LocalReportCollectionFilter): boolean {
+  return Object.prototype.hasOwnProperty.call(duckDbServicePrincipalFilterColumns, filter.column);
+}
+
+const duckDbServicePrincipalFilterColumns: Record<string, string> = {
+  id: "coalesce(id, '')",
+  appId: "coalesce(app_id, '')",
+  displayName: "coalesce(display_name, '')",
+  appDisplayName: "coalesce(app_display_name, '')",
+  servicePrincipalType: "coalesce(service_principal_type, '')",
+  publisherName: "coalesce(publisher_name, '')",
+  accountEnabled: "cast(account_enabled as varchar)",
+  appOwnerOrganizationId: "coalesce(app_owner_organization_id, '')",
+  homepage: "coalesce(homepage, '')",
+  loginUrl: "coalesce(login_url, '')",
+  replyUrls: "coalesce(cast(reply_urls as varchar), '')",
+  servicePrincipalNames: "coalesce(cast(service_principal_names as varchar), '')",
+  tags: "coalesce(cast(tags as varchar), '')"
+};

@@ -11,6 +11,8 @@ import type {
   EntraUserGroupMembershipResponse
 } from "../../../../core/azure/entra/types";
 import type { PermissionRiskLevel } from "../../../../core/risk/types";
+import type { LocalReportCollectionFilter } from "../../../../core/runtime/collections";
+import type { PageOptions } from "../../../../core/runtime/pagination";
 import type {
   EntraOAuth2PermissionGrant as InputEntraOAuth2PermissionGrant,
   EntraServicePrincipal
@@ -22,7 +24,11 @@ import { mapEntraServicePrincipalsToCore } from "./entraServicePrincipalMapper";
 import { readEntraUserGroupMembership } from "./groupMembersTable";
 import { readEntraOAuth2PermissionGrantRows } from "./oauth2PermissionGrantsTable";
 import { toManagedIdentities, toServicePrincipals } from "./principalProjection";
-import { readEntraServicePrincipalRowById, readEntraServicePrincipalRows } from "./servicePrincipalsTable";
+import {
+  countEntraServicePrincipalRows,
+  readEntraServicePrincipalRowById,
+  readEntraServicePrincipalRows
+} from "./servicePrincipalsTable";
 
 export type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
 export type { ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
@@ -34,6 +40,15 @@ export type EntraPrincipalPermissions = {
   appRoleAssignments: EntraAppRoleAssignment[];
 };
 
+export type EntraPrincipalReadOptions = PageOptions & {
+  filters?: LocalReportCollectionFilter[];
+};
+
+export type EntraPermissionReadOptions = {
+  principalId?: string;
+  principalIds?: string[];
+};
+
 export async function readRawServicePrincipals(
   connection: DuckDBConnection
 ): Promise<EntraServicePrincipal[]> {
@@ -41,15 +56,33 @@ export async function readRawServicePrincipals(
 }
 
 export async function readServicePrincipals(
-  connection: DuckDBConnection
+  connection: DuckDBConnection,
+  options: EntraPrincipalReadOptions = {}
 ): Promise<ServicePrincipal[]> {
-  const permissionsByPrincipalId = await readPrincipalPermissionSummary(connection);
+  const servicePrincipals = mapEntraServicePrincipalsToCore(await readEntraServicePrincipalRows(connection, {
+    ...options,
+    principalKind: "servicePrincipal"
+  }));
+  const permissionsByPrincipalId = await readPrincipalPermissionSummary(
+    connection,
+    getPrincipalIds(servicePrincipals)
+  );
 
   return toServicePrincipals(
-    mapEntraServicePrincipalsToCore(await readEntraServicePrincipalRows(connection)),
-    await readLatestAzureIdentityEnrichment(connection),
+    servicePrincipals,
+    await readLatestAzureIdentityEnrichment(connection, getPrincipalEnrichmentKeys(servicePrincipals)),
     permissionsByPrincipalId
   );
+}
+
+export async function countServicePrincipals(
+  connection: DuckDBConnection,
+  options: EntraPrincipalReadOptions = {}
+): Promise<number> {
+  return countEntraServicePrincipalRows(connection, {
+    ...options,
+    principalKind: "servicePrincipal"
+  });
 }
 
 export async function findServicePrincipalById(
@@ -62,58 +95,79 @@ export async function findServicePrincipalById(
     return null;
   }
 
-  const permissionsByPrincipalId = await readPrincipalPermissionSummary(connection);
+  const servicePrincipals = mapEntraServicePrincipalsToCore([servicePrincipal]);
+  const permissionsByPrincipalId = await readPrincipalPermissionSummary(
+    connection,
+    getPrincipalIds(servicePrincipals)
+  );
 
   return toServicePrincipals(
-    mapEntraServicePrincipalsToCore([servicePrincipal]),
-    await readLatestAzureIdentityEnrichment(connection),
+    servicePrincipals,
+    await readLatestAzureIdentityEnrichment(connection, getPrincipalEnrichmentKeys(servicePrincipals)),
     permissionsByPrincipalId
   )[0] ?? null;
 }
 
 export async function readManagedIdentities(
-  connection: DuckDBConnection
+  connection: DuckDBConnection,
+  options: EntraPrincipalReadOptions = {}
 ): Promise<ManagedIdentity[]> {
-  const permissionsByPrincipalId = await readPrincipalPermissionSummary(connection);
+  const managedIdentityPrincipals = mapEntraServicePrincipalsToCore(await readEntraServicePrincipalRows(connection, {
+    ...options,
+    principalKind: "managedIdentity"
+  }));
+  const permissionsByPrincipalId = await readPrincipalPermissionSummary(
+    connection,
+    getPrincipalIds(managedIdentityPrincipals)
+  );
 
   return toManagedIdentities(
-    mapEntraServicePrincipalsToCore(await readEntraServicePrincipalRows(connection)),
-    await readLatestAzureIdentityEnrichment(connection),
+    managedIdentityPrincipals,
+    await readLatestAzureIdentityEnrichment(connection, getPrincipalEnrichmentKeys(managedIdentityPrincipals)),
     permissionsByPrincipalId
   );
 }
 
+export async function countManagedIdentities(
+  connection: DuckDBConnection,
+  options: EntraPrincipalReadOptions = {}
+): Promise<number> {
+  return countEntraServicePrincipalRows(connection, {
+    ...options,
+    principalKind: "managedIdentity"
+  });
+}
+
 export async function readOAuth2PermissionGrants(
-  connection: DuckDBConnection
+  connection: DuckDBConnection,
+  options: EntraPermissionReadOptions = {}
 ): Promise<EntraOAuth2PermissionGrant[]> {
-  return (await readEntraOAuth2PermissionGrantRows(connection)).map(toCoreEntraOAuth2PermissionGrant);
+  return (await readEntraOAuth2PermissionGrantRows(connection, {
+    clientId: options.principalId,
+    clientIds: options.principalIds
+  })).map(toCoreEntraOAuth2PermissionGrant);
 }
 
 export async function readAppRoleAssignments(
-  connection: DuckDBConnection
+  connection: DuckDBConnection,
+  options: EntraPermissionReadOptions = {}
 ): Promise<EntraAppRoleAssignment[]> {
-  return readEntraAppRoleAssignmentRows(connection);
+  return readEntraAppRoleAssignmentRows(connection, options);
 }
 
 export async function readPrincipalPermissions(
   connection: DuckDBConnection,
   principalId: string
 ): Promise<EntraPrincipalPermissions> {
-  const normalizedPrincipalId = principalId.toLowerCase();
-
   const [oauth2PermissionGrants, appRoleAssignments] = await Promise.all([
-    readEntraOAuth2PermissionGrantRows(connection),
-    readEntraAppRoleAssignmentRows(connection)
+    readEntraOAuth2PermissionGrantRows(connection, { clientId: principalId }),
+    readEntraAppRoleAssignmentRows(connection, { principalId })
   ]);
 
   return {
     principalId,
-    oauth2PermissionGrants: oauth2PermissionGrants
-      .filter((grant) => grant.clientId.toLowerCase() === normalizedPrincipalId)
-      .map(toCoreEntraOAuth2PermissionGrant),
-    appRoleAssignments: appRoleAssignments.filter(
-      (assignment) => assignment.principalId.toLowerCase() === normalizedPrincipalId
-    )
+    oauth2PermissionGrants: oauth2PermissionGrants.map(toCoreEntraOAuth2PermissionGrant),
+    appRoleAssignments
   };
 }
 
@@ -125,11 +179,17 @@ export async function readUserGroupMembership(
 }
 
 async function readPrincipalPermissionSummary(
-  connection: DuckDBConnection
+  connection: DuckDBConnection,
+  principalIds: string[]
 ): Promise<Map<string, EntraPrincipalPermissionSummary>> {
+  const normalizedPrincipalIds = normalizePrincipalIds(principalIds);
+  if (normalizedPrincipalIds.length === 0) {
+    return new Map();
+  }
+
   const [oauth2PermissionGrants, appRoleAssignments] = await Promise.all([
-    readEntraOAuth2PermissionGrantRows(connection),
-    readEntraAppRoleAssignmentRows(connection)
+    readEntraOAuth2PermissionGrantRows(connection, { clientIds: normalizedPrincipalIds }),
+    readEntraAppRoleAssignmentRows(connection, { principalIds: normalizedPrincipalIds })
   ]);
   const permissionsByPrincipalId = new Map<string, EntraPrincipalPermissionSummary>();
 
@@ -152,6 +212,14 @@ async function readPrincipalPermissionSummary(
   }
 
   return permissionsByPrincipalId;
+}
+
+function getPrincipalIds(servicePrincipals: Pick<EntraServicePrincipal, "id">[]): string[] {
+  return servicePrincipals.map((servicePrincipal) => servicePrincipal.id);
+}
+
+function normalizePrincipalIds(principalIds: string[]): string[] {
+  return [...new Set(principalIds.map((principalId) => principalId.trim()).filter(Boolean))];
 }
 
 function getOrCreatePrincipalPermissionSummary(
@@ -210,3 +278,7 @@ const permissionRiskRank: Record<PermissionRiskLevel, number> = {
   medium: 2,
   high: 3
 };
+
+function getPrincipalEnrichmentKeys(servicePrincipals: Pick<EntraServicePrincipal, "id" | "appId">[]): string[] {
+  return servicePrincipals.flatMap((servicePrincipal) => [servicePrincipal.id, servicePrincipal.appId]);
+}
