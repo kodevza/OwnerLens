@@ -3078,6 +3078,99 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
   });
 });
 
+test("applies disabled resource group owner evidence when reading managed identity ownership evidence", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    meta: {
+      provider: "entra",
+      snapshotVersion: "0.4",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      tenantId: "tenant-1",
+      account: "owner@example.test",
+      scopes: [],
+      servicePrincipalCount: 1,
+      applicationCount: 0,
+      oauth2PermissionGrantCount: 0,
+      appRoleAssignmentCount: 0
+    },
+    servicePrincipals: [
+      servicePrincipal("principal-uami-1", "client-1", "Identity app", "ManagedIdentity")
+    ],
+    applications: [],
+    oauth2PermissionGrants: [],
+    appRoleAssignments: []
+  };
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      userAssignedManagedIdentityCount: 1
+    },
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-app",
+        location: "westeurope",
+        tags: { ownerGroup: "platform-team" }
+      }
+    ],
+    userAssignedManagedIdentities: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceId: "/subscriptions/sub-1/resourceGroups/rg-app/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-a",
+        name: "uami-a",
+        resourceGroup: "rg-app",
+        location: "westeurope",
+        clientId: "client-1",
+        principalId: "principal-uami-1",
+        tenantId: "tenant-1",
+        tags: null
+      }
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await runtime.initialize();
+
+    await expect(
+      runtime.readOwnershipEvidence({ kind: "managedIdentity", principalId: "principal-uami-1" })
+    ).resolves.toMatchObject({
+      evidence: [
+        {
+          ownerCandidateKey: "ownerGroup:platform-team",
+          ownerDisplayName: "platform-team",
+          confidence: "high",
+          evidence: "ownerGroup=platform-team"
+        }
+      ]
+    });
+
+    await expect(
+      runtime.setOwnerCandidateDisabled(
+        "resourceGroup:sub-1:rg-app:principal:principal-uami-1:ownerGroup:platform-team",
+        true
+      )
+    ).resolves.toBe(1);
+
+    await expect(
+      runtime.readOwnershipEvidence({ kind: "managedIdentity", principalId: "principal-uami-1" })
+    ).resolves.toMatchObject({
+      evidence: [
+        {
+          ownerCandidateKey: "ownerGroup:platform-team",
+          ownerDisplayName: "platform-team",
+          confidence: "none",
+          evidence: "ownerGroup=platform-team",
+          disabled: true
+        }
+      ]
+    });
+  });
+});
+
 test("closes runtime DuckDB file lock", async () => {
   await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
     await runtime.initialize();

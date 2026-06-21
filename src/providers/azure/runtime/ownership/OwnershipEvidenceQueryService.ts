@@ -26,10 +26,12 @@ import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureRe
 export type OwnershipEvidenceRequest =
   | {
       kind: "servicePrincipal" | "managedIdentity";
+      azureRbac?: boolean;
       principalId: string;
     }
   | {
       kind: "resourceGroup";
+      azureRbac?: boolean;
       subscriptionId: string;
       resourceGroup: string;
       page?: number;
@@ -41,7 +43,9 @@ export type OwnershipEvidenceQueryServiceOptions = {
   azureResources: LocalAzureResourcesReportRuntime;
 };
 
-type ResourceGroupOwnershipEvidenceRequest = Extract<OwnershipEvidenceRequest, { kind: "resourceGroup" }>;
+type ResourceGroupOwnershipEvidenceRequest = Extract<OwnershipEvidenceRequest, { kind: "resourceGroup" }> & {
+  principalIds?: string[];
+};
 const DEFAULT_RESOURCE_GROUP_OWNERSHIP_EVIDENCE_LIMIT = 100;
 
 export class OwnershipEvidenceQueryService {
@@ -136,7 +140,8 @@ export class OwnershipEvidenceQueryService {
       return this.readResourceGroupEvidence({
         kind: "resourceGroup",
         subscriptionId: identityResourceGroup.subscriptionId,
-        resourceGroup: identityResourceGroup.resourceGroup
+        resourceGroup: identityResourceGroup.resourceGroup,
+        principalIds: [row.id]
       });
     }
 
@@ -178,7 +183,8 @@ export class OwnershipEvidenceQueryService {
     const ownerRows = await this.azureResources.readAzureResourceGroupOwnershipSqlRows(
       {
         subscriptionIds: [request.subscriptionId],
-        resourceGroups: [request.resourceGroup]
+        resourceGroups: [request.resourceGroup],
+        principalIds: request.principalIds
       },
       getResourceGroupOwnershipLookupLimit(request)
     );
