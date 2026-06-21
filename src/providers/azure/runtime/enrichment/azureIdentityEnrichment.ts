@@ -18,8 +18,8 @@ import { evaluateAzureRoleAssignmentRisk } from "./evaluateAzureRoleAssignmentRi
 import { getResourceManagedIdentityAssignments } from "../entra/buildAzureManagedIdentityAssignmentIndex";
 import type { AzureManagedIdentityResourceAssignment } from "../entra/azureIdentityTypes";
 import type { EntraServicePrincipal, InputEntraGroupMember } from "../../inputTransferObject/generated/EntraSnapshot";
-import { readEntraGroupMemberRows } from "../entra/groupMembersTable";
-import { readEntraServicePrincipalRows } from "../entra/servicePrincipalsTable";
+import { readEntraGroupMemberRows } from "../entra/domain/groupMembersTable";
+import { readEntraServicePrincipalRows } from "../entra/domain/servicePrincipalsTable";
 import { readAzureResourceRows, readAzureRoleAssignmentRows } from "../resources/tables";
 
 export type {

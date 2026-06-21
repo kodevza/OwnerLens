@@ -23,12 +23,13 @@ import type { AzureResourcesCollectionQueryService } from "../resources/AzureRes
 import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
 import type { ExportService } from "../ExportService";
 import type { LocalEntraReportRuntime } from "./LocalEntraReportRuntime";
-import { getRuntimeServicePrincipalFilters } from "./servicePrincipalsTable";
+import { getRuntimeServicePrincipalFilters } from "./domain/servicePrincipalsTable";
 import {
   projectManagedIdentityOwners,
   projectServicePrincipalOwners
 } from "../ownership/principalOwnerProjection";
 import { readEntraPrincipalDirectOwnerCandidates } from "../ownership/OwnershipEvidenceHelper";
+import { maxOwnerConfidence } from "../../../../core/ownership/ownerCandidateRanking";
 import type { OwnerCandidate, OwnerConfidence } from "../../../../core/ownership/types";
 
 export type EntraZeroTrustAssessmentQueries = {
@@ -42,13 +43,6 @@ export type EntraCollectionQueryServiceOptions = {
   azureResourcesQueries: AzureResourcesCollectionQueryService;
   zeroTrustAssessmentQueries: EntraZeroTrustAssessmentQueries;
   exportService: ExportService;
-};
-
-const OWNER_CONFIDENCE_RANK: Record<OwnerConfidence, number> = {
-  none: 0,
-  low: 1,
-  medium: 2,
-  high: 3
 };
 
 export class EntraCollectionQueryService {
@@ -345,10 +339,6 @@ function buildDirectOwnerProjection(ownerCandidates: OwnerCandidate[]): {
       "none"
     )
   };
-}
-
-function maxOwnerConfidence(left: OwnerConfidence, right: OwnerConfidence): OwnerConfidence {
-  return OWNER_CONFIDENCE_RANK[left] >= OWNER_CONFIDENCE_RANK[right] ? left : right;
 }
 
 function enrichServicePrincipalsWithResourceGroupOwners(

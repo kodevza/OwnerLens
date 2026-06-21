@@ -1,6 +1,6 @@
 import type { DuckDBConnection, DuckDBValue } from "@duckdb/node-api";
 
-import type { EntraOAuth2PermissionGrant } from "../../inputTransferObject/generated/EntraSnapshot";
+import type { EntraOAuth2PermissionGrant } from "../../../inputTransferObject/generated/EntraSnapshot";
 
 export async function insertEntraOAuth2PermissionGrantRows(
   connection: DuckDBConnection,

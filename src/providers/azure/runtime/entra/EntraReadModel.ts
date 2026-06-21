@@ -19,16 +19,16 @@ import type {
 } from "../../inputTransferObject/generated/EntraSnapshot";
 
 import { readLatestAzureIdentityEnrichment } from "../enrichment/azureIdentityEnrichment";
-import { readEntraAppRoleAssignmentRows } from "./appRoleAssignmentsTable";
+import { readEntraAppRoleAssignmentRows } from "./domain/appRoleAssignmentsTable";
 import { mapEntraServicePrincipalsToCore } from "./entraServicePrincipalMapper";
-import { readEntraUserGroupMembership } from "./groupMembersTable";
-import { readEntraOAuth2PermissionGrantRows } from "./oauth2PermissionGrantsTable";
+import { readEntraUserGroupMembership } from "./domain/groupMembersTable";
+import { readEntraOAuth2PermissionGrantRows } from "./domain/oauth2PermissionGrantsTable";
 import { toManagedIdentities, toServicePrincipals } from "./principalProjection";
 import {
   countEntraServicePrincipalRows,
   readEntraServicePrincipalRowById,
   readEntraServicePrincipalRows
-} from "./servicePrincipalsTable";
+} from "./domain/servicePrincipalsTable";
 
 export type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
 export type { ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";

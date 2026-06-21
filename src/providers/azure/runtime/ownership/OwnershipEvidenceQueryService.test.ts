@@ -636,6 +636,83 @@ test("prefers direct managed identity owner evidence over Azure RBAC evidence", 
   expect(readAzureResourceGroupOwnershipSqlRows).not.toHaveBeenCalled();
 });
 
+test("falls back to Azure RBAC when all direct managed identity owner evidence is disabled", async () => {
+  const readAzureResourceGroupOwnershipSqlRows = jest.fn().mockResolvedValue([
+    {
+      subscriptionId: "sub-1",
+      subscriptionName: "Production",
+      resourceGroup: "rg-mi",
+      location: "westeurope",
+      tags: { ownerGroup: "resource-group-owner" },
+      targetKey: "resourceGroup:sub-1:rg-mi",
+      kind: "resourceGroup",
+      owner: "resource-group-owner",
+      ownerCandidate: "ownerGroup:resource-group-owner",
+      ownerDisplayName: "resource-group-owner",
+      principalId: "mi-principal-id",
+      confidence: "high",
+      source: "tag.ownerGroup",
+      evidence: [{ user: "ownerGroup=resource-group-owner", date: null }]
+    }
+  ]);
+  const service = new OwnershipEvidenceQueryService({
+    entraQueries: {
+      readManagedIdentityRows: jest.fn().mockResolvedValue([
+        managedIdentity({
+          id: "mi-principal-id",
+          appId: "mi-client-id",
+          displayName: "uami-api",
+          resourceGroup: "rg-mi",
+          tags: {
+            ownerGroup: "identity-platform"
+          }
+        })
+      ])
+    },
+    azureResources: {
+      readAzureResourceGroupOwnershipSqlRows,
+      readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([
+        {
+          subscriptionId: "sub-1",
+          subscriptionName: "Production",
+          resourceId: "/subscriptions/sub-1/resourceGroups/rg-mi/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-api",
+          name: "uami-api",
+          resourceGroup: "rg-mi",
+          location: "westeurope",
+          clientId: "mi-client-id",
+          principalId: "mi-principal-id",
+          tenantId: "tenant-1",
+          tags: null
+        }
+      ])
+    },
+    disabledEvidenceStore: {
+      readKeys: jest.fn().mockResolvedValue(new Set(["ownerGroup:identity-platform"]))
+    }
+  } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
+
+  await expect(
+    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID", azureRbac: true })
+  ).resolves.toMatchObject({
+    evidence: [
+      {
+        ownerCandidateKey: "ownerGroup:resource-group-owner",
+        ownerDisplayName: "resource-group-owner",
+        confidence: "high",
+        evidence: "ownerGroup=resource-group-owner"
+      }
+    ]
+  });
+  expect(readAzureResourceGroupOwnershipSqlRows).toHaveBeenCalledWith(
+    {
+      subscriptionIds: ["sub-1"],
+      resourceGroups: ["rg-mi"],
+      principalIds: ["mi-principal-id"]
+    },
+    100
+  );
+});
+
 test("returns direct service principal owner and tag evidence for a managed identity", async () => {
   const service = buildOwnershipEvidenceService({
     azureSnapshot: azureSnapshot({

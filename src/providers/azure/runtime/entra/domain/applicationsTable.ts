@@ -1,6 +1,6 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
-import type { EntraApplication } from "../../inputTransferObject/generated/EntraSnapshot";
+import type { EntraApplication } from "../../../inputTransferObject/generated/EntraSnapshot";
 
 export async function insertEntraApplicationRows(
   connection: DuckDBConnection,

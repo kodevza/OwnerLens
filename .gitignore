@@ -14,3 +14,4 @@ src/providers/azure/inputTransferObject/
 playwright-report/
 test-results/
 testResults.xml
+*TS*md

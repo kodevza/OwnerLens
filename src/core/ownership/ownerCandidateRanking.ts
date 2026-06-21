@@ -1,6 +1,6 @@
 import type { OwnerCandidate, OwnerCandidateSource, OwnerConfidence } from "./types";
 
-const CONFIDENCE_WEIGHT: Record<OwnerConfidence, number> = {
+export const OWNER_CONFIDENCE_RANK: Record<OwnerConfidence, number> = {
   none: 0,
   low: 1,
   medium: 2,
@@ -25,9 +25,13 @@ export function rankOwnerCandidates(candidates: OwnerCandidate[]): OwnerCandidat
     }));
 }
 
+export function maxOwnerConfidence(left: OwnerConfidence, right: OwnerConfidence): OwnerConfidence {
+  return OWNER_CONFIDENCE_RANK[left] >= OWNER_CONFIDENCE_RANK[right] ? left : right;
+}
+
 function compareOwnerCandidates(left: OwnerCandidate, right: OwnerCandidate): number {
   return (
-    compareDescending(CONFIDENCE_WEIGHT[left.confidence], CONFIDENCE_WEIGHT[right.confidence]) ||
+    compareDescending(OWNER_CONFIDENCE_RANK[left.confidence], OWNER_CONFIDENCE_RANK[right.confidence]) ||
     compareDescending(SOURCE_WEIGHT[left.source], SOURCE_WEIGHT[right.source]) ||
     compareDescending(left.relatedScopes.length, right.relatedScopes.length) ||
     compareDescending(left.evidence.length, right.evidence.length) ||

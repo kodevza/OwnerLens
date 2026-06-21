@@ -1,7 +1,7 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
-import type { EntraSnapshot } from "../../inputTransferObject/generated/EntraSnapshot";
-import type { LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
+import type { EntraSnapshot } from "../../../inputTransferObject/generated/EntraSnapshot";
+import type { LocalSnapshotData } from "../../../../../core/runtime/localSnapshotFiles";
 
 export async function importEntraSnapshotMetadata(
   connection: DuckDBConnection,

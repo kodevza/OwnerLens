@@ -1,8 +1,8 @@
 import type { DuckDBConnection, DuckDBValue } from "@duckdb/node-api";
 
-import type { LocalReportCollectionFilter } from "../../../../core/runtime/collections";
-import type { PageOptions } from "../../../../core/runtime/pagination";
-import type { EntraServicePrincipal } from "../../inputTransferObject/generated/EntraSnapshot";
+import type { LocalReportCollectionFilter } from "../../../../../core/runtime/collections";
+import type { PageOptions } from "../../../../../core/runtime/pagination";
+import type { EntraServicePrincipal } from "../../../inputTransferObject/generated/EntraSnapshot";
 
 export type EntraServicePrincipalRowsQueryOptions = PageOptions & {
   filters?: LocalReportCollectionFilter[];

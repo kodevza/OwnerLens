@@ -128,7 +128,7 @@ export class OwnershipEvidenceQueryService {
 
   private async readServicePrincipalOwnerCandidates(row: ServicePrincipal): Promise<OwnerCandidate[]> {
     const directOwnerCandidates = await this.readDirectServicePrincipalOwnerCandidates(row);
-    if (directOwnerCandidates.length > 0) {
+    if (hasActiveOwnerEvidence(directOwnerCandidates)) {
       return directOwnerCandidates;
     }
 
@@ -180,7 +180,7 @@ export class OwnershipEvidenceQueryService {
     }
 
     const directOwnerCandidates = await this.readDirectManagedIdentityOwnerCandidates(row);
-    if (directOwnerCandidates.length > 0) {
+    if (hasActiveOwnerEvidence(directOwnerCandidates)) {
       return {
         target: {
           kind: "managedIdentity",
@@ -275,6 +275,12 @@ export class OwnershipEvidenceQueryService {
       evidence: flattenCandidateEvidence(ownerRows.flatMap(mapResourceGroupOwnershipSqlRowToOwnerCandidate))
     };
   }
+}
+
+function hasActiveOwnerEvidence(candidates: OwnerCandidate[]): boolean {
+  return candidates.some((candidate) =>
+    candidate.evidence.some((evidence) => evidence.disabled !== true)
+  );
 }
 
 function getResourceGroupOwnershipLookupLimit(options: PageOptions): number {
