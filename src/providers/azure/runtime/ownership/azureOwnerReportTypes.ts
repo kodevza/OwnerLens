@@ -1,4 +1,4 @@
-import type { OwnerResolution } from "../../../core/ownership/types";
+import type { OwnerResolution } from "../../../../core/ownership/types";
 
 export type OwnerReportRow = OwnerResolution & {
   kind: "subscription" | "resourceGroup";

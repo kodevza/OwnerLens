@@ -13,7 +13,7 @@ import type {
 } from "../../../../core/azure/resources";
 import type { EntraServicePrincipal } from "../../../../core/azure/entra/types";
 import type { PermissionRiskLevel } from "../../../../core/risk/types";
-import type { OwnerReportRow } from "../../ownership/azureOwnerReportTypes";
+import type { OwnerReportRow } from "../ownership/azureOwnerReportTypes";
 import { evaluateAzureRoleAssignmentRisk } from "../enrichment/evaluateAzureRoleAssignmentRisk";
 
 export function buildResourceGroupOwnershipRows(

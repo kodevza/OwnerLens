@@ -46,7 +46,8 @@ export class OwnershipRuntime {
   private getEvidenceQueries(): OwnershipEvidenceQueryService {
     this.evidenceQueries ??= new OwnershipEvidenceQueryService({
       entraQueries: this.getEntraQueries(),
-      azureResources: this.azureResources
+      azureResources: this.azureResources,
+      disabledEvidenceStore: this.disabledEvidenceStore
     });
 
     return this.evidenceQueries;

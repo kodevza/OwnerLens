@@ -3,7 +3,7 @@ import type { AzureRbac } from "../../../../core/azure/azureRbac";
 import type { AzureRoleAssignment, ResourceGroupOwnershipRow } from "../../../../core/azure/resources";
 
 import { evaluateAzureRoleAssignmentRisk } from "../enrichment/evaluateAzureRoleAssignmentRisk";
-import { buildAzureOwnershipReport } from "../../ownership/buildAzureOwnershipReport";
+import { buildAzureOwnershipReport } from "../ownership/buildAzureOwnershipReport";
 import {
   buildPaginatedCollection,
   type LocalReportCollectionQueryOptions,

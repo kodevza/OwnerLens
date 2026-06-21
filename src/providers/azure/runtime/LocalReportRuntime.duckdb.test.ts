@@ -3204,8 +3204,14 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       servicePrincipalCount: 2
     },
     servicePrincipals: [
-      servicePrincipal("sp-1", "app-1", "Application app", "Application"),
-      servicePrincipal("principal-uami-1", "client-1", "Identity app", "ManagedIdentity")
+      servicePrincipal("sp-1", "app-1", "Application app", {
+        servicePrincipalType: "Application",
+        servicePrincipalOwners: [{ id: "owner-sp-direct-1", displayName: "sp-direct-owner@example.test" }]
+      }),
+      servicePrincipal("principal-uami-1", "client-1", "Identity app", {
+        servicePrincipalType: "ManagedIdentity",
+        servicePrincipalOwners: [{ id: "owner-direct-1", displayName: "direct-owner@example.test" }]
+      })
     ],
     oauth2PermissionGrants: [],
     appRoleAssignments: []
@@ -3314,8 +3320,8 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       rows: [
         expect.objectContaining({
           id: "sp-1",
-          potentialOwners: [],
-          ownerConfidence: "none"
+          potentialOwners: ["sp-direct-owner@example.test"],
+          ownerConfidence: "high"
         })
       ]
     });
@@ -3335,7 +3341,7 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
       rows: [
         expect.objectContaining({
           id: "principal-uami-1",
-          potentialOwners: ["alice@example.test"],
+          potentialOwners: ["direct-owner@example.test"],
           ownerConfidence: "high"
         })
       ]
@@ -3396,6 +3402,7 @@ function servicePrincipal(
   options: "Application" | "ManagedIdentity" | {
     servicePrincipalType: "Application" | "ManagedIdentity";
     tags?: string[];
+    servicePrincipalOwners?: EntraSnapshot["servicePrincipals"][number]["servicePrincipalOwners"];
   }
 ): EntraSnapshot["servicePrincipals"][number] {
   const servicePrincipalType = typeof options === "string" ? options : options.servicePrincipalType;
@@ -3415,7 +3422,7 @@ function servicePrincipal(
     servicePrincipalNames: [],
     tags: typeof options === "string" ? [] : options.tags ?? [],
     appRoles: [],
-    servicePrincipalOwners: [],
+    servicePrincipalOwners: typeof options === "string" ? [] : options.servicePrincipalOwners ?? [],
     metadata: null
   };
 }

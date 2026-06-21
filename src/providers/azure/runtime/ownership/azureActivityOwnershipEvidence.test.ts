@@ -1,4 +1,4 @@
-import type { EntraServicePrincipal } from "../inputTransferObject/generated/EntraSnapshot";
+import type { EntraServicePrincipal } from "../../inputTransferObject/generated/EntraSnapshot";
 import { buildServicePrincipalIndex, describeIdentity } from "./azureActivityOwnershipEvidence";
 
 test("describes service principals from generated Entra snapshot DTOs", () => {

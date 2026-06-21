@@ -1,6 +1,6 @@
-import type { AzureActivityLog, AzureResourceGroup } from "../../../core/azure/resources";
-import type { Tags } from "../../../core/azure/tags";
-import type { OwnerEvidence, OwnerResolution } from "../../../core/ownership/types";
+import type { AzureActivityLog, AzureResourceGroup } from "../../../../core/azure/resources";
+import type { Tags } from "../../../../core/azure/tags";
+import type { OwnerEvidence, OwnerResolution } from "../../../../core/ownership/types";
 import {
   compareLogsNewestFirst,
   describeIdentity,

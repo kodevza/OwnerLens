@@ -27,7 +27,9 @@ import { getRuntimeServicePrincipalFilters } from "./servicePrincipalsTable";
 import {
   projectManagedIdentityOwners,
   projectServicePrincipalOwners
-} from "../../ownership/principalOwnerProjection";
+} from "../ownership/principalOwnerProjection";
+import { readEntraPrincipalDirectOwnerCandidates } from "../ownership/OwnershipEvidenceHelper";
+import type { OwnerCandidate, OwnerConfidence } from "../../../../core/ownership/types";
 
 export type EntraZeroTrustAssessmentQueries = {
   readRemediationSummaries(): Promise<Map<string, ZtaRemediationSummary>>;
@@ -40,6 +42,13 @@ export type EntraCollectionQueryServiceOptions = {
   azureResourcesQueries: AzureResourcesCollectionQueryService;
   zeroTrustAssessmentQueries: EntraZeroTrustAssessmentQueries;
   exportService: ExportService;
+};
+
+const OWNER_CONFIDENCE_RANK: Record<OwnerConfidence, number> = {
+  none: 0,
+  low: 1,
+  medium: 2,
+  high: 3
 };
 
 export class EntraCollectionQueryService {
@@ -304,21 +313,61 @@ function enrichManagedIdentitiesWithResourceGroupOwners(
   resourceGroupOwnershipRows: ResourceGroupOwnershipRow[],
   userAssignedManagedIdentities: AzureUserAssignedManagedIdentity[]
 ): ManagedIdentity[] {
-  return managedIdentities.map((identity) => ({
-    ...identity,
-    ...projectManagedIdentityOwners(identity.id, identity.appId, resourceGroupOwnershipRows, userAssignedManagedIdentities)
-  }));
+  return managedIdentities.map((identity) => {
+    const resourceGroupProjection = projectManagedIdentityOwners(
+      identity.id,
+      identity.appId,
+      resourceGroupOwnershipRows,
+      userAssignedManagedIdentities
+    );
+    const directOwnerCandidates = readEntraPrincipalDirectOwnerCandidates(identity);
+
+    return {
+      ...identity,
+      ...resourceGroupProjection,
+      ...(directOwnerCandidates.length > 0
+        ? buildDirectOwnerProjection(directOwnerCandidates)
+        : {})
+    };
+  });
+}
+
+function buildDirectOwnerProjection(ownerCandidates: OwnerCandidate[]): {
+  ownerCandidates: OwnerCandidate[];
+  potentialOwners: string[];
+  ownerConfidence: OwnerConfidence;
+} {
+  return {
+    ownerCandidates,
+    potentialOwners: ownerCandidates.map((candidate) => candidate.displayName),
+    ownerConfidence: ownerCandidates.reduce<OwnerConfidence>(
+      (confidence, candidate) => maxOwnerConfidence(confidence, candidate.confidence),
+      "none"
+    )
+  };
+}
+
+function maxOwnerConfidence(left: OwnerConfidence, right: OwnerConfidence): OwnerConfidence {
+  return OWNER_CONFIDENCE_RANK[left] >= OWNER_CONFIDENCE_RANK[right] ? left : right;
 }
 
 function enrichServicePrincipalsWithResourceGroupOwners(
   servicePrincipals: ServicePrincipal[],
   resourceGroupOwnershipRows: ResourceGroupOwnershipRow[]
 ): ServicePrincipal[] {
-  return servicePrincipals.map((servicePrincipal) => ({
-    ...servicePrincipal,
-    ...projectServicePrincipalOwners(
+  return servicePrincipals.map((servicePrincipal) => {
+    const resourceGroupProjection = projectServicePrincipalOwners(
       servicePrincipal.roleAssignments,
       resourceGroupOwnershipRows
-    )
-  }));
+    );
+    const directOwnerCandidates = readEntraPrincipalDirectOwnerCandidates(servicePrincipal);
+
+    return {
+      ...servicePrincipal,
+      ...resourceGroupProjection,
+      ...(directOwnerCandidates.length > 0
+        ? buildDirectOwnerProjection(directOwnerCandidates)
+        : {})
+    };
+  });
 }

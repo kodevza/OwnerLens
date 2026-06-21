@@ -1,4 +1,4 @@
-import { appConfig } from "../../../core/config";
+import { appConfig } from "../../../../core/config";
 import { azureOwnerAdapter } from "./resolveAzureOwner";
 import type { AzureOwnerTagConfigMap, AzureReportConfig } from "./azureOwnershipTypes";
 

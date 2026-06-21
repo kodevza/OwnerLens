@@ -1,6 +1,6 @@
 import type { EntraServicePrincipal, ServicePrincipalType } from "../../../../core/azure/entra/types";
 import type { AzureResourceGroup, AzureRoleAssignment } from "../../../../core/azure/resources";
-import type { OwnerReportRow } from "../../ownership/azureOwnerReportTypes";
+import type { OwnerReportRow } from "../ownership/azureOwnerReportTypes";
 import {
   applyResourceGroupOwnerDisabledEvidence,
   buildResourceGroupOwnershipRows
