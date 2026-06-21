@@ -475,6 +475,75 @@ test("returns resource group evidence for a managed identity with a resolved res
   });
 });
 
+test("reads managed identity ownership evidence with a principal-scoped resource group lookup", async () => {
+  const readAzureResourceGroupOwnershipSqlRows = jest.fn().mockResolvedValue([
+    {
+      subscriptionId: "sub-1",
+      subscriptionName: "Production",
+      resourceGroup: "rg-mi",
+      location: "westeurope",
+      tags: { ownerGroup: "identity-platform" },
+      targetKey: "resourceGroup:sub-1:rg-mi",
+      kind: "resourceGroup",
+      owner: null,
+      ownerCandidate: "ownerGroup:identity-platform",
+      ownerDisplayName: "identity-platform",
+      principalId: "mi-principal-id",
+      confidence: "none",
+      source: "tag.ownerGroup",
+      evidence: [{ user: "ownerGroup=identity-platform", date: null, disabled: true }]
+    }
+  ]);
+  const service = new OwnershipEvidenceQueryService({
+    entraQueries: {
+      readManagedIdentityRows: jest.fn().mockResolvedValue([
+        managedIdentity({
+          id: "mi-principal-id",
+          appId: "mi-client-id",
+          displayName: "uami-api",
+          resourceGroup: "rg-mi"
+        })
+      ])
+    },
+    azureResources: {
+      readAzureResourceGroupOwnershipSqlRows,
+      readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([
+        {
+          subscriptionId: "sub-1",
+          subscriptionName: "Production",
+          resourceId: "/subscriptions/sub-1/resourceGroups/rg-mi/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-api",
+          name: "uami-api",
+          resourceGroup: "rg-mi",
+          location: "westeurope",
+          clientId: "mi-client-id",
+          principalId: "mi-principal-id",
+          tenantId: "tenant-1",
+          tags: null
+        }
+      ])
+    }
+  } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
+
+  await expect(
+    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID" })
+  ).resolves.toMatchObject({
+    evidence: [
+      {
+        ownerCandidateKey: "ownerGroup:identity-platform",
+        disabled: true
+      }
+    ]
+  });
+  expect(readAzureResourceGroupOwnershipSqlRows).toHaveBeenCalledWith(
+    {
+      subscriptionIds: ["sub-1"],
+      resourceGroups: ["rg-mi"],
+      principalIds: ["mi-principal-id"]
+    },
+    100
+  );
+});
+
 test("returns direct resource group cost center tag evidence", async () => {
   const service = buildOwnershipEvidenceService({
     azureSnapshot: azureSnapshot({

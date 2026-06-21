@@ -10,6 +10,7 @@ import { AzureRbacComponent } from "./resource/AzureRbacComponent";
 import { EntraPermissionsComponent } from "./identity/EntraPermissionsComponent";
 import { ManagedIdentityComponent } from "./identity/ManagedIdentityComponent";
 import { OwnershipEvidenceComponent } from "./identity/OwnershipEvidenceComponent";
+import { OwnershipEvidenceToggle } from "./identity/OwnershipEvidenceToggle";
 import { RemediationPackageComponent } from "./RemediationPackageComponent";
 import { ResourceGroupComponent, type AzureRbacResourceGroupSelection } from "./resource/ResourceGroupComponent";
 import { ServicePrincipalComponent } from "./identity/ServicePrincipalComponent";
@@ -84,6 +85,7 @@ export function AzureComponent() {
   const [azureRbacTab, setAzureRbacTab] = useState<AzureRbacTab | null>(null);
   const [entraPermissionsTab, setEntraPermissionsTab] = useState<EntraPermissionsTab | null>(null);
   const [ownershipEvidenceTab, setOwnershipEvidenceTab] = useState<OwnershipEvidenceTab | null>(null);
+  const [ownershipEvidenceToggleEnabled, setOwnershipEvidenceToggleEnabled] = useState(false);
   const [remediationPackageTab, setRemediationPackageTab] = useState<RemediationPackageTab | null>(null);
   const [ztaRelatedObjectFilter, setZtaRelatedObjectFilter] = useState<string | null>(null);
   const [tableControls, setTableControls] = useState<Record<PersistentTableView, PersistentTableControls>>({
@@ -257,6 +259,12 @@ export function AzureComponent() {
             ) : null}
           </TabsList>
         </Tabs>
+        {activeView === "ownershipEvidence" ? (
+          <OwnershipEvidenceToggle
+            checked={ownershipEvidenceToggleEnabled}
+            onCheckedChange={setOwnershipEvidenceToggleEnabled}
+          />
+        ) : null}
       </div>
       <div className="relative z-0">
         {activeView === "resourceGroups" ? (
@@ -310,6 +318,7 @@ export function AzureComponent() {
         {activeView === "ownershipEvidence" && ownershipEvidenceTab ? (
           <OwnershipEvidenceComponent
             key={getOwnershipEvidenceTabKey(ownershipEvidenceTab)}
+            azureRbac={ownershipEvidenceToggleEnabled}
             displayName={ownershipEvidenceDisplayName ?? ownershipEvidenceTab.displayName}
             target={ownershipEvidenceTab.target}
             onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, ownershipEvidenceTab.returnView)}

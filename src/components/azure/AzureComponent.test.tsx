@@ -1092,11 +1092,13 @@ test("opens selectable ownership evidence table from a service principal owner b
   expect(evidenceRequest).toBeDefined();
 
   const url = new URL(evidenceRequest ?? "", window.location.origin);
+  expect(url.searchParams.get("azureRbac")).toBe("false");
   expect(url.searchParams.get("kind")).toBe("servicePrincipal");
   expect(url.searchParams.get("principalId")).toBe("sp-object-id");
 
   await clickElementByLabel("Set alice@example.test ownership evidence Inactive");
   await waitForText(container, "Inactive");
+  expect(evidenceReadCount).toBe(1);
 
   const statusRequest = fetchMock.mock.calls
     .map(([input]) => String(input))
@@ -1108,6 +1110,19 @@ test("opens selectable ownership evidence table from a service principal owner b
     "resourceGroup:sub-1:rg-app:principal:sp-object-id:ownerUser:alice@example.test"
   );
   expect(statusUrl.searchParams.get("status")).toBe("inactive");
+
+  await clickElementByLabel("Toggle ownership evidence option");
+  await waitFor(() => {
+    expect(evidenceReadCount).toBe(2);
+  });
+
+  const azureRbacEvidenceRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .filter((requestUrl) => requestUrl.startsWith("/api/data/ownership/evidence"))
+    .at(-1);
+  expect(azureRbacEvidenceRequest).toBeDefined();
+  expect(new URL(azureRbacEvidenceRequest ?? "", window.location.origin).searchParams.get("azureRbac")).toBe("true");
+  await waitForText(container, "Resource group owner");
 
   await clickButton("Close SP: Service principal app ownership evidence tab");
   await waitFor(() => {
@@ -1238,12 +1253,14 @@ test("sets resource group owner candidate status to inactive from the evidence t
   expect(evidenceRequest).toBeDefined();
 
   const evidenceUrl = new URL(evidenceRequest ?? "", window.location.origin);
+  expect(evidenceUrl.searchParams.get("azureRbac")).toBe("false");
   expect(evidenceUrl.searchParams.get("kind")).toBe("resourceGroup");
   expect(evidenceUrl.searchParams.get("page")).toBe("1");
   expect(evidenceUrl.searchParams.get("count")).toBe("20");
 
   await clickElementByLabel("Set alice@example.test ownership evidence Inactive");
   await waitForText(container, "Inactive");
+  expect(evidenceReadCount).toBe(1);
 
   const statusRequest = fetchMock.mock.calls
     .map(([input]) => String(input))

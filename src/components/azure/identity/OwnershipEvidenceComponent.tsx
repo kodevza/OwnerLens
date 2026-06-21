@@ -29,10 +29,12 @@ type UserGroupsDropdownSelection = {
 };
 
 export function OwnershipEvidenceComponent({
+  azureRbac,
   displayName,
   onOwnershipEvidenceClick,
   target
 }: {
+  azureRbac: boolean;
   displayName: string;
   onOwnershipEvidenceClick?: (selection: { displayName: string; target: OwnershipEvidenceTarget }) => void;
   target: OwnershipEvidenceTarget;
@@ -46,13 +48,14 @@ export function OwnershipEvidenceComponent({
       setLoadState({ status: "loading" });
 
       const response = await readOwnershipEvidence({
+        azureRbac,
         signal,
         target
       });
 
       setLoadState({ status: "ready", response });
     },
-    [target]
+    [azureRbac, target]
   );
 
   useEffect(() => {
@@ -89,8 +92,23 @@ export function OwnershipEvidenceComponent({
 
       try {
         await updateEvidenceStatus({ key: statusKey, status });
-        const controller = new AbortController();
-        await loadOwnershipEvidence(controller.signal);
+        setLoadState((current) => {
+          if (current.status !== "ready") {
+            return current;
+          }
+
+          return {
+            status: "ready",
+            response: {
+              ...current.response,
+              evidence: current.response.evidence.map((item) =>
+                getOwnerCandidateStatusKey(target, item) === statusKey
+                  ? { ...item, disabled: status === "inactive" }
+                  : item
+              )
+            }
+          };
+        });
       } catch (error) {
         setLoadState({
           status: "error",
@@ -104,7 +122,7 @@ export function OwnershipEvidenceComponent({
         });
       }
     },
-    [loadOwnershipEvidence, target]
+    [target]
   );
 
   const handleUserGroupsClick = useCallback(
