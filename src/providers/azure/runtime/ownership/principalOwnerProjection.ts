@@ -2,14 +2,14 @@ import type {
   AzureRoleAssignment,
   AzureUserAssignedManagedIdentity,
   ResourceGroupOwnershipRow
-} from "../../../core/azure/resources";
-import { rankOwnerCandidates } from "../../../core/ownership/ownerCandidateRanking";
+} from "../../../../core/azure/resources";
+import { rankOwnerCandidates } from "../../../../core/ownership/ownerCandidateRanking";
 import type {
   OwnerCandidate,
   OwnerCandidateScope,
   OwnerConfidence,
   OwnerEvidence
-} from "../../../core/ownership/types";
+} from "../../../../core/ownership/types";
 
 export type PrincipalOwnerProjection = {
   resourceGroup?: string;

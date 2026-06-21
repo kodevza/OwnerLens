@@ -2,7 +2,7 @@ import type {
   AzureRoleAssignment,
   AzureUserAssignedManagedIdentity,
   ResourceGroupOwnershipRow
-} from "../../../core/azure/resources";
+} from "../../../../core/azure/resources";
 import {
   projectManagedIdentityOwners,
   projectServicePrincipalOwners

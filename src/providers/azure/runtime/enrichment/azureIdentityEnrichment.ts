@@ -15,8 +15,8 @@ import {
 import type { AzureResource, AzureRoleAssignment } from "../../../../core/azure/resources";
 import { isBroadAzureScope } from "./azureScopeClassifier";
 import { evaluateAzureRoleAssignmentRisk } from "./evaluateAzureRoleAssignmentRisk";
-import { getResourceManagedIdentityAssignments } from "../../identities/buildAzureManagedIdentityAssignmentIndex";
-import type { AzureManagedIdentityResourceAssignment } from "../../identities/azureIdentityTypes";
+import { getResourceManagedIdentityAssignments } from "../entra/buildAzureManagedIdentityAssignmentIndex";
+import type { AzureManagedIdentityResourceAssignment } from "../entra/azureIdentityTypes";
 import type { EntraServicePrincipal, InputEntraGroupMember } from "../../inputTransferObject/generated/EntraSnapshot";
 import { readEntraGroupMemberRows } from "../entra/groupMembersTable";
 import { readEntraServicePrincipalRows } from "../entra/servicePrincipalsTable";
