@@ -1,7 +1,7 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
-import type { EntraUserGroupMembershipResponse } from "../../../../core/azure/entra/types";
-import type { InputEntraGroupMember } from "../../inputTransferObject/generated/EntraSnapshot";
+import type { EntraUserGroupMembershipResponse } from "../../../../../core/azure/entra/types";
+import type { InputEntraGroupMember } from "../../../inputTransferObject/generated/EntraSnapshot";
 
 export async function insertEntraGroupMemberRows(
   connection: DuckDBConnection,

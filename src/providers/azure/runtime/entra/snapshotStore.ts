@@ -2,12 +2,12 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type { LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
 import type { EntraSnapshot } from "../../inputTransferObject/generated/EntraSnapshot";
-import { insertEntraApplicationRows, readEntraApplicationRows } from "./applicationsTable";
-import { insertEntraAppRoleAssignmentRows, readEntraAppRoleAssignmentRows } from "./appRoleAssignmentsTable";
-import { insertEntraGroupMemberRows, readEntraGroupMemberRows } from "./groupMembersTable";
-import { insertEntraOAuth2PermissionGrantRows, readEntraOAuth2PermissionGrantRows } from "./oauth2PermissionGrantsTable";
-import { insertEntraServicePrincipalRows, readEntraServicePrincipalRows } from "./servicePrincipalsTable";
-import { importEntraSnapshotMetadata } from "./snapshotMetadataTable";
+import { insertEntraApplicationRows, readEntraApplicationRows } from "./domain/applicationsTable";
+import { insertEntraAppRoleAssignmentRows, readEntraAppRoleAssignmentRows } from "./domain/appRoleAssignmentsTable";
+import { insertEntraGroupMemberRows, readEntraGroupMemberRows } from "./domain/groupMembersTable";
+import { insertEntraOAuth2PermissionGrantRows, readEntraOAuth2PermissionGrantRows } from "./domain/oauth2PermissionGrantsTable";
+import { insertEntraServicePrincipalRows, readEntraServicePrincipalRows } from "./domain/servicePrincipalsTable";
+import { importEntraSnapshotMetadata } from "./domain/snapshotMetadataTable";
 import type { NormalizedEntraSnapshot } from "./normalizeEntraSnapshot";
 
 export const entraSnapshotFileName = "entra-snapshot.json";

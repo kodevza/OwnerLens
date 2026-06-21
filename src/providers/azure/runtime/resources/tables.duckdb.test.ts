@@ -5,9 +5,9 @@ import type {
   AzureResourceGroup
 } from "../../inputTransferObject/generated/AzureSnapshot";
 import type { EntraServicePrincipal } from "../../inputTransferObject/generated/EntraSnapshot";
-import { insertEntraServicePrincipalRows } from "../entra/servicePrincipalsTable";
+import { insertEntraServicePrincipalRows } from "../entra/domain/servicePrincipalsTable";
 import { prepareRuntimeSqlSchema } from "../SnapshotImporter";
-import { disableOwnerEvidenceKey } from "./disabledOwnerEvidenceTable";
+import { disableOwnerEvidenceKey } from "../ownership/disabledOwnerEvidenceTable";
 import {
   insertAzureActivityLogRows,
   insertAzureResourceGroupRows,

@@ -3,7 +3,10 @@ import type {
   AzureUserAssignedManagedIdentity,
   ResourceGroupOwnershipRow
 } from "../../../../core/azure/resources";
-import { rankOwnerCandidates } from "../../../../core/ownership/ownerCandidateRanking";
+import {
+  maxOwnerConfidence,
+  rankOwnerCandidates
+} from "../../../../core/ownership/ownerCandidateRanking";
 import type {
   OwnerCandidate,
   OwnerCandidateScope,
@@ -202,10 +205,6 @@ function getResourceGroupKey(subscriptionId: string, resourceGroup: string): str
   return `${subscriptionId.toLowerCase()}:${resourceGroup.toLowerCase()}`;
 }
 
-function maxOwnerConfidence(left: OwnerConfidence, right: OwnerConfidence): OwnerConfidence {
-  return OWNER_CONFIDENCE_RANK[left] >= OWNER_CONFIDENCE_RANK[right] ? left : right;
-}
-
 function mergeOwnerEvidence(left: OwnerEvidence[], right: OwnerEvidence[]): OwnerEvidence[] {
   const merged = new Map<string, OwnerEvidence>();
 
@@ -240,10 +239,3 @@ function getOwnerCandidateScopeKey(scope: OwnerCandidateScope): string {
     scope.roleDefinitionName ?? ""
   ].join(":");
 }
-
-const OWNER_CONFIDENCE_RANK: Record<OwnerConfidence, number> = {
-  none: 0,
-  low: 1,
-  medium: 2,
-  high: 3
-};

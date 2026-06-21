@@ -19,8 +19,8 @@ import {
   insertEntraServicePrincipalRows,
   readEntraServicePrincipalRowById,
   readEntraServicePrincipalRows
-} from "./entra/servicePrincipalsTable";
-import { insertEntraApplicationRows } from "./entra/applicationsTable";
+} from "./entra/domain/servicePrincipalsTable";
+import { insertEntraApplicationRows } from "./entra/domain/applicationsTable";
 import { prepareRuntimeSqlSchema } from "./SnapshotImporter";
 import type { ZeroTrustAssessmentReport } from "./zta/types";
 
@@ -3136,7 +3136,7 @@ test("applies disabled resource group owner evidence when reading managed identi
     await runtime.initialize();
 
     await expect(
-      runtime.readOwnershipEvidence({ kind: "managedIdentity", principalId: "principal-uami-1" })
+      runtime.readOwnershipEvidence({ kind: "managedIdentity", principalId: "principal-uami-1", azureRbac: true })
     ).resolves.toMatchObject({
       evidence: [
         {
@@ -3156,7 +3156,7 @@ test("applies disabled resource group owner evidence when reading managed identi
     ).resolves.toBe(1);
 
     await expect(
-      runtime.readOwnershipEvidence({ kind: "managedIdentity", principalId: "principal-uami-1" })
+      runtime.readOwnershipEvidence({ kind: "managedIdentity", principalId: "principal-uami-1", azureRbac: true })
     ).resolves.toMatchObject({
       evidence: [
         {

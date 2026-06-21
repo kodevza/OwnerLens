@@ -6,7 +6,7 @@ import {
   disableOwnerEvidenceKey,
   enableOwnerEvidenceKey,
   readDisabledOwnerEvidenceKeys
-} from "./resources/disabledOwnerEvidenceTable";
+} from "./ownership/disabledOwnerEvidenceTable";
 
 export { type DisabledOwnerKey };
 
