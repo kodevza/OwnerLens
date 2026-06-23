@@ -146,10 +146,26 @@ function buildResourceGroupOwnershipIndex(rows: ResourceGroupOwnershipRow[]): Re
   const byResourceGroup = new Map<string, ResourceGroupOwnershipRow>();
 
   for (const row of rows) {
-    byResourceGroup.set(getResourceGroupKey(row.subscriptionId, row.resourceGroup), row);
+    const key = getResourceGroupKey(row.subscriptionId, row.resourceGroup);
+    const existing = byResourceGroup.get(key);
+
+    byResourceGroup.set(key, existing ? mergeResourceGroupOwnershipRows(existing, row) : row);
   }
 
   return { byResourceGroup };
+}
+
+function mergeResourceGroupOwnershipRows(
+  existing: ResourceGroupOwnershipRow,
+  next: ResourceGroupOwnershipRow
+): ResourceGroupOwnershipRow {
+  return {
+    ...existing,
+    ownerCandidates: rankOwnerCandidates([
+      ...existing.ownerCandidates,
+      ...next.ownerCandidates
+    ])
+  };
 }
 
 function buildManagedIdentityLocationIndex(

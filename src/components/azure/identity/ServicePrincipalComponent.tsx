@@ -8,7 +8,7 @@ import type { RemediationPackage } from "../../../core/runtime/remediation";
 import { getTagNames } from "../../../core/azure/tags";
 import { azureServicePrincipalColumnHelp } from "../azureReportConfig";
 import { exportServicePrincipalsCsv, readRemediationPackage, readServicePrincipals } from "../api";
-import { SelectableGenericTable } from "../../../report/components/SelectableGenericTable";
+import { SelectableGenericTable } from "../../../report/components/table/SelectableGenericTable";
 import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../../report/reportTypes";
 import { CsvSelectionActionBar } from "../CsvSelectionActionBar";
@@ -201,6 +201,7 @@ export function ServicePrincipalComponent({
       ) : null}
       <SelectableGenericTable
         columnHelp={azureServicePrincipalColumnHelp}
+        columnWidthsStorageKey="entra-service-principals"
         emptyMessage="No service principals match the filter."
         fieldRenderers={fieldRenderers}
         fields={servicePrincipalFields}

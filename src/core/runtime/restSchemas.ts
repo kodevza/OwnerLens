@@ -323,13 +323,13 @@ export const entraUserGroupsResponseSchema: RuntimeRestJsonSchema = {
 export const ownershipEvidenceResponseSchema: RuntimeRestJsonSchema = {
   type: "object",
   additionalProperties: true,
-  required: ["target", "items"],
+  required: ["target", "evidence"],
   properties: {
     target: {
       type: "object",
       additionalProperties: true
     },
-    items: {
+    evidence: {
       type: "array",
       items: {
         type: "object",

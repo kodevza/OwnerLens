@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 
 import type { OwnershipEvidenceItem, OwnershipEvidenceResponse } from "../../../core/ownership/types";
-import { SelectableGenericTable } from "../../../report/components/SelectableGenericTable";
+import { SelectableGenericTable } from "../../../report/components/table/SelectableGenericTable";
 import { Card } from "../../../report/components/ui/card";
 import { EntraUserGroupsDropdown } from "./EntraUserGroupsDropdown";
 import { readOwnershipEvidence, updateEvidenceStatus, type EvidenceStatus, type OwnershipEvidenceTarget } from "../api";
 import { formatOwnershipEvidenceTarget } from "./ownershipEvidenceFormatters";
 import { ownershipEvidenceFields } from "./ownershipEvidenceFields";
 import { buildOwnershipEvidenceFieldRenderers, getOwnerCandidateStatusKey } from "./OwnershipEvidenceRenderers";
+import type { AzureRbacPrincipalSelection } from "./ServicePrincipalFieldRenderers";
 
 type LoadState =
   | {
@@ -31,11 +32,13 @@ type UserGroupsDropdownSelection = {
 export function OwnershipEvidenceComponent({
   azureRbac,
   displayName,
+  onAzureRbacClick,
   onOwnershipEvidenceClick,
   target
 }: {
   azureRbac: boolean;
   displayName: string;
+  onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
   onOwnershipEvidenceClick?: (selection: { displayName: string; target: OwnershipEvidenceTarget }) => void;
   target: OwnershipEvidenceTarget;
 }) {
@@ -149,12 +152,22 @@ export function OwnershipEvidenceComponent({
                 target: applicationTarget
               })
           : undefined,
+        onApplicationRbacClick: onAzureRbacClick
+          ? (evidence, applicationTarget) => {
+              if (applicationTarget.kind === "servicePrincipal") {
+                onAzureRbacClick({
+                  displayName: evidence.ownerDisplayName,
+                  objectId: applicationTarget.principalId
+                });
+              }
+            }
+          : undefined,
         onUserGroupsClick: handleUserGroupsClick,
         onStatusChange: handleStatusChange,
         target,
         updatingEvidenceKeys
       }),
-    [handleStatusChange, handleUserGroupsClick, onOwnershipEvidenceClick, target, updatingEvidenceKeys]
+    [handleStatusChange, handleUserGroupsClick, onAzureRbacClick, onOwnershipEvidenceClick, target, updatingEvidenceKeys]
   );
 
   if (loadState.status === "loading") {
@@ -172,6 +185,7 @@ export function OwnershipEvidenceComponent({
         <div className="mt-1 text-sm text-muted-foreground">{formatOwnershipEvidenceTarget(loadState.response)}</div>
       </div>
       <SelectableGenericTable
+        columnWidthsStorageKey="ownership-evidence"
         emptyMessage="No ownership evidence was found."
         fieldRenderers={fieldRenderers}
         fields={ownershipEvidenceFields}

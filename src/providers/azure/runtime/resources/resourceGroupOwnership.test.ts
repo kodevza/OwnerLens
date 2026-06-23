@@ -106,6 +106,46 @@ test("falls back to the next activity owner when the current candidate is blocke
   );
 });
 
+test("keeps active high-confidence owner rows ahead of later inactive rows for the same resource group", () => {
+  const [row] = buildResourceGroupOwnershipRows(
+    [resourceGroup("serverless-test"), resourceGroup("serverless-test")],
+    [
+      ownerRow("serverless-test", "tag.ownerGroup", "simple", "high"),
+      {
+        ...ownerRow(
+          "serverless-test",
+          "activity.lastModifier",
+          "kzawadka@konradsoft4pm.onmicrosoft.com",
+          "none"
+        ),
+        owner: null,
+        evidence: [
+          {
+            user: "/subscriptions/sub-1/resourceGroups/serverless-test/providers/Microsoft.Web/sites/app-n67chf4j3h7eg",
+            date: "2026-04-30T10:40:57.628Z",
+            disabled: true
+          }
+        ]
+      }
+    ]
+  );
+
+  expect(row).toEqual(
+    expect.objectContaining({
+      owner: "simple",
+      confidence: "high",
+      source: "tag.ownerGroup",
+      ownerCandidates: [
+        expect.objectContaining({
+          displayName: "simple",
+          confidence: "high",
+          rank: 1
+        })
+      ]
+    })
+  );
+});
+
 function resourceGroup(resourceGroupName: string): AzureResourceGroup {
   return {
     subscriptionId: "sub-1",

@@ -58,7 +58,7 @@ type PersistentTableControls = {
 
 type AzureRbacTab = AzureRbacPrincipalSelection & {
   kind: "servicePrincipal";
-  returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities" | "remediationPackage">;
+  returnView: Extract<AzureView, "servicePrincipals" | "managedIdentities" | "ownershipEvidence" | "remediationPackage">;
 } | AzureRbacResourceGroupSelection & {
   kind: "resourceGroup";
   returnView: Extract<AzureView, "resourceGroups">;
@@ -133,7 +133,7 @@ export function AzureComponent() {
 
   function openAzureRbac(
     principal: AzureRbacPrincipalSelection,
-    returnView: Extract<AzureRbacTab["returnView"], "servicePrincipals" | "managedIdentities" | "remediationPackage">
+    returnView: Extract<AzureRbacTab["returnView"], "servicePrincipals" | "managedIdentities" | "ownershipEvidence" | "remediationPackage">
   ) {
     setAzureRbacTab({ ...principal, kind: "servicePrincipal", returnView });
     activateView("azureRbac");
@@ -201,6 +201,7 @@ export function AzureComponent() {
   }
 
   const ownershipEvidenceDisplayName = ownershipEvidenceTab ? getOwnershipEvidenceTabDisplayName(ownershipEvidenceTab) : null;
+  const showOwnershipEvidenceToggle = ownershipEvidenceTab ? isPrincipalOwnershipEvidenceTab(ownershipEvidenceTab) : false;
 
   return (
     <section className="flex flex-col">
@@ -259,7 +260,7 @@ export function AzureComponent() {
             ) : null}
           </TabsList>
         </Tabs>
-        {activeView === "ownershipEvidence" ? (
+        {activeView === "ownershipEvidence" && showOwnershipEvidenceToggle ? (
           <OwnershipEvidenceToggle
             checked={ownershipEvidenceToggleEnabled}
             onCheckedChange={setOwnershipEvidenceToggleEnabled}
@@ -321,6 +322,7 @@ export function AzureComponent() {
             azureRbac={ownershipEvidenceToggleEnabled}
             displayName={ownershipEvidenceDisplayName ?? ownershipEvidenceTab.displayName}
             target={ownershipEvidenceTab.target}
+            onAzureRbacClick={(principal) => openAzureRbac(principal, "ownershipEvidence")}
             onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, ownershipEvidenceTab.returnView)}
           />
         ) : null}
@@ -409,6 +411,10 @@ function getOwnershipEvidenceTabDisplayName(tab: OwnershipEvidenceTab): string {
   }
 
   return `${prefix}: ${tab.displayName}`;
+}
+
+function isPrincipalOwnershipEvidenceTab(tab: OwnershipEvidenceTab): boolean {
+  return tab.target.kind === "servicePrincipal" || tab.target.kind === "managedIdentity";
 }
 
 function getAzureRbacTabKey(tab: AzureRbacTab): string {

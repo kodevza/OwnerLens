@@ -111,6 +111,36 @@ test("deduplicates the same service principal owner across resource groups", () 
   ]);
 });
 
+test("keeps the active high-confidence service principal owner ahead of later inactive candidates for the same resource group", () => {
+  const projection = projectServicePrincipalOwners(
+    [roleAssignment("sp-1", "/subscriptions/sub-1/resourceGroups/serverless-test")],
+    [
+      resourceGroupOwnership("sub-1", "serverless-test", "simple", "high"),
+      resourceGroupOwnership("sub-1", "serverless-test", "kzawadka@konradsoft4pm.onmicrosoft.com", "none", {
+        source: "activity.lastModifier",
+        evidence: [
+          {
+            user: "/subscriptions/sub-1/resourceGroups/serverless-test/providers/Microsoft.Web/sites/app-n67chf4j3h7eg",
+            date: "2026-04-30T10:40:57.628Z",
+            disabled: true
+          }
+        ]
+      })
+    ]
+  );
+
+  expect(projection.ownerConfidence).toBe("high");
+  expect(projection.potentialOwners[0]).toBe("simple");
+  expect(projection.ownerCandidates[0]).toEqual(
+    expect.objectContaining({
+      displayName: "simple",
+      type: "ownerGroup",
+      confidence: "high",
+      rank: 1
+    })
+  );
+});
+
 test("returns no service principal owners without resource group ownership context", () => {
   const projection = projectServicePrincipalOwners(
     [],
@@ -171,8 +201,12 @@ function resourceGroupOwnership(
   subscriptionId: string,
   resourceGroup: string,
   owner: string | null,
-  confidence: ResourceGroupOwnershipRow["confidence"]
+  confidence: ResourceGroupOwnershipRow["confidence"],
+  options: Partial<Pick<ResourceGroupOwnershipRow, "source" | "evidence">> = {}
 ): ResourceGroupOwnershipRow {
+  const source = options.source ?? "tag.ownerGroup";
+  const evidence = options.evidence ?? [{ user: `ownerGroup=${owner}`, date: null }];
+
   return {
     subscriptionId,
     subscriptionName: "Subscription",
@@ -187,9 +221,9 @@ function resourceGroupOwnership(
             displayName: owner,
             type: "ownerGroup",
             confidence,
-            source: "tag",
+            source: source.startsWith("activity.") ? "activity" : "tag",
             rank: 1,
-            evidence: [{ user: `ownerGroup=${owner}`, date: null }],
+            evidence,
             relatedScopes: [
               {
                 subscriptionId,
@@ -202,8 +236,8 @@ function resourceGroupOwnership(
       : [],
     owner,
     confidence,
-    source: owner ? "tag.ownerGroup" : "none",
-    evidence: owner ? [{ user: `ownerGroup=${owner}`, date: null }] : [],
+    source: owner ? source : "none",
+    evidence: owner ? evidence : [],
     roleAssignments: [],
     rbacRoleAssignmentCount: 0,
     rbacRoleLevel: "none"

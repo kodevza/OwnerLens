@@ -5,7 +5,10 @@ import { cn } from "../../../lib/utils";
 export function TableContainer({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("relative w-full overflow-auto rounded-md border border-border bg-card text-card-foreground shadow-sm", className)}
+      className={cn(
+        "relative w-full overflow-auto rounded-md border border-border bg-card text-card-foreground shadow-sm [scrollbar-gutter:stable]",
+        className
+      )}
       {...props}
     />
   );

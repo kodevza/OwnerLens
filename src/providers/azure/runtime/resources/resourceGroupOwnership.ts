@@ -1,5 +1,8 @@
 import { appConfig } from "../../../../core/config";
-import { rankOwnerCandidates } from "../../../../core/ownership/ownerCandidateRanking";
+import {
+  OWNER_CONFIDENCE_RANK,
+  rankOwnerCandidates
+} from "../../../../core/ownership/ownerCandidateRanking";
 import type {
   OwnerCandidate,
   OwnerCandidateSource,
@@ -213,11 +216,19 @@ function buildResourceGroupOwnerIndex(ownerRows: OwnerReportRow[]): Map<string, 
 
   for (const row of ownerRows) {
     if (row.kind === "resourceGroup" && row.resourceGroup) {
-      index.set(getResourceGroupOwnerIndexKey(row.subscriptionId, row.resourceGroup), row);
+      const key = getResourceGroupOwnerIndexKey(row.subscriptionId, row.resourceGroup);
+      const existing = index.get(key);
+      index.set(key, existing ? getPreferredOwnerRow(existing, row) : row);
     }
   }
 
   return index;
+}
+
+function getPreferredOwnerRow(existing: OwnerReportRow, next: OwnerReportRow): OwnerReportRow {
+  return OWNER_CONFIDENCE_RANK[next.confidence] > OWNER_CONFIDENCE_RANK[existing.confidence]
+    ? next
+    : existing;
 }
 
 function getResourceGroupOwnerIndexKey(subscriptionId: string, resourceGroup: string): string {

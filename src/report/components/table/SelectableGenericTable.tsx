@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import {
-  GenericRemoteTable,
-  GenericTableView,
-  isRemoteTableProps,
-  type GenericTableSelectionColumn,
-  type GenericTableWrapperProps
-} from "./GenericTable";
-import type { ColumnFilters, SortRule } from "../../core/collectionControls";
+import { GenericRemoteTable } from "./GenericRemoteTable";
+import { GenericTableView } from "./GenericTableView";
+import { isRemoteTableProps } from "./GenericTable";
+import type { GenericTableSelectionColumn, GenericTableWrapperProps } from "./types";
+import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 
 type SelectionOverlayContext = {
   filters: ColumnFilters;

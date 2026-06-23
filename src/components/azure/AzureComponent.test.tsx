@@ -1246,6 +1246,7 @@ test("sets resource group owner candidate status to inactive from the evidence t
   await waitForText(container, "rg-app");
   await clickButton("Open ownership evidence for alice@example.test");
   await waitForText(container, "Activity log");
+  expect(queryButton("Toggle ownership evidence option")).toBeNull();
 
   const evidenceRequest = fetchMock.mock.calls
     .map(([input]) => String(input))
@@ -1377,6 +1378,42 @@ test("opens ownership evidence for application owner evidence", async () => {
       });
     }
 
+    if (requestUrl.startsWith("/api/data/azureRbac")) {
+      return jsonResponse({
+        collectionId: "azureRbac",
+        columns: [],
+        count: 1,
+        page: 1,
+        pageSize: 20,
+        rows: [
+          {
+            accessDisplayName: "Reader on application subscription",
+            accessRisk: "low",
+            accessResourceGroup: null,
+            accessResourceId: null,
+            accessScope: "/subscriptions/sub-1",
+            accessScopeType: "Subscription",
+            accessSubscriptionId: "sub-1",
+            canDelegate: false,
+            condition: null,
+            conditionVersion: null,
+            principalDisplayName: "Application owner app",
+            principalId: "application-object-id",
+            principalType: "ServicePrincipal",
+            roleAssignmentId: "assignment-application",
+            roleDefinitionId: "reader-role-id",
+            roleDefinitionName: "Reader",
+            scope: "/subscriptions/sub-1",
+            scopeSubscriptionId: "sub-1",
+            servicePrincipalId: "application-object-id",
+            signInName: null,
+            subscriptionId: "sub-1",
+            subscriptionName: "Platform"
+          }
+        ]
+      });
+    }
+
     return servicePrincipalOwnerResponse({
       displayName: "Application owner app",
       type: "application"
@@ -1389,6 +1426,20 @@ test("opens ownership evidence for application owner evidence", async () => {
   await waitForText(container, "Service principal app");
   await clickButton("Open ownership evidence for Application owner app");
   await waitForText(container, "Application owner");
+  await clickButton("Open application Azure RBAC assignments for Application owner app");
+  await waitForText(container, "Reader on application subscription");
+
+  const applicationRbacRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .find((requestUrl) => requestUrl.startsWith("/api/data/azureRbac"));
+  expect(applicationRbacRequest).toBeDefined();
+
+  const rbacUrl = new URL(applicationRbacRequest ?? "", window.location.origin);
+  expect(rbacUrl.searchParams.get("servicePrincipalId")).toBe("application-object-id");
+
+  await clickButton("Close Application owner app Azure RBAC tab");
+  await waitForText(container, "Application owner");
+
   await clickButton("Open application ownership evidence for Application owner app");
   await waitForText(container, "No ownership evidence was found.");
 

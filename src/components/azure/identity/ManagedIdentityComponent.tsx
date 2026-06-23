@@ -7,7 +7,7 @@ import type { RemediationPackage } from "../../../core/runtime/remediation";
 import { getTagNames } from "../../../core/azure/tags";
 import { azureManagedIdentityColumnHelp } from "../azureReportConfig";
 import { exportManagedIdentitiesCsv, readManagedIdentities, readRemediationPackage } from "../api";
-import { SelectableGenericTable } from "../../../report/components/SelectableGenericTable";
+import { SelectableGenericTable } from "../../../report/components/table/SelectableGenericTable";
 import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../../report/reportTypes";
 import { CsvSelectionActionBar } from "../CsvSelectionActionBar";
@@ -187,6 +187,7 @@ export function ManagedIdentityComponent({
       ) : null}
       <SelectableGenericTable
         columnHelp={azureManagedIdentityColumnHelp}
+        columnWidthsStorageKey="entra-managed-identities"
         emptyMessage="No managed identities match the filter."
         fieldRenderers={fieldRenderers}
         fields={managedIdentityFields}
