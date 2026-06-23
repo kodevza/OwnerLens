@@ -1,4 +1,4 @@
-import { FingerprintPattern, UsersRound } from "lucide-react";
+import { FingerprintPattern, KeyRound, UsersRound } from "lucide-react";
 import type { MouseEvent } from "react";
 
 import type { OwnershipEvidenceItem } from "../../../core/ownership/types";
@@ -17,12 +17,14 @@ import {
 
 export function buildOwnershipEvidenceFieldRenderers({
   onApplicationEvidenceClick,
+  onApplicationRbacClick,
   onUserGroupsClick,
   onStatusChange,
   target,
   updatingEvidenceKeys
 }: {
   onApplicationEvidenceClick?: (evidence: OwnershipEvidenceItem, target: OwnershipEvidenceTarget) => void;
+  onApplicationRbacClick?: (evidence: OwnershipEvidenceItem, target: OwnershipEvidenceTarget) => void;
   onUserGroupsClick: (evidence: OwnershipEvidenceItem, event: MouseEvent<HTMLButtonElement>) => void;
   onStatusChange: (evidence: OwnershipEvidenceItem, status: EvidenceStatus) => void;
   target: OwnershipEvidenceTarget;
@@ -61,6 +63,23 @@ export function buildOwnershipEvidenceFieldRenderers({
               }}
             >
               <FingerprintPattern aria-hidden="true" className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+          {getApplicationEvidenceTarget(evidence) && onApplicationRbacClick ? (
+            <button
+              aria-label={`Open application Azure RBAC assignments for ${evidence.ownerDisplayName}`}
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-input text-muted-foreground hover:bg-muted hover:text-foreground"
+              title={`Open Azure RBAC assignments for ${evidence.ownerDisplayName}`}
+              type="button"
+              onClick={(event) => {
+                const applicationTarget = getApplicationEvidenceTarget(evidence);
+                event.stopPropagation();
+                if (applicationTarget) {
+                  onApplicationRbacClick(evidence, applicationTarget);
+                }
+              }}
+            >
+              <KeyRound aria-hidden="true" className="h-3.5 w-3.5" />
             </button>
           ) : null}
         </div>

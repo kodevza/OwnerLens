@@ -6,7 +6,7 @@ import type { OwnerConfidence } from "../../../core/ownership/types";
 import type { PermissionRiskLevel } from "../../../core/risk/types";
 import { azureOwnerColumnHelp } from "../azureReportConfig";
 import { exportResourceGroupsCsv, readResourceGroups, remotePageSize } from "../api";
-import { SelectableGenericTable } from "../../../report/components/SelectableGenericTable";
+import { SelectableGenericTable } from "../../../report/components/table/SelectableGenericTable";
 import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 import type { ReportColumnRenderers } from "../../../report/buildCollectionColumns";
 import type { ReportFieldDescriptor } from "../../../report/reportTypes";
@@ -172,6 +172,7 @@ export function ResourceGroupComponent({
     <>
       <SelectableGenericTable
         columnHelp={azureOwnerColumnHelp}
+        columnWidthsStorageKey="azure-resource-groups"
         emptyMessage="No resource groups match the filter."
         fieldRenderers={resourceGroupFieldRenderers}
         fields={resourceGroupFields}

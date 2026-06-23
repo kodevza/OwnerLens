@@ -412,7 +412,7 @@ test("reads resource group owner evidence for distinct Azure RBAC resource group
     },
     azureResources: {
       readAzureResourceGroupOwnershipSqlRows,
-      readAzureUserAssignedManagedIdentities: jest.fn()
+      readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([])
     }
   } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
 
@@ -463,7 +463,7 @@ test("reads resource group owner evidence for distinct Azure RBAC resource group
   );
 });
 
-test("prefers direct service principal owner evidence over Azure RBAC evidence", async () => {
+test("does not return direct service principal owner evidence in Azure RBAC mode", async () => {
   const readAzureResourceGroupOwnershipSqlRows = jest.fn();
   const service = new OwnershipEvidenceQueryService({
     entraQueries: {
@@ -480,10 +480,19 @@ test("prefers direct service principal owner evidence over Azure RBAC evidence",
               ownerType: "User"
             }
           ],
+          applicationOwners: [
+            {
+              id: "app-owner-1",
+              displayName: "Application Owner",
+              userPrincipalName: null,
+              mail: "app-owner@example.test",
+              ownerType: "Application"
+            }
+          ],
           roleAssignments: [
             roleAssignment({
               principalId: "sp-direct",
-              scope: "/subscriptions/sub-1/resourceGroups/rg-api",
+              scope: "/subscriptions/sub-1",
               roleDefinitionName: "Contributor"
             })
           ]
@@ -492,7 +501,7 @@ test("prefers direct service principal owner evidence over Azure RBAC evidence",
     },
     azureResources: {
       readAzureResourceGroupOwnershipSqlRows,
-      readAzureUserAssignedManagedIdentities: jest.fn()
+      readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([])
     }
   } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
 
@@ -503,13 +512,7 @@ test("prefers direct service principal owner evidence over Azure RBAC evidence",
       kind: "servicePrincipal",
       id: "sp-direct"
     },
-    evidence: [
-      {
-        ownerCandidateKey: "entraServicePrincipalOwner:ownerUser:sp-owner-1",
-        ownerDisplayName: "sp-owner@example.test",
-        path: "direct"
-      }
-    ]
+    evidence: []
   });
   expect(readAzureResourceGroupOwnershipSqlRows).not.toHaveBeenCalled();
 });
@@ -590,7 +593,7 @@ test("returns resource group evidence for a managed identity with a resolved res
   });
 });
 
-test("prefers direct managed identity owner evidence over Azure RBAC evidence", async () => {
+test("does not return direct managed identity owner evidence in Azure RBAC mode", async () => {
   const readAzureResourceGroupOwnershipSqlRows = jest.fn();
   const service = new OwnershipEvidenceQueryService({
     entraQueries: {
@@ -614,7 +617,7 @@ test("prefers direct managed identity owner evidence over Azure RBAC evidence", 
     },
     azureResources: {
       readAzureResourceGroupOwnershipSqlRows,
-      readAzureUserAssignedManagedIdentities: jest.fn()
+      readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([])
     }
   } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
 
@@ -625,18 +628,12 @@ test("prefers direct managed identity owner evidence over Azure RBAC evidence", 
       kind: "managedIdentity",
       id: "mi-principal-id"
     },
-    evidence: [
-      {
-        ownerCandidateKey: "entraServicePrincipalOwner:ownerUser:mi-owner-1",
-        ownerDisplayName: "mi-owner@example.test",
-        path: "direct"
-      }
-    ]
+    evidence: []
   });
   expect(readAzureResourceGroupOwnershipSqlRows).not.toHaveBeenCalled();
 });
 
-test("falls back to Azure RBAC when all direct managed identity owner evidence is disabled", async () => {
+test("returns Azure RBAC evidence for a managed identity without using direct owner fallback", async () => {
   const readAzureResourceGroupOwnershipSqlRows = jest.fn().mockResolvedValue([
     {
       subscriptionId: "sub-1",

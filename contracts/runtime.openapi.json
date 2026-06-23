@@ -1998,14 +1998,14 @@
                   "additionalProperties": true,
                   "required": [
                     "target",
-                    "items"
+                    "evidence"
                   ],
                   "properties": {
                     "target": {
                       "type": "object",
                       "additionalProperties": true
                     },
-                    "items": {
+                    "evidence": {
                       "type": "array",
                       "items": {
                         "type": "object",

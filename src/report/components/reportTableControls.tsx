@@ -126,24 +126,28 @@ export function applyColumnFilterOpen(
 
 export function ReportTableHead<TRow>({
   columns,
+  columnWidths = {},
   filters,
   filterOptions,
   openFilterColumnId,
   sortRules,
   onFilterChange,
   onFilterOpenChange,
+  onResizeStart,
   onValueFilterToggle,
   onValuesFilterChange,
   onObjectFieldFilterChange,
   onSortToggle
 }: {
   columns: ReportTableColumn<TRow>[];
+  columnWidths?: Record<string, number>;
   filters: ColumnFilters;
   filterOptions: ColumnFilterOptions;
   openFilterColumnId: string | null;
   sortRules: SortRule[];
   onFilterChange: (columnId: string, value: string) => void;
   onFilterOpenChange: (columnId: string, isOpen: boolean) => void;
+  onResizeStart?: (columnId: string, startX: number, startWidth: number) => void;
   onValueFilterToggle: (columnId: string, value: string, checked: boolean) => void;
   onValuesFilterChange: (columnId: string, values: string[]) => void;
   onObjectFieldFilterChange: (
@@ -160,13 +164,18 @@ export function ReportTableHead<TRow>({
         const sortMark = sortRule ? (sortRule.direction === "asc" ? "↑" : "↓") : "↕";
         const options = filterOptions[column.id] ?? [];
         const filter = filters[column.id];
+        const columnWidth = columnWidths[column.id];
         const shouldUseMultiselect =
           (column.filter === "multiselect" && options.length > 0) ||
           (column.filter !== "text" && options.length > 0 && options.length <= maxMultiselectOptions);
 
         return (
-          <TableHead key={column.id} className={column.className}>
-            <div className="flex min-w-[132px] flex-col gap-1.5">
+          <TableHead
+            key={column.id}
+            className={column.className}
+            style={columnWidth ? { width: `${columnWidth}px` } : undefined}
+          >
+            <div className="group/table-head relative flex min-w-[132px] flex-col gap-1.5 pr-2">
               <div className="flex items-start justify-between gap-1 py-1">
                 <button
                   aria-label={`Sort by ${column.label}`}
@@ -211,6 +220,25 @@ export function ReportTableHead<TRow>({
                   onChange={(event) => onFilterChange(column.id, event.target.value)}
                 />
               )}
+              {onResizeStart ? (
+                <button
+                  aria-label={`Resize ${column.label} column`}
+                  className="absolute -right-px bottom-1 top-1 z-20 w-1.5 cursor-col-resize touch-none rounded-sm border-0 bg-transparent p-0 opacity-0 transition-opacity hover:bg-border hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/table-head:opacity-100"
+                  type="button"
+                  onClick={(event) => event.preventDefault()}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    if (event.currentTarget.setPointerCapture) {
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                    }
+                    onResizeStart(
+                      column.id,
+                      event.clientX,
+                      event.currentTarget.closest("th")?.getBoundingClientRect().width ?? 0
+                    );
+                  }}
+                />
+              ) : null}
             </div>
           </TableHead>
         );

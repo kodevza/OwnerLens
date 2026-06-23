@@ -8,7 +8,7 @@ import type {
 } from "../../../core/azure/ztaReport";
 import { formatDate, formatValue } from "../../../lib/utils";
 import type { ReportColumnRenderers } from "../../../report/buildCollectionColumns";
-import { SelectableGenericTable } from "../../../report/components/SelectableGenericTable";
+import { SelectableGenericTable } from "../../../report/components/table/SelectableGenericTable";
 import { SelectionActionBar } from "../../../report/components/SelectionActionBar";
 import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 import { Button } from "../../../report/components/ui/button";
@@ -239,6 +239,7 @@ export function ZtaComponent({
         <div className="text-sm text-destructive">{openPackageState.message}</div>
       ) : null}
       <SelectableGenericTable
+        columnWidthsStorageKey="zero-trust-assessment-tests"
         emptyMessage="No Zero Trust Assessment tests found."
         fields={ztaTestFields}
         fieldRenderers={fieldRenderers}

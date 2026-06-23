@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { GenericTable } from "../../../report/components/GenericTable";
+import { GenericTable } from "../../../report/components/table/GenericTable";
 import type { ReportFieldDescriptor } from "../../../report/reportTypes";
 import type { PermissionRiskLevel } from "../../../core/risk/types";
 import { readEntraPermissions, type EntraPrincipalPermissionsResponse } from "../api";
@@ -147,6 +147,7 @@ export function EntraPermissionsComponent({ principalId }: { principalId: string
         <div className="rounded-md border border-destructive/40 bg-card p-4 text-sm text-destructive">{loadState.message}</div>
       ) : null}
       <GenericTable
+        columnWidthsStorageKey="entra-api-permissions"
         emptyMessage="No Entra API permissions match the filter."
         fields={entraPermissionFields}
         getRowKey={(row) => `${row.permissionType}:${row.id}`}

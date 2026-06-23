@@ -9,6 +9,11 @@ permissions:
   contents: write
   id-token: write
 
+env:
+  MODULE_PATH: ./artifacts/powershell-package/OwnerLens
+  KEY_VAULT_URL: ${{ vars.KEY_VAULT_URL }}
+  SIGNING_CERT_NAME: ${{ vars.SIGNING_CERT_NAME }}
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -22,6 +27,9 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
+      - run: npm ci
+      - run: npm run lint
+
       - name: Set package version from tag
         id: set_version
         run: |
@@ -34,7 +42,6 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      - run: npm ci
       - run: npm test --if-present
       - run: npm run test:components --if-present
       - run: npm run build --if-present
@@ -62,6 +69,76 @@ jobs:
           $version = "${{ needs.publish.outputs.version }}"
           ./scripts/package-powershell-module.ps1 -Version $version
 
+      - name: Azure login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install signing and publishing tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          dotnet tool install --global AzureSignTool
+
+          Install-Module PowerShellGet -Force -Scope CurrentUser
+          Install-Module PackageManagement -Force -Scope CurrentUser
+
+      - name: Sign PowerShell files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $files = Get-ChildItem $env:MODULE_PATH -Recurse -File |
+            Where-Object { $_.Extension -in ".ps1", ".psm1", ".psd1" }
+
+          if (-not $files) {
+            throw "No PowerShell files found to sign."
+          }
+
+          foreach ($file in $files) {
+            Write-Host "Signing $($file.FullName)"
+
+            azuresigntool sign `
+              -kvu $env:KEY_VAULT_URL `
+              -kvc $env:SIGNING_CERT_NAME `
+              -kvm `
+              -fd sha256 `
+              -tr "http://timestamp.digicert.com" `
+              -td sha256 `
+              -v `
+              $file.FullName
+
+            $sig = Get-AuthenticodeSignature -FilePath $file.FullName
+
+            if ($sig.Status -eq "NotSigned") {
+              throw "File was not signed: $($file.FullName)"
+            }
+
+            if (-not $sig.TimeStamperCertificate) {
+              throw "Missing timestamp: $($file.FullName)"
+            }
+
+            Write-Host "Signed: $($file.Name) / Status: $($sig.Status)"
+          }
+
+      - name: Refresh signed PowerShell module release assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $version = "${{ needs.publish.outputs.version }}"
+          $zipPath = "artifacts/release/OwnerLens-$version-win-x64.zip"
+          $checksumPath = "$zipPath.sha256"
+
+          Remove-Item -LiteralPath $zipPath, $checksumPath -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path $env:MODULE_PATH -DestinationPath $zipPath -CompressionLevel Optimal
+
+          $hash = Get-FileHash -Path $zipPath -Algorithm SHA256
+          Set-Content -Path $checksumPath -Value "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $zipPath)" -Encoding ascii
+
       - name: Upload PowerShell module release assets
         shell: pwsh
         env:
@@ -84,3 +161,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Failed to upload PowerShell module release assets for $tag."
           }
+
+      - name: Publish module to PowerShell Gallery
+        shell: pwsh
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          Publish-Module `
+            -Path $env:MODULE_PATH `
+            -NuGetApiKey $env:PSGALLERY_API_KEY `
+            -Verbose

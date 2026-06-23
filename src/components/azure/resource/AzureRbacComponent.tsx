@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 
 import type { AzureRbac } from "../../../core/azure/azureRbac";
-import { GenericTable } from "../../../report/components/GenericTable";
+import { GenericTable } from "../../../report/components/table/GenericTable";
 import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../../report/reportTypes";
 import type { PermissionRiskLevel } from "../../../core/risk/types";
@@ -115,6 +115,7 @@ export function AzureRbacComponent({ target }: { target: AzureRbacTarget }) {
 
   return (
     <GenericTable
+      columnWidthsStorageKey="azure-rbac-assignments"
       emptyMessage="No Azure RBAC assignments match the filter."
       fields={azureRbacFields}
       getRowKey={(row) => row.roleAssignmentId ?? `${row.servicePrincipalId}:${row.scope}:${row.roleDefinitionId ?? row.roleDefinitionName ?? ""}`}

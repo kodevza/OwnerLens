@@ -127,19 +127,11 @@ export class OwnershipEvidenceQueryService {
   }
 
   private async readServicePrincipalOwnerCandidates(row: ServicePrincipal): Promise<OwnerCandidate[]> {
-    const directOwnerCandidates = await this.readDirectServicePrincipalOwnerCandidates(row);
-    if (hasActiveOwnerEvidence(directOwnerCandidates)) {
-      return directOwnerCandidates;
-    }
-
     const roleAssignments = row.roleAssignments ?? [];
     const target = getRoleAssignmentResourceGroupOwnershipTarget(roleAssignments);
 
     if (target.subscriptionIds.length === 0 || target.resourceGroups.length === 0) {
-      return row.ownerCandidates ?? projectServicePrincipalOwners(
-        roleAssignments,
-        []
-      ).ownerCandidates;
+      return [];
     }
 
     try {
@@ -159,10 +151,7 @@ export class OwnershipEvidenceQueryService {
       ).ownerCandidates;
     } catch (error) {
       if (error instanceof RuntimeHttpError && error.statusCode === 404) {
-        return row.ownerCandidates ?? projectServicePrincipalOwners(
-          roleAssignments,
-          []
-        ).ownerCandidates;
+        return [];
       }
 
       throw error;
@@ -179,19 +168,9 @@ export class OwnershipEvidenceQueryService {
       throw new RuntimeHttpError("Ownership evidence target was not found.", 404);
     }
 
-    const directOwnerCandidates = await this.readDirectManagedIdentityOwnerCandidates(row);
-    if (hasActiveOwnerEvidence(directOwnerCandidates)) {
-      return {
-        target: {
-          kind: "managedIdentity",
-          id: row.id,
-          displayName: row.displayName
-        },
-        evidence: flattenCandidateEvidence(rankOwnerCandidates(directOwnerCandidates))
-      };
-    }
-
     if (!azureRbac) {
+      const directOwnerCandidates = await this.readDirectManagedIdentityOwnerCandidates(row);
+
       return {
         target: {
           kind: "managedIdentity",
@@ -275,12 +254,6 @@ export class OwnershipEvidenceQueryService {
       evidence: flattenCandidateEvidence(ownerRows.flatMap(mapResourceGroupOwnershipSqlRowToOwnerCandidate))
     };
   }
-}
-
-function hasActiveOwnerEvidence(candidates: OwnerCandidate[]): boolean {
-  return candidates.some((candidate) =>
-    candidate.evidence.some((evidence) => evidence.disabled !== true)
-  );
 }
 
 function getResourceGroupOwnershipLookupLimit(options: PageOptions): number {

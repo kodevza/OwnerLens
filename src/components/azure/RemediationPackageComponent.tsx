@@ -7,7 +7,7 @@ import type { JsonValue, RemediationPackage, RemediationTask } from "../../core/
 import type { PermissionRiskLevel } from "../../core/risk/types";
 import { formatDate, formatValue } from "../../lib/utils";
 import type { ReportColumnRenderers } from "../../report/buildCollectionColumns";
-import { SelectableGenericTable } from "../../report/components/SelectableGenericTable";
+import { SelectableGenericTable } from "../../report/components/table/SelectableGenericTable";
 import { Badge } from "../../report/components/ui/badge";
 import { Button } from "../../report/components/ui/button";
 import { Card } from "../../report/components/ui/card";
@@ -207,6 +207,7 @@ export function RemediationPackageComponent({
         <SummaryCard label="Source kind" value={currentPackage.sourceKind} />
       </div>
       <SelectableGenericTable
+        columnWidthsStorageKey="remediation-package-tasks"
         emptyMessage="No remediation tasks were created."
         fields={remediationTaskFields}
         fieldRenderers={fieldRenderers}
