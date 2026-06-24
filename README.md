@@ -16,8 +16,6 @@ OwnerLens helps split actionable remediations by the
 most likely accountable owners and provides traceable evidence for why each
 remediation was assigned.
 
-The app runs locally with Vite. Snapshot files exported by OwnerLens collector
-commands stay on your machine and are read from the local `data` directory.
 ```mermaid
 
 flowchart TD
@@ -44,7 +42,6 @@ flowchart TD
 
 ➡️ Export resolved ownership results to CSV and JSON files for resource groups, service principals, and managed identities.
 
-➡️ Switch between snapshot files found in `./data`.
 
 ## Requirements
 
@@ -104,6 +101,11 @@ directory or port, pass them explicitly:
 
 ```powershell
 Start-OwnerLens -DataPath C:\OwnerLensData -Port 4174
+```
+
+Open browser  - even localhost is secured with token
+```powershell
+Open-OwnerLens
 ```
 
 Create the resource snapshot:
