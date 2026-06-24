@@ -11,8 +11,6 @@ permissions:
 
 env:
   MODULE_PATH: ./artifacts/powershell-package/OwnerLens
-  KEY_VAULT_URL: ${{ secrets.KEY_VAULT_URL }}
-  SIGNING_CERT_NAME: ${{ secrets.SIGNING_CERT_NAME }}
 
 jobs:
   publish:
@@ -77,17 +75,15 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Install signing and publishing tools
+      - name: Install publishing tools
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
 
-          dotnet tool install --global AzureSignTool
-
           Install-Module PowerShellGet -Force -Scope CurrentUser
           Install-Module PackageManagement -Force -Scope CurrentUser
 
-      - name: Sign PowerShell files
+      - name: Validate PowerShell files to sign
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -99,19 +95,30 @@ jobs:
             throw "No PowerShell files found to sign."
           }
 
+          $files | ForEach-Object { Write-Host "Will sign $($_.FullName)" }
+
+      - name: Sign PowerShell files with Artifact Signing
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ secrets.ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}
+          files-folder: ${{ github.workspace }}\artifacts\powershell-package\OwnerLens
+          files-folder-filter: ps1,psm1,psd1
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify PowerShell signatures
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $files = Get-ChildItem $env:MODULE_PATH -Recurse -File |
+            Where-Object { $_.Extension -in ".ps1", ".psm1", ".psd1" }
+
           foreach ($file in $files) {
-            Write-Host "Signing $($file.FullName)"
-
-            azuresigntool sign `
-              -kvu $env:KEY_VAULT_URL `
-              -kvc $env:SIGNING_CERT_NAME `
-              -kvm `
-              -fd sha256 `
-              -tr "http://timestamp.digicert.com" `
-              -td sha256 `
-              -v `
-              $file.FullName
-
             $sig = Get-AuthenticodeSignature -FilePath $file.FullName
 
             if ($sig.Status -ne "Valid") {
