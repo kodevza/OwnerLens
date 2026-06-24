@@ -56,6 +56,7 @@ jobs:
   package-powershell-module:
     runs-on: windows-latest
     needs: publish
+    environment: package-signing
     steps:
       - uses: actions/checkout@v6
 
