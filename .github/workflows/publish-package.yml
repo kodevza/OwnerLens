@@ -11,8 +11,8 @@ permissions:
 
 env:
   MODULE_PATH: ./artifacts/powershell-package/OwnerLens
-  KEY_VAULT_URL: ${{ vars.KEY_VAULT_URL }}
-  SIGNING_CERT_NAME: ${{ vars.SIGNING_CERT_NAME }}
+  KEY_VAULT_URL: ${{ secrets.KEY_VAULT_URL }}
+  SIGNING_CERT_NAME: ${{ secrets.SIGNING_CERT_NAME }}
 
 jobs:
   publish:
@@ -70,11 +70,11 @@ jobs:
           ./scripts/package-powershell-module.ps1 -Version $version
 
       - name: Azure login via OIDC
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_IDS }}
 
       - name: Install signing and publishing tools
         shell: pwsh
