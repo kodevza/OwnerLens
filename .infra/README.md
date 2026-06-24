@@ -2,67 +2,11 @@
 
 This folder contains one-time Azure signing infrastructure for OwnerLens release assets.
 
-The package publishing workflow signs PowerShell release files with `AzureSignTool`
-using a code-signing certificate stored in Azure Key Vault.
-
-## Deploy Key Vault
-
-Create a resource group:
-
-```bash
-az group create -n rg-ownerlens-signing -l westeurope
-```
-
-Deploy the Key Vault:
-
-```bash
-az deployment group create \
-  --resource-group rg-ownerlens-signing \
-  --template-file .infra/keyvault.bicep \
-  --parameters keyVaultName=kv-ownerlens-signing
-```
-
-Assign access to the GitHub Actions OIDC service principal on the Key Vault.
-Minimum practical RBAC roles:
-
-- Key Vault Crypto User
-- Key Vault Certificate User
-
-If using access policies instead of RBAC, the pipeline identity needs approximately:
-
-- certificates: get, list
-- keys: get, sign, verify
-
-Create the certificate once during bootstrap, not in every pipeline run:
-
-```powershell
-./.infra/create-code-signing-cert.ps1 `
-  -VaultName "kv-ownerlens-signing" `
-  -CertificateName "ownerlens-code-signing"
-```
-
-Check certificate creation status:
-
-```powershell
-Get-AzKeyVaultCertificateOperation -VaultName "kv-ownerlens-signing" -Name "ownerlens-code-signing"
-```
-
-Configure the `package-signing` GitHub environment secrets used by
-`.github/workflows/publish-package.yml`:
-
-- `AZURE_CLIENT_ID`
-- `AZURE_TENANT_ID`
-- `AZURE_SUBSCRIPTION_ID`
-- `KEY_VAULT_URL`, for example `https://kv-ownerlens-signing.vault.azure.net/`
-- `SIGNING_CERT_NAME`, for example `ownerlens-code-signing`
-- `PSGALLERY_API_KEY`
-
-## Artifact Signing
+The package publishing workflow signs PowerShell release files with Azure
+Artifact Signing through the GitHub Artifact Signing action, which uses Windows
+SignTool with the Artifact Signing client.
 
 ## Deploy Artifact Signing
-
-Artifact Signing infrastructure is retained for a future public-trust signing
-flow. The current publishing workflow does not use it.
 
 Register the resource provider once per subscription:
 
@@ -106,4 +50,46 @@ az deployment group create \
       signerPrincipalId=<github-oidc-app-service-principal-object-id>
 ```
 
-The Bicep assigns `Artifact Signing Certificate Profile Signer` on the certificate profile when `signerPrincipalId` is provided. To let a user or group complete identity validation, pass `identityVerifierPrincipalId`; the Bicep assigns `Artifact Signing Identity Verifier` on the account.
+The Bicep assigns `Artifact Signing Certificate Profile Signer` on the
+certificate profile when `signerPrincipalId` is provided. To let a user or group
+complete identity validation, pass `identityVerifierPrincipalId`; the Bicep
+assigns `Artifact Signing Identity Verifier` on the account.
+
+Configure the `package-signing` GitHub environment secrets used by
+`.github/workflows/publish-package.yml`:
+
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+- `ARTIFACT_SIGNING_ENDPOINT`, for example `https://neu.codesigning.azure.net/`
+- `ARTIFACT_SIGNING_ACCOUNT_NAME`
+- `ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME`
+- `PSGALLERY_API_KEY`
+
+## Deploy Key Vault
+
+Key Vault signing is retained only for local/private signing experiments. The
+publishing workflow does not use Key Vault.
+
+Create a resource group:
+
+```bash
+az group create -n rg-ownerlens-signing -l westeurope
+```
+
+Deploy the Key Vault:
+
+```bash
+az deployment group create \
+  --resource-group rg-ownerlens-signing \
+  --template-file .infra/keyvault.bicep \
+  --parameters keyVaultName=kv-ownerlens-signing
+```
+
+Create the certificate once during bootstrap, not in every pipeline run:
+
+```powershell
+./.infra/create-code-signing-cert.ps1 `
+  -VaultName "kv-ownerlens-signing" `
+  -CertificateName "ownerlens-code-signing"
+```

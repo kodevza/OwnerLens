@@ -97,6 +97,25 @@ jobs:
 
           $files | ForEach-Object { Write-Host "Will sign $($_.FullName)" }
 
+      - name: Validate Artifact Signing configuration
+        shell: pwsh
+        env:
+          ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+          ARTIFACT_SIGNING_ACCOUNT_NAME: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT_NAME }}
+          ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $missing = @(
+            "ARTIFACT_SIGNING_ENDPOINT",
+            "ARTIFACT_SIGNING_ACCOUNT_NAME",
+            "ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME"
+          ) | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
+
+          if ($missing) {
+            throw "Missing required package-signing environment secret(s): $($missing -join ', '). Configure them in GitHub before running the publish workflow."
+          }
+
       - name: Sign PowerShell files with Artifact Signing
         uses: azure/artifact-signing-action@v2
         with:
