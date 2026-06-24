@@ -114,8 +114,8 @@ jobs:
 
             $sig = Get-AuthenticodeSignature -FilePath $file.FullName
 
-            if ($sig.Status -eq "NotSigned") {
-              throw "File was not signed: $($file.FullName)"
+            if ($sig.Status -ne "Valid") {
+              throw "Authenticode signature is not valid for $($file.FullName): $($sig.Status) - $($sig.StatusMessage)"
             }
 
             if (-not $sig.TimeStamperCertificate) {
