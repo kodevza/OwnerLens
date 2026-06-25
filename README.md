@@ -1,138 +1,98 @@
 # OwnerLens
 
-OwnerLens is a local Azure ownership report. It reads exported Azure resource
-and Microsoft Entra snapshot files, then helps identify likely owners for Azure
-subscriptions and resource groups using tags, cost center mappings, role
-assignments, managed identities, service principals, application registrations,
-groups, and activity-log evidence.
+OwnerLens is a local-first Azure and Microsoft Entra ownership evidence tool. It
+reads snapshots from `./data`, resolves likely accountable owners for Azure
+resources and workload identities, shows confidence and evidence trails, and
+exports owner mappings, gaps, and remediation assignments to CSV or JSON.
 
-The application is intended to: 
-
-👉 reconcile cloud provider ownership data (currently Azure), 
-
-👉 export the resolved ownership results for Identity and Access Management (IAM) systems, 
-
-OwnerLens helps split actionable remediations by the
-most likely accountable owners and provides traceable evidence for why each
-remediation was assigned.
-
-```mermaid
-
-flowchart TD
-    A["1. Entra + Azure Resource Snapshot<br/><br/>Service Principals<br/>Managed Identities<br/>Groups<br/>Azure RBAC<br/>Tags<br/>Activity Logs"]
-
-    B["2. OwnerLens Review UI<br/><br/>Resolve likely owners<br/>Show confidence<br/>Show evidence<br/>Find ownership gaps"]
-
-    C["3. Export to IAM / Recertification<br/><br/>CSV / JSON<br/>Owner mapping<br/>Gap report<br/>Input for SailPoint / Saviynt / Omada / Entra Governance"]
-
-
-    A --> B --> C
-```    
-## Features
-
-➡️ Resolve owners from configurable Azure tags such as `ownerGroup`,
-  `costCenter`, and `owner`. Configure tag names and confidence levels in
-  [src/core/config.ts](src/core/config.ts).
-
-➡️ Review ownership confidence and supporting evidence.
-
-➡️ Inspect Azure role assignment and permission risk signals.
-
-➡️ Review managed identity and service principal relationships.
-
-➡️ Export resolved ownership results to CSV and JSON files for resource groups, service principals, and managed identities.
-
+Owner signals include Azure tags, cost center mappings, Azure RBAC, groups,
+managed identities, service principals, app registrations, and activity logs.
 
 ## Requirements
 
-- PowerShell 7 or Windows PowerShell for snapshot export scripts
-- Azure PowerShell and Microsoft Graph PowerShell modules when exporting data
-
-## Run With npx
-
-```bash
-npx ownerlens start
-```
-
-`npx ownerlens start` starts the packaged app on `127.0.0.1`, creates `./data`
-in the directory where you run the command, and reads snapshot files from that
-directory. Open the local URL printed by the command, usually
-`http://127.0.0.1:4173`. When running from a source checkout, run `npm run build`
-before `npm run start`.
-
-## Create Snapshot Files
-
-OwnerLens expects these files by default:
-
-- `data/snapshot.json` for Azure resources, role assignments, managed
-  identities, and optional Azure Monitor activity logs
-- `data/entra-snapshot.json` for Microsoft Entra service principals, application registrations, and groups
-
-Sign in to Azure:
+- PowerShell 7 (`pwsh`) on `PATH` for the OwnerLens module and snapshot
+  collectors. Do not use Windows PowerShell (`powershell.exe`).
+- Node.js and npm for building from a source checkout.
+- Azure PowerShell and Microsoft Graph PowerShell modules when collecting data:
 
 ```powershell
-Connect-AzAccount
+Install-Module Az -Scope CurrentUser
+Install-Module Az.ManagedServiceIdentity -Scope CurrentUser
+Install-Module Microsoft.Graph -Scope CurrentUser
 ```
 
-Sign in to Microsoft Graph:
+Run all PowerShell commands in `pwsh`.
+
+## Run
+
+Build the PowerShell module from a source checkout:
 
 ```powershell
-Connect-MgGraph -TenantId "<tenant-id>" -Scopes "Application.Read.All","Group.Read.All","Directory.Read.All"
+pwsh ./scripts/build-windows-runtime.ps1
+pwsh ./scripts/build-powershell-module.ps1
 ```
 
-Import the PowerShell module:
+Start the local app from `pwsh`:
 
 ```powershell
 Import-Module ./artifacts/OwnerLens/OwnerLens.psd1 -Force
-```
-
-Start OwnerLens from PowerShell on Windows:
-
-```powershell
-Start-OwnerLens
-Open-OwnerLens
-Get-OwnerLensStatus
-Stop-OwnerLens
-```
-
-`Start-OwnerLens` starts the local app on `127.0.0.1` using a free port and
-stores runtime state under `$env:LOCALAPPDATA\OwnerLens`. To use a specific data
-directory or port, pass them explicitly:
-
-```powershell
-Start-OwnerLens -DataPath C:\OwnerLensData -Port 4174
-```
-
-Open browser  - even localhost is secured with token
-```powershell
+Start-OwnerLens -DataPath ./data
 Open-OwnerLens
 ```
 
-Create the resource snapshot:
+`Start-OwnerLens` binds to `127.0.0.1`, chooses a free port, creates the data
+directory, and stores runtime state under `$env:LOCALAPPDATA\OwnerLens`.
+
+Use an explicit port or data directory when needed:
 
 ```powershell
+Start-OwnerLens -Port 4174 -DataPath C:\OwnerLensData
+```
+
+## Create Snapshots
+
+Collectors write these files by default:
+
+- `data/snapshot.json` for Azure subscriptions, resource groups, resources,
+  managed identities, role assignments, and optional activity logs.
+- `data/entra-snapshot.json` for Microsoft Entra service principals,
+  application registrations, groups, and group membership facts.
+
+Sign in from `pwsh`:
+
+```powershell
+Connect-AzAccount
+Connect-MgGraph -TenantId "<tenant-id>" -Scopes "Application.Read.All","Group.Read.All","Directory.Read.All"
+```
+
+Collect snapshots from `pwsh`:
+
+```powershell
+Import-Module ./artifacts/OwnerLens/OwnerLens.psd1 -Force
 Invoke-OwnerLensCollectAzure -SubscriptionIds "sub-id-1,sub-id-2"
-```
-
-Create the Entra snapshot:
-
-```powershell
 Invoke-OwnerLensCollectEntra -TenantId "<tenant-id>"
 ```
 
 More collector options are documented in [tools/README.md](tools/README.md).
 
-Snapshot files can contain tenant, subscription, resource, identity, group, and
-activity-log metadata. Review them before sharing. Files matching
+Snapshot files can contain sensitive tenant, subscription, identity, group,
+credential, and activity-log metadata. Review them before sharing. Files matching
 `data/*snapshot.json` are ignored by git.
 
 ## Development
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for local development, testing, dependency
-graph, project structure, and ownership rule configuration notes.
+graph, and ownership rule configuration notes. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for contribution expectations.
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for local
-development expectations.
+Common checks:
+
+```powershell
+npm run build
+npm test
+npm run test:all
+npm run lint
+```
 
 ## License
 

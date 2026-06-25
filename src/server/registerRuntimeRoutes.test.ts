@@ -1,26 +1,9 @@
 import { Hono } from "hono";
 
 import { RuntimeHttpError } from "../core/runtime/localSnapshotFiles";
-import { getRuntimeRestErrorStatusCode, type RuntimeRestEndpoint } from "../core/runtime/rest";
-import { emptyQuerySchema, runtimeRowSchema } from "../core/runtime/restSchemas";
+import { getRuntimeRestErrorStatusCode } from "../core/runtime/rest";
+import { testEndpoint } from "../../tests/support/runtimeRestEndpoint";
 import { registerRuntimeRoutes } from "./registerRuntimeRoutes";
-
-type TestRuntimeRestEndpoint = Omit<
-  RuntimeRestEndpoint,
-  "operationId" | "tags" | "summary" | "querySchema" | "responseSchema"
-> &
-  Partial<Pick<RuntimeRestEndpoint, "querySchema" | "responseSchema">>;
-
-function testEndpoint(endpoint: TestRuntimeRestEndpoint): RuntimeRestEndpoint {
-  return {
-    operationId: `test${endpoint.method ?? "GET"}${endpoint.path.replace(/\W+/g, "")}`,
-    tags: ["Test"],
-    summary: "Test endpoint.",
-    querySchema: emptyQuerySchema,
-    responseSchema: runtimeRowSchema,
-    ...endpoint
-  };
-}
 
 test("registers all methods for runtime routes that share a path", async () => {
   const app = new Hono();
