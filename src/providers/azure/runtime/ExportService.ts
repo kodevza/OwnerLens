@@ -39,7 +39,8 @@ export class ExportService {
 
   exportAzureResourceGroupOwnershipCsv(
     rows: Record<string, unknown>[],
-    options: LocalReportCollectionQueryOptions
+    options: LocalReportCollectionQueryOptions,
+    columns?: readonly string[]
   ): RuntimeCollectionCsvExport<"azureResources.resourceGroupOwnership"> {
     return buildRuntimeCollectionCsvExport({
       collectionId: "azureResources.resourceGroupOwnership",
@@ -49,6 +50,7 @@ export class ExportService {
       sortRules: options.sortRules,
       selectedRowKeys: options.selectedRowKeys,
       getRowKey: getResourceGroupOwnershipRowKey,
+      columns,
       includeBom: true
     });
   }

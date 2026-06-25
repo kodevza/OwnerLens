@@ -15,7 +15,8 @@ function Wait-OwnerLensServer {
     [Parameter(Mandatory)]
     [string]$Token,
 
-    [int]$TimeoutSeconds = 30
+    [ValidateRange(1, [int]::MaxValue)]
+    [int]$TimeoutSeconds = 180
   )
 
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)

@@ -22,6 +22,8 @@ import {
 import { mapEntraServicePrincipalsToCore } from "../entra/entraServicePrincipalMapper";
 import type { AzureResourceGroupOwnershipSqlRow } from "./tables";
 
+const csvExportPageSize = 10000;
+
 export type AzureResourcesCollectionQueryServiceOptions = {
   entra: LocalEntraReportRuntime;
   azureResources: LocalAzureResourcesReportRuntime;
@@ -75,9 +77,18 @@ export class AzureResourcesCollectionQueryService {
   async exportResourceGroupOwnershipCsv(
     options: LocalReportCollectionQueryOptions
   ): Promise<RuntimeCollectionCsvExport<"azureResources.resourceGroupOwnership">> {
+    const collection = await this.queryResourceGroupOwnership({
+      ...options,
+      page: 1,
+      pageSize: csvExportPageSize
+    });
+
     return this.exportService.exportAzureResourceGroupOwnershipCsv(
-      await this.readResourceGroupOwnershipRows(),
-      options
+      collection.rows as unknown as Record<string, unknown>[],
+      {
+        selectedRowKeys: options.selectedRowKeys
+      },
+      collection.columns
     );
   }
 

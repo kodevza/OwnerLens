@@ -30,13 +30,17 @@ Get-OwnerLensStatus
 Stop-OwnerLens
 ```
 
-`Start-OwnerLens` binds to `127.0.0.1`, chooses a random free port by default, writes state to
-`$env:LOCALAPPDATA\OwnerLens\runtime-state.json`, and keeps the runtime token out of normal output.
+`Start-OwnerLens` binds to `127.0.0.1`, chooses a random free port by default, waits up to 180 seconds
+for the runtime API to become ready, writes state to `$env:LOCALAPPDATA\OwnerLens\runtime-state.json`,
+and keeps the runtime token out of normal output.
+Server stdout and stderr are written under `$env:LOCALAPPDATA\OwnerLens\logs`; `Start-OwnerLens`
+prints those paths, and `Get-OwnerLensStatus` returns them as `StdoutLogPath` and `StderrLogPath`.
 
 Use explicit paths when needed:
 
 ```powershell
 Start-OwnerLens -Port 4174 -DataPath C:\OwnerLensData
+Start-OwnerLens -StartupTimeoutSeconds 240
 ```
 
 ## Collect Entra

@@ -32,6 +32,7 @@ function Stop-OwnerLens {
     }
   }
 
+  Unregister-OwnerLensRuntimeLogEvents -State $state
   Remove-OwnerLensState
   New-OwnerLensStatusObject -State $state -Running $false -Health "Stopped"
 }

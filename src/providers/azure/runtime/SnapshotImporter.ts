@@ -15,6 +15,7 @@ export type SnapshotImporterOptions = {
   entra: LocalEntraReportRuntime;
   azureResources: LocalAzureResourcesReportRuntime;
   zeroTrustAssessment: SnapshotImportRuntime;
+  logger?: Pick<Console, "log"> | null;
 };
 
 export type SnapshotImporterStatus = {
@@ -39,11 +40,13 @@ export class SnapshotImporter {
   private readonly entra: LocalEntraReportRuntime;
   private readonly azureResources: LocalAzureResourcesReportRuntime;
   private readonly zeroTrustAssessment: SnapshotImportRuntime;
+  private readonly logger: Pick<Console, "log"> | null;
 
   constructor(options: SnapshotImporterOptions) {
     this.entra = options.entra;
     this.azureResources = options.azureResources;
     this.zeroTrustAssessment = options.zeroTrustAssessment;
+    this.logger = options.logger ?? (process.env.NODE_ENV === "test" ? null : console);
   }
 
   getStatus(): SnapshotImporterStatus {
@@ -55,8 +58,32 @@ export class SnapshotImporter {
   }
 
   async importSnapshots(): Promise<void> {
-    await this.entra.importSnapshot();
-    await this.azureResources.importSnapshot();
-    await this.zeroTrustAssessment.importSnapshot();
+    await this.importSnapshotWithLogging("Entra", this.entra);
+    await this.importSnapshotWithLogging("Azure resources", this.azureResources);
+    await this.importSnapshotWithLogging("Zero Trust Assessment", this.zeroTrustAssessment);
+  }
+
+  private async importSnapshotWithLogging(label: string, runtime: SnapshotImportRuntime): Promise<void> {
+    const previousStatus = runtime.getStatus();
+    this.logger?.log(
+      previousStatus.imported
+        ? `Checking ${label} snapshot...`
+        : `Importing ${label} snapshot...`
+    );
+
+    await runtime.importSnapshot();
+
+    const status = runtime.getStatus();
+    if (!status.imported) {
+      this.logger?.log(`No ${label} snapshot found.`);
+      return;
+    }
+
+    if (status.skipped) {
+      this.logger?.log(`${label} snapshot is already current.`);
+      return;
+    }
+
+    this.logger?.log(`Imported ${label} snapshot.`);
   }
 }
