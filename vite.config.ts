@@ -6,9 +6,9 @@ import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } fro
 import { getRuntimeRestErrorStatusCode, handleRuntimeRestRequest } from "./src/core/runtime/rest";
 import {
   createLocalReportRuntime,
-  createDefaultLocalReportRuntime,
-  defineLocalReportRuntimeRestEndpoints
-} from "./src/providers/azure/runtime/localReportRuntimeRest";
+  createDefaultLocalReportRuntime
+} from "./src/providers/azure/runtime/localReportRuntimeFactory";
+import { defineLocalReportRuntimeRestEndpoints } from "./src/providers/azure/runtime/localReportRuntimeRestEndpoints";
 
 function localReportRuntimeApi(): Plugin {
   const runtime = process.env.OWNERLENS_DATA_DIR

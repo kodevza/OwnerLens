@@ -1,7 +1,8 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type { SnapshotImportStatus } from "../../../core/runtime/snapshotImportRegistry";
-import { migrate } from "../../../db/migrate";
+import { RuntimeHttpError } from "../../../core/runtime/localSnapshotFiles";
+import { migrate, MigrationCompatibilityError } from "../../../db/migrate";
 import { LocalEntraReportRuntime } from "./entra/LocalEntraReportRuntime";
 import { LocalAzureResourcesReportRuntime } from "./resources/LocalAzureResourcesReportRuntime";
 
@@ -23,7 +24,15 @@ export type SnapshotImporterStatus = {
 };
 
 export async function prepareRuntimeSqlSchema(connection: DuckDBConnection): Promise<void> {
-  await migrate(connection, "migrations", process.env.NODE_ENV === "test" ? null : console);
+  try {
+    await migrate(connection, "migrations", process.env.NODE_ENV === "test" ? null : console);
+  } catch (error) {
+    if (error instanceof MigrationCompatibilityError) {
+      throw new RuntimeHttpError(error.message, 409, "runtime.schemaVersionIncompatible");
+    }
+
+    throw error;
+  }
 }
 
 export class SnapshotImporter {

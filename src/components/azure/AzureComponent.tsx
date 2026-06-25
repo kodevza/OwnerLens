@@ -416,6 +416,9 @@ export function AzureComponent() {
           <ServicePrincipalDetailsComponent
             key={principalDetailsTab.tabId}
             servicePrincipal={principalDetailsTab.principal}
+            onAzureRbacClick={(principal) => openAzureRbac(principal, principalDetailsTab.tabId)}
+            onEntraPermissionsClick={(principal) => openEntraPermissions(principal, principalDetailsTab.tabId)}
+            onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, principalDetailsTab.tabId)}
           />
         ) : null}
         {ownershipEvidenceTab ? (

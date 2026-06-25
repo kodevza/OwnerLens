@@ -1,4 +1,5 @@
 import {
+  applyRuntimeCollectionSelection,
   applyRuntimeCollectionFilters,
   applyRuntimeCollectionSort,
   buildCollectionColumns,
@@ -35,7 +36,7 @@ export function buildRuntimeCollectionCsvExport<CollectionId extends string>(
   const columns = input.columns ?? buildCollectionColumns(input.rows);
   const columnIds = columns.map((column) => (typeof column === "string" ? column : column.id));
   const filteredRows = applyRuntimeCollectionFilters(input.rows, columnIds, input.filters ?? []);
-  const selectedRows = applySelectedRowKeys(filteredRows, input.selectedRowKeys ?? [], input.getRowKey);
+  const selectedRows = applyRuntimeCollectionSelection(filteredRows, input.selectedRowKeys ?? [], input.getRowKey);
   const sortedRows = applyRuntimeCollectionSort(selectedRows, columnIds, input.sortRules ?? []);
 
   return {
@@ -50,21 +51,4 @@ export function buildRuntimeCollectionCsvExport<CollectionId extends string>(
     columns: columnIds,
     count: sortedRows.length
   };
-}
-
-function applySelectedRowKeys(
-  rows: Record<string, unknown>[],
-  selectedRowKeys: string[],
-  getRowKey: ((row: Record<string, unknown>) => string) | undefined
-): Record<string, unknown>[] {
-  const selectedRowKeySet = new Set(selectedRowKeys.map((rowKey) => rowKey.trim()).filter(Boolean));
-  if (selectedRowKeySet.size === 0) {
-    return rows;
-  }
-
-  if (!getRowKey) {
-    return rows;
-  }
-
-  return rows.filter((row) => selectedRowKeySet.has(getRowKey(row)));
 }

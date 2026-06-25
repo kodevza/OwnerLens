@@ -3,6 +3,10 @@ import type {
   CreateRuntimeRemediationPackageRequest,
   DeleteRuntimeRemediationTasksRequest
 } from "../../../core/runtime/remediation";
+import type {
+  GeneratePowerShellScriptRequest,
+  RuntimePowerShellScript
+} from "./scripts/PowershellScriptService";
 
 export type LocalReportRuntimeRestRuntime = {
   listSnapshots(): Promise<unknown> | unknown;
@@ -32,4 +36,5 @@ export type LocalReportRuntimeRestRuntime = {
   readRemediationPackage(packageId: string): Promise<unknown> | unknown;
   exportRemediationPackageTasksCsv(packageId: string, options: LocalReportCollectionQueryOptions): Promise<unknown> | unknown;
   deleteRemediationTasks(request: DeleteRuntimeRemediationTasksRequest): Promise<unknown> | unknown;
+  generatePowerShellScript(request: GeneratePowerShellScriptRequest): Promise<RuntimePowerShellScript> | RuntimePowerShellScript;
 };

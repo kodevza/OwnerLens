@@ -1,10 +1,12 @@
 import { AzureComponent } from "./components/azure/AzureComponent";
 import { AzureInventoryStats } from "./components/azure/AzureInventoryStats";
 import { ownerLensVersion } from "./core/buildInfo";
+import { RuntimeErrorToast } from "./components/azure/RuntimeErrorToast";
 
 export default function App() {
   return (
     <main className="min-h-screen bg-background text-foreground">
+      <RuntimeErrorToast />
       <div className="mx-auto flex min-h-screen w-full min-w-0 max-w-none flex-col gap-4 py-4 min-[1920px]:w-[80vw]">
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-b border-border bg-background/90 px-4 py-3 backdrop-blur md:px-6">
           <div className="shrink-0">

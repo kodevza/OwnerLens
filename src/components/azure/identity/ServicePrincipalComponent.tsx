@@ -7,7 +7,12 @@ import type { PermissionRiskLevel } from "../../../core/risk/types";
 import type { RemediationPackage } from "../../../core/runtime/remediation";
 import { getTagNames } from "../../../core/azure/tags";
 import { azureServicePrincipalColumnHelp } from "../azureReportConfig";
-import { exportServicePrincipalsCsv, readRemediationPackage, readServicePrincipals } from "../api";
+import {
+  exportServicePrincipalsCsv,
+  generatePowerShellScript,
+  readRemediationPackage,
+  readServicePrincipals
+} from "../api";
 import { SelectableGenericTable } from "../../../report/components/table/SelectableGenericTable";
 import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../../report/reportTypes";
@@ -227,6 +232,28 @@ export function ServicePrincipalComponent({
             selectedRowKeys={selectedRowKeys}
             sortRules={sortRules}
             onExportCsv={exportServicePrincipalsCsv}
+            powerShellScriptAction={{
+              selectionLabel: selectAllMatchingFilters
+                ? "all filtered service principals"
+                : `${selectedRowKeys.length} selected service principals`,
+              templates: [
+                {
+                  id: "setServicePrincipalOwnerTag",
+                  label: "Set owner tag",
+                  generate: () =>
+                    generatePowerShellScript({
+                      collectionId: "entra.servicePrincipals",
+                      templateId: "setServicePrincipalOwnerTag",
+                      selection: {
+                        filters,
+                        selectAllMatchingFilters,
+                        selectedRowKeys,
+                        sortRules
+                      }
+                    })
+                }
+              ]
+            }}
           />
         )}
       />

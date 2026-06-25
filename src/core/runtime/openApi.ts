@@ -1,4 +1,5 @@
 import type { RuntimeRestEndpoint } from "./rest";
+import { runtimeErrorResponseSchema } from "./restSchemas";
 import type { RuntimeRestJsonSchema } from "./restValidation";
 
 type OpenApiDocument = {
@@ -61,6 +62,7 @@ function toOpenApiOperation(endpoint: RuntimeRestEndpoint): Record<string, unkno
       "400": errorResponse,
       "401": errorResponse,
       "404": errorResponse,
+      "409": errorResponse,
       "500": errorResponse
     }
   };
@@ -101,16 +103,7 @@ const errorResponse = {
   description: "Runtime error response",
   content: {
     "application/json": {
-      schema: {
-        type: "object",
-        required: ["error"],
-        additionalProperties: false,
-        properties: {
-          error: {
-            type: "string"
-          }
-        }
-      }
+      schema: runtimeErrorResponseSchema
     }
   }
 };

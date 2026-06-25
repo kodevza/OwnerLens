@@ -17,6 +17,7 @@ import type {
 } from "../../core/runtime/remediation";
 import type { LocalReportPaginatedCollection } from "../../core/runtime/collections";
 import type { PaginatedCollection } from "../../core/runtime/pagination";
+import type { RuntimeErrorBody } from "../../core/runtime/localSnapshotFiles";
 import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import {
   appendRuntimeCollectionFilters,
@@ -83,10 +84,14 @@ type ZeroTrustAssessmentRuntimeResponse = ZtaReport &
 
 export const remotePageSize = 20;
 
+export const runtimeApiErrorEventName = "ownerlens:runtimeApiError";
+
+export type RuntimeApiError = RuntimeErrorBody;
+
 export async function readAzureInventoryStats({ signal }: { signal: AbortSignal }): Promise<AzureInventoryStats> {
   const response = await runtimeFetch("/api/data/runtime/stats", { signal });
   if (!response.ok) {
-    throw new Error(`Inventory stats read failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Inventory stats read failed"));
   }
 
   return readJsonResponse<AzureInventoryStats>(response, "/api/data/runtime/stats", "Inventory stats read failed");
@@ -98,6 +103,26 @@ export type CsvExportSelection = {
   selectedRowKeys: string[];
   sortRules?: SortRule[];
 };
+
+export type RuntimePowerShellScript = {
+  kind: "powershellScript";
+  templateId: PowerShellScriptTemplateId;
+  fileName: string;
+  contentType: "text/x-powershell; charset=utf-8";
+  body: string;
+  count: number;
+  targetIds: string[];
+};
+
+export type PowerShellScriptTemplateId =
+  | "setResourceGroupOwnerTag"
+  | "setResourceGroupOwnerGroupTag"
+  | "setServicePrincipalOwnerTag";
+
+export type PowerShellScriptCollectionId =
+  | "azureResources.resourceGroupOwnership"
+  | "entra.servicePrincipals"
+  | "entra.managedIdentities";
 
 export async function readServicePrincipals({
   filters,
@@ -118,7 +143,7 @@ export async function readServicePrincipals({
 
   const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
-    throw new Error(`Service principals read failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Service principals read failed"));
   }
 
   return (await response.json()) as ServicePrincipalRuntimeResponse;
@@ -143,7 +168,7 @@ export async function readManagedIdentities({
 
   const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
-    throw new Error(`Managed identities read failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Managed identities read failed"));
   }
 
   return (await response.json()) as ManagedIdentityRuntimeResponse;
@@ -168,7 +193,7 @@ export async function readResourceGroups({
 
   const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
-    throw new Error(`Resource groups read failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Resource groups read failed"));
   }
 
   return (await response.json()) as ResourceGroupRuntimeResponse;
@@ -188,6 +213,48 @@ export async function exportResourceGroupsCsv(selection: CsvExportSelection): Pr
     selection,
     "Resource groups CSV export failed"
   );
+}
+
+export async function generateResourceGroupPowerShellScript({
+  selection,
+  templateId
+}: {
+  selection: CsvExportSelection;
+  templateId: PowerShellScriptTemplateId;
+}): Promise<RuntimePowerShellScript> {
+  return generatePowerShellScript({
+    collectionId: "azureResources.resourceGroupOwnership",
+    selection,
+    templateId
+  });
+}
+
+export async function generatePowerShellScript({
+  collectionId,
+  selection,
+  templateId
+}: {
+  collectionId: PowerShellScriptCollectionId;
+  selection: CsvExportSelection;
+  templateId: PowerShellScriptTemplateId;
+}): Promise<RuntimePowerShellScript> {
+  const url = new URL("/api/data/scripts/powershell", window.location.origin);
+  url.searchParams.set("collection", collectionId);
+  url.searchParams.set("template", templateId);
+  appendRuntimeCollectionFilters(url, selection.filters);
+  appendRuntimeCollectionSortRules(url, selection.sortRules ?? []);
+
+  if (!selection.selectAllMatchingFilters) {
+    appendRuntimeSelectedRowKeys(url, selection.selectedRowKeys);
+  }
+
+  const requestPath = `${url.pathname}${url.search}`;
+  const response = await runtimeFetch(requestPath);
+  if (!response.ok) {
+    throw new Error(await formatRuntimeApiFailure(response, "PowerShell script generation failed"));
+  }
+
+  return readJsonResponse<RuntimePowerShellScript>(response, requestPath, "PowerShell script generation failed");
 }
 
 export async function exportRemediationPackageTasksCsv(
@@ -228,7 +295,7 @@ export async function readAzureRbac({
 
   const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
-    throw new Error(`Azure RBAC read failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Azure RBAC read failed"));
   }
 
   return (await response.json()) as AzureRbacRuntimeResponse;
@@ -246,7 +313,7 @@ export async function readEntraPermissions({
 
   const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
-    throw new Error(`Entra API permissions read failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Entra API permissions read failed"));
   }
 
   return (await response.json()) as EntraPrincipalPermissionsResponse;
@@ -264,7 +331,7 @@ export async function readEntraUserGroups({
 
   const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
-    throw new Error(`Entra user groups read failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Entra user groups read failed"));
   }
 
   return readJsonResponse<EntraUserGroupMembershipResponse>(
@@ -302,7 +369,7 @@ export async function readOwnershipEvidence({
 
   const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
-    throw new Error(`Ownership evidence read failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Ownership evidence read failed"));
   }
 
   return readJsonResponse<OwnershipEvidenceResponse>(
@@ -337,7 +404,7 @@ export async function readZeroTrustAssessmentReport({
 
   const response = await runtimeFetch(`${url.pathname}${url.search}`, { signal });
   if (!response.ok) {
-    throw new Error(`Zero Trust Assessment report read failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Zero Trust Assessment report read failed"));
   }
 
   return (await response.json()) as ZeroTrustAssessmentRuntimeResponse;
@@ -355,7 +422,7 @@ export async function createZeroTrustAssessmentRemediationPackage(
   });
 
   if (!response.ok) {
-    throw new Error(`Zero Trust Assessment remediation package creation failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Zero Trust Assessment remediation package creation failed"));
   }
 
   return readJsonResponse<CreateRuntimeRemediationPackageResponse>(
@@ -371,7 +438,7 @@ export async function readRemediationPackage(packageId: string): Promise<Remedia
 
   const response = await runtimeFetch(`${url.pathname}${url.search}`);
   if (!response.ok) {
-    throw new Error(`Remediation package read failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Remediation package read failed"));
   }
 
   return readJsonResponse<RemediationPackage>(response, `${url.pathname}${url.search}`, "Remediation package read failed");
@@ -389,7 +456,7 @@ export async function deleteRemediationTasks(
   });
 
   if (!response.ok) {
-    throw new Error(`Remediation task deletion failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Remediation task deletion failed"));
   }
 
   return readJsonResponse<RemediationPackage>(
@@ -414,7 +481,7 @@ export async function updateEvidenceStatus({
 
   const response = await runtimeFetch(`${url.pathname}${url.search}`);
   if (!response.ok) {
-    throw new Error(`Ownership evidence status update failed: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, "Ownership evidence status update failed"));
   }
 }
 
@@ -450,7 +517,7 @@ async function downloadRuntimeCsv(path: string, selection: CsvExportSelection, f
   const requestPath = `${url.pathname}${url.search}`;
   const response = await runtimeFetch(requestPath);
   if (!response.ok) {
-    throw new Error(`${failurePrefix}: ${response.status}`);
+    throw new Error(await formatRuntimeApiFailure(response, failurePrefix));
   }
 
   const blob = await response.blob();
@@ -471,19 +538,83 @@ function getDownloadFileName(response: Response, fallback: string): string {
   return fileNameMatch?.[1] ?? fallback;
 }
 
-function runtimeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+async function runtimeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const token = readRuntimeToken();
-  if (!token) {
-    return init === undefined ? fetch(input) : fetch(input, init);
+  const response = token
+    ? await fetch(input, {
+        ...init,
+        headers: withRuntimeToken(init?.headers, token)
+      })
+    : await (init === undefined ? fetch(input) : fetch(input, init));
+
+  if (!response.ok) {
+    dispatchRuntimeApiError(await readRuntimeApiError(cloneRuntimeResponse(response)));
   }
 
-  const headers = new Headers(init?.headers);
-  headers.set("X-OwnerLens-Runtime-Token", token);
+  return response;
+}
 
-  return fetch(input, {
-    ...init,
-    headers
-  });
+function withRuntimeToken(headers: HeadersInit | undefined, token: string): Headers {
+  const nextHeaders = new Headers(headers);
+  nextHeaders.set("X-OwnerLens-Runtime-Token", token);
+  return nextHeaders;
+}
+
+async function formatRuntimeApiFailure(response: Response, fallback: string): Promise<string> {
+  const error = await readRuntimeApiError(cloneRuntimeResponse(response));
+  return error ? `${fallback}: ${error.message}` : `${fallback}: ${response.status}`;
+}
+
+async function readRuntimeApiError(response: Response): Promise<RuntimeApiError | null> {
+  const contentType = response.headers?.get("Content-Type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    return null;
+  }
+
+  try {
+    return parseRuntimeApiError(await response.json());
+  } catch {
+    return null;
+  }
+}
+
+function parseRuntimeApiError(value: unknown): RuntimeApiError | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const error = value.error;
+  if (isRecord(error) && typeof error.code === "string" && typeof error.message === "string") {
+    return {
+      code: error.code,
+      message: error.message
+    };
+  }
+
+  if (typeof error === "string") {
+    return {
+      code: "runtime.error",
+      message: error
+    };
+  }
+
+  return null;
+}
+
+function dispatchRuntimeApiError(error: RuntimeApiError | null): void {
+  if (!error) {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent<RuntimeApiError>(runtimeApiErrorEventName, { detail: error }));
+}
+
+function cloneRuntimeResponse(response: Response): Response {
+  return typeof response.clone === "function" ? response.clone() : response;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function readRuntimeToken(): string {

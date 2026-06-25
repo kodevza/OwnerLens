@@ -2,7 +2,7 @@ import { serve, type ServerType } from "@hono/node-server";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createLocalReportRuntime } from "../providers/azure/runtime/localReportRuntimeRest";
+import { createLocalReportRuntime } from "../providers/azure/runtime/localReportRuntimeFactory";
 import { createOwnerLensApp } from "./createOwnerLensApp";
 
 const defaultHost = "127.0.0.1";
@@ -25,7 +25,7 @@ export type StartedOwnerLensServer = {
 export async function startOwnerLensServer(options: OwnerLensServerOptions): Promise<StartedOwnerLensServer> {
   const appRoot = options.appRoot ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const distRoot = path.join(appRoot, "dist");
-  const runtime = createLocalReportRuntime(options.dataDir);
+  const runtime = createLocalReportRuntime(options.dataDir, appRoot);
   const app = createOwnerLensApp({
     distRoot,
     runtime,

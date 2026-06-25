@@ -5,7 +5,12 @@ import type { Tags } from "../../../core/azure/tags";
 import type { OwnerConfidence } from "../../../core/ownership/types";
 import type { PermissionRiskLevel } from "../../../core/risk/types";
 import { azureOwnerColumnHelp } from "../azureReportConfig";
-import { exportResourceGroupsCsv, readResourceGroups, remotePageSize } from "../api";
+import {
+  exportResourceGroupsCsv,
+  generateResourceGroupPowerShellScript,
+  readResourceGroups,
+  remotePageSize
+} from "../api";
 import { SelectableGenericTable } from "../../../report/components/table/SelectableGenericTable";
 import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 import type { ReportColumnRenderers } from "../../../report/buildCollectionColumns";
@@ -194,6 +199,41 @@ export function ResourceGroupComponent({
             selectedRowKeys={selectedRowKeys}
             sortRules={sortRules}
             onExportCsv={exportResourceGroupsCsv}
+            powerShellScriptAction={{
+              selectionLabel: selectAllMatchingFilters
+                ? "all filtered resource groups"
+                : `${selectedRowKeys.length} selected resource groups`,
+              templates: [
+                {
+                  id: "setResourceGroupOwnerTag",
+                  label: "Set owner tag",
+                  generate: () =>
+                    generateResourceGroupPowerShellScript({
+                      templateId: "setResourceGroupOwnerTag",
+                      selection: {
+                        filters,
+                        selectAllMatchingFilters,
+                        selectedRowKeys,
+                        sortRules
+                      }
+                    })
+                },
+                {
+                  id: "setResourceGroupOwnerGroupTag",
+                  label: "Set ownerGroup tag",
+                  generate: () =>
+                    generateResourceGroupPowerShellScript({
+                      templateId: "setResourceGroupOwnerGroupTag",
+                      selection: {
+                        filters,
+                        selectAllMatchingFilters,
+                        selectedRowKeys,
+                        sortRules
+                      }
+                    })
+                }
+              ]
+            }}
           />
         )}
       />

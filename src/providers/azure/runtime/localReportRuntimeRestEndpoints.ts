@@ -1,11 +1,17 @@
 import { RuntimeHttpError } from "../../../core/runtime/localSnapshotFiles";
 import type { DeleteRuntimeRemediationTasksRequest } from "../../../core/runtime/remediation";
 import type { RuntimeRestEndpoint } from "../../../core/runtime/rest";
+import type {
+  PowerShellScriptCollectionId,
+  PowerShellScriptTemplateId
+} from "./scripts/PowershellScriptService";
 import {
   collectionResponseSchema,
   csvCollectionQuerySchema,
   deleteRemediationTasksBodySchema,
   emptyQuerySchema,
+  powershellScriptQuerySchema,
+  powershellScriptResponseSchema,
   remediationPackageQuerySchema,
   remediationPackageResponseSchema,
   runtimeInventoryStatsResponseSchema,
@@ -36,6 +42,20 @@ export function defineLocalReportRuntimeRestEndpoints(runtime: LocalReportRuntim
     ...defineAzureResourcesLocalReportRuntimeRestEndpoints(runtime, restBasePath),
     ...defineOwnershipLocalReportRuntimeRestEndpoints(runtime, restBasePath),
     ...defineZeroTrustAssessmentLocalReportRuntimeRestEndpoints(runtime, restBasePath),
+    {
+      operationId: "generatePowerShellScript",
+      tags: ["Scripts"],
+      summary: "Generate a PowerShell script from a runtime template and collection selection.",
+      path: `${restBasePath}/scripts/powershell`,
+      querySchema: powershellScriptQuerySchema,
+      responseSchema: powershellScriptResponseSchema,
+      handle: ({ url }) =>
+        runtime.generatePowerShellScript({
+          collectionId: readPowerShellScriptCollectionId(url),
+          templateId: readPowerShellScriptTemplateId(url),
+          selection: parseRuntimeCollectionQueryOptions(url)
+        })
+    },
     {
       operationId: "readRuntimeInventoryStats",
       tags: ["Runtime"],
@@ -87,6 +107,36 @@ export function defineLocalReportRuntimeRestEndpoints(runtime: LocalReportRuntim
       handle: ({ body }) => runtime.deleteRemediationTasks(parseDeleteRemediationTasksRequest(body))
     }
   ];
+}
+
+function readPowerShellScriptTemplateId(url: URL): PowerShellScriptTemplateId {
+  const templateId = readRequiredSearchParam(url, "template");
+  if (
+    templateId !== "setResourceGroupOwnerTag" &&
+    templateId !== "setResourceGroupOwnerGroupTag" &&
+    templateId !== "setServicePrincipalOwnerTag"
+  ) {
+    throw new RuntimeHttpError(`Unsupported PowerShell template: ${templateId}`, 400);
+  }
+
+  return templateId;
+}
+
+function readPowerShellScriptCollectionId(url: URL): PowerShellScriptCollectionId | undefined {
+  const collectionId = url.searchParams.get("collection")?.trim();
+  if (!collectionId) {
+    return undefined;
+  }
+
+  if (
+    collectionId !== "azureResources.resourceGroupOwnership" &&
+    collectionId !== "entra.servicePrincipals" &&
+    collectionId !== "entra.managedIdentities"
+  ) {
+    throw new RuntimeHttpError(`Unsupported PowerShell collection: ${collectionId}`, 400);
+  }
+
+  return collectionId;
 }
 
 function parseDeleteRemediationTasksRequest(body: unknown): DeleteRuntimeRemediationTasksRequest {

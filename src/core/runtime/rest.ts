@@ -1,4 +1,4 @@
-import { RuntimeHttpError } from "./localSnapshotFiles";
+import { RuntimeHttpError, type RuntimeErrorResponse } from "./localSnapshotFiles";
 import type { RuntimeCollectionCsvExport } from "./collectionExport";
 import { validateRuntimeRestPayload, type RuntimeRestJsonSchema } from "./restValidation";
 
@@ -73,11 +73,38 @@ export async function handleRuntimeRestRequest(
     validateRuntimeRestResponse(endpoint, value);
     return formatRuntimeRestResult(value, endpoint.statusCode);
   } catch (error) {
-    return formatJsonResult(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      options.getErrorStatusCode(error)
-    );
+    const statusCode = options.getErrorStatusCode(error);
+    return formatJsonResult(formatRuntimeError(error, statusCode), statusCode);
   }
+}
+
+function formatRuntimeError(error: unknown, statusCode: number): RuntimeErrorResponse {
+  return {
+    error: {
+      code: error instanceof RuntimeHttpError ? error.code : defaultRuntimeErrorCode(statusCode),
+      message: error instanceof Error ? error.message : "Unknown error"
+    }
+  };
+}
+
+function defaultRuntimeErrorCode(statusCode: number): string {
+  if (statusCode === 400) {
+    return "runtime.badRequest";
+  }
+
+  if (statusCode === 401) {
+    return "runtime.unauthorized";
+  }
+
+  if (statusCode === 404) {
+    return "runtime.notFound";
+  }
+
+  if (statusCode === 409) {
+    return "runtime.conflict";
+  }
+
+  return "runtime.internalError";
 }
 
 function readRuntimeQuery(url: URL): Record<string, string | string[]> {

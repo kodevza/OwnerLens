@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { RuntimeHttpError } from "./errors";
 
-export { RuntimeHttpError } from "./errors";
+export { RuntimeHttpError, type RuntimeErrorBody, type RuntimeErrorResponse } from "./errors";
 
 export type LocalSnapshotFile = {
   name: string;

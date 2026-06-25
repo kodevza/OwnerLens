@@ -84,6 +84,23 @@ export function applyRuntimeCollectionFilters(
   );
 }
 
+export function applyRuntimeCollectionSelection(
+  rows: Record<string, unknown>[],
+  selectedRowKeys: string[],
+  getRowKey: ((row: Record<string, unknown>) => string) | undefined
+): Record<string, unknown>[] {
+  const selectedRowKeySet = new Set(selectedRowKeys.map((rowKey) => rowKey.trim()).filter(Boolean));
+  if (selectedRowKeySet.size === 0) {
+    return rows;
+  }
+
+  if (!getRowKey) {
+    return rows;
+  }
+
+  return rows.filter((row) => selectedRowKeySet.has(getRowKey(row)));
+}
+
 export function applyRuntimeCollectionSort(
   rows: Record<string, unknown>[],
   columns: string[],
