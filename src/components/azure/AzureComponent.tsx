@@ -301,7 +301,7 @@ export function AzureComponent() {
                 key={tab.tabId}
                 active={activeView === tab.tabId}
                 closeLabel={`Close ${tab.principal.displayName} details tab`}
-                label={`${tab.principal.displayName} details`}
+                label={`INF: ${tab.principal.displayName}`}
                 onClose={() => closePrincipalDetails(tab)}
                 value={tab.tabId}
               />
@@ -311,7 +311,7 @@ export function AzureComponent() {
                 key={tab.tabId}
                 active={activeView === tab.tabId}
                 closeLabel={`Close ${tab.displayName} Entra API permissions tab`}
-                label={`${tab.displayName} permissions`}
+                label={`PER: ${tab.displayName}`}
                 onClose={() => closeEntraPermissions(tab)}
                 value={tab.tabId}
               />

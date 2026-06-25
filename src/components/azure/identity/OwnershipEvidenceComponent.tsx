@@ -59,8 +59,10 @@ export function OwnershipEvidenceComponent({
   const [userGroupsDropdown, setUserGroupsDropdown] = useState<UserGroupsDropdownSelection | null>(null);
 
   const loadOwnershipEvidence = useCallback(
-    async (signal: AbortSignal) => {
-      setLoadState({ status: "loading" });
+    async (signal: AbortSignal, options: { showLoading?: boolean } = {}) => {
+      if (options.showLoading !== false) {
+        setLoadState({ status: "loading" });
+      }
 
       const response = await readOwnershipEvidence({
         azureRbac,
@@ -122,23 +124,12 @@ export function OwnershipEvidenceComponent({
 
       try {
         await updateEvidenceStatus({ key: statusKey, status });
-        setLoadState((current) => {
-          if (current.status !== "ready") {
-            return current;
-          }
-
-          return {
-            status: "ready",
-            response: {
-              ...current.response,
-              evidence: current.response.evidence.map((item) =>
-                getOwnerCandidateStatusKey(target, item) === statusKey
-                  ? { ...item, disabled: status === "inactive" }
-                  : item
-              )
-            }
-          };
-        });
+        setLoadState((current) => markEvidenceStatus(current, target, statusKey, status));
+        try {
+          await loadOwnershipEvidence(new AbortController().signal, { showLoading: false });
+        } catch {
+          // Keep the confirmed local status when a follow-up refresh fails.
+        }
       } catch (error) {
         setLoadState({
           status: "error",
@@ -152,7 +143,7 @@ export function OwnershipEvidenceComponent({
         });
       }
     },
-    [target]
+    [loadOwnershipEvidence, target]
   );
 
   const handleUserGroupsClick = useCallback(
@@ -233,6 +224,29 @@ export function OwnershipEvidenceComponent({
       ) : null}
     </section>
   );
+}
+
+function markEvidenceStatus(
+  current: LoadState,
+  target: OwnershipEvidenceTarget,
+  statusKey: string,
+  status: EvidenceStatus
+): LoadState {
+  if (current.status !== "ready") {
+    return current;
+  }
+
+  return {
+    status: "ready",
+    response: {
+      ...current.response,
+      evidence: current.response.evidence.map((item) =>
+        getOwnerCandidateStatusKey(target, item) === statusKey
+          ? { ...item, disabled: status === "inactive" }
+          : item
+      )
+    }
+  };
 }
 
 function isPrincipalTarget(

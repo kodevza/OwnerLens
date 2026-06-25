@@ -265,14 +265,14 @@ async function readAzureResourceGroupOwnershipRows(
         select subscription_id, subscription_name, resource_group, location, tags, ordinal
         from azure_resource_groups
         ${options.target ? `
-        where lower(trim(subscription_id)) in (
-          select lower(trim(json_extract_string(value, '$')))
-          from json_each($subscriptionIds::json)
-        )
-          and lower(trim(resource_group)) in (
-            select lower(trim(json_extract_string(value, '$')))
-            from json_each($resourceGroups::json)
-          )` : ""}
+        where (lower(trim(subscription_id)), lower(trim(resource_group))) in (
+          select
+            lower(trim(json_extract_string(subscription_entry.value, '$'))),
+            lower(trim(json_extract_string(resource_group_entry.value, '$')))
+          from json_each($subscriptionIds::json) subscription_entry
+          join json_each($resourceGroups::json) resource_group_entry
+            on subscription_entry.key = resource_group_entry.key
+        )` : ""}
         order by ordinal
       ),
       target_principal_ids as (
@@ -367,7 +367,7 @@ async function readAzureResourceGroupOwnershipRows(
             ':' || lower(trim(latest_log.normalized_caller)) as owner_candidate,
           'low' as confidence,
           'activity.lastModifier' as source,
-          coalesce(latest_log.resource_id, '-') as evidence_value,
+          coalesce(latest_log.resource_id, latest_log.normalized_caller, '-') as evidence_value,
           latest_log.event_timestamp as evidence_date,
           1000 + latest_log.target_rank as priority
         from ranked_activity latest_log
@@ -478,7 +478,15 @@ async function readAzureResourceGroupOwnershipRows(
             owner_candidates.*,
             row_number() over (
               partition by subscription_id, resource_group, principal_id
-              order by case when disabled then 1 else 0 end, priority
+              order by
+                case when disabled then 1 else 0 end asc,
+                case confidence
+                  when 'high' then 3
+                  when 'medium' then 2
+                  when 'low' then 1
+                  else 0
+                end desc,
+                priority
             ) as owner_rank
           from owner_candidates
         ) ranked_owner_candidates
@@ -502,7 +510,16 @@ async function readAzureResourceGroupOwnershipRows(
       left join selected_owners owner
         on lower(trim(owner.subscription_id)) = lower(trim(rg.subscription_id))
         and lower(trim(owner.resource_group)) = lower(trim(rg.resource_group))
-      order by rg.ordinal, owner.priority
+      order by
+        rg.ordinal,
+        case when owner.disabled then 1 else 0 end asc,
+        case owner.confidence
+          when 'high' then 3
+          when 'medium' then 2
+          when 'low' then 1
+          else 0
+        end desc,
+        owner.priority
     `,
     buildResourceGroupOwnershipSqlParams(options)
   )).map(mapAzureResourceGroupOwnershipRow);

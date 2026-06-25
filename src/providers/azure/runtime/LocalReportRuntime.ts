@@ -105,6 +105,7 @@ export class LocalReportRuntime {
       azureResources: this.azureResources,
       azureResourcesQueries: this.azureResourcesQueries,
       zeroTrustAssessmentQueries: this.remediationRuntime,
+      disabledEvidenceStore: this.ownershipRuntime.getDisabledEvidenceStore(),
       exportService: this.exportService
     });
     this.powershellScriptService = new PowershellScriptService({

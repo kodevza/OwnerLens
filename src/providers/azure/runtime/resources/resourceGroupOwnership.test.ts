@@ -146,6 +146,88 @@ test("keeps active high-confidence owner rows ahead of later inactive rows for t
   );
 });
 
+test("prefers an active resource group owner row over a stronger inactive row", () => {
+  const [row] = buildResourceGroupOwnershipRows(
+    [resourceGroup("rg-inactive-first")],
+    [
+      {
+        ...ownerRow("rg-inactive-first", "tag.ownerGroup", "platform-team", "high"),
+        evidence: [{ user: "ownerGroup=platform-team", date: null, disabled: true }]
+      },
+      ownerRow("rg-inactive-first", "tag.owner", "app-team@example.test", "medium")
+    ]
+  );
+
+  expect(row).toEqual(
+    expect.objectContaining({
+      owner: "app-team@example.test",
+      confidence: "medium",
+      source: "tag.owner",
+      ownerCandidates: [
+        expect.objectContaining({
+          displayName: "app-team@example.test",
+          confidence: "medium",
+          rank: 1,
+          evidence: [{ user: "owner=app-team@example.test", date: null }]
+        })
+      ]
+    })
+  );
+});
+
+test("does not create owner candidates from disabled-only evidence", () => {
+  const [row] = buildResourceGroupOwnershipRows(
+    [resourceGroup("rg-disabled-only")],
+    [
+      {
+        ...ownerRow("rg-disabled-only", "tag.ownerGroup", "platform-team", "high"),
+        owner: null,
+        confidence: "none",
+        evidence: [{ user: "ownerGroup=platform-team", date: null, disabled: true }]
+      }
+    ]
+  );
+
+  expect(row).toEqual(
+    expect.objectContaining({
+      owner: null,
+      confidence: "none",
+      ownerCandidates: []
+    })
+  );
+});
+
+test("prefers the strongest active owner row after inactive evidence", () => {
+  const [row] = buildResourceGroupOwnershipRows(
+    [resourceGroup("rg-first-active")],
+    [
+      {
+        ...ownerRow("rg-first-active", "tag.ownerGroup", "platform-team", "high"),
+        owner: null,
+        confidence: "none",
+        evidence: [{ user: "ownerGroup=platform-team", date: null, disabled: true }]
+      },
+      ownerRow("rg-first-active", "tag.owner", "app-owner@example.test", "medium"),
+      ownerRow("rg-first-active", "tag.costCenter", "cc-1001", "high")
+    ]
+  );
+
+  expect(row).toEqual(
+    expect.objectContaining({
+      owner: "cc-1001",
+      confidence: "high",
+      source: "tag.costCenter",
+      ownerCandidates: [
+        expect.objectContaining({
+          displayName: "cc-1001",
+          confidence: "high",
+          rank: 1
+        })
+      ]
+    })
+  );
+});
+
 function resourceGroup(resourceGroupName: string): AzureResourceGroup {
   return {
     subscriptionId: "sub-1",

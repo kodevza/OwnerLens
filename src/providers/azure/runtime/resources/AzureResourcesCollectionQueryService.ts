@@ -1,6 +1,6 @@
 import { mapRoleAssignmentToAzureRbac } from "../../../../core/azure/azureRbac";
 import type { AzureRbac } from "../../../../core/azure/azureRbac";
-import type { AzureRoleAssignment, ResourceGroupOwnershipRow } from "../../../../core/azure/resources";
+import type { AzureResourceGroup, AzureRoleAssignment, ResourceGroupOwnershipRow } from "../../../../core/azure/resources";
 
 import { evaluateAzureRoleAssignmentRisk } from "../enrichment/evaluateAzureRoleAssignmentRisk";
 import { buildAzureOwnershipReport } from "../ownership/buildAzureOwnershipReport";
@@ -67,7 +67,7 @@ export class AzureResourcesCollectionQueryService {
   ): Promise<LocalReportPaginatedCollection<"azureResources.resourceGroupOwnership">> {
     return buildPaginatedCollection(
       "azureResources.resourceGroupOwnership",
-      await this.readResourceGroupOwnershipRows(),
+      await this.readResourceGroupOwnershipRows(options),
       options
     );
   }
@@ -139,7 +139,10 @@ export class AzureResourcesCollectionQueryService {
         getResourceGroupOwnershipLookupLimit(options)
       );
 
-      return buildResourceGroupOwnershipRows(ownerRows, ownerRows as AzureResourceGroupOwnershipSqlRow[]);
+      return buildResourceGroupOwnershipRows(
+        getResourceGroupsFromOwnershipRows(ownerRows),
+        ownerRows as AzureResourceGroupOwnershipSqlRow[]
+      );
     }
 
     const [resourceSnapshot, entraSnapshot, disabledKeys] = await Promise.all([
@@ -245,6 +248,24 @@ function getResourceGroupOwnershipLookupLimit(options: PageOptions): number {
   }
 
   return Math.max(1, Math.trunc(options.page) * Math.trunc(options.pageSize));
+}
+
+function getResourceGroupsFromOwnershipRows(rows: AzureResourceGroupOwnershipSqlRow[]): AzureResourceGroup[] {
+  const resourceGroups = new Map<string, AzureResourceGroup>();
+
+  for (const row of rows) {
+    if (!resourceGroups.has(row.targetKey)) {
+      resourceGroups.set(row.targetKey, {
+        subscriptionId: row.subscriptionId,
+        subscriptionName: row.subscriptionName,
+        resourceGroup: row.resourceGroup,
+        location: row.location,
+        tags: row.tags
+      });
+    }
+  }
+
+  return [...resourceGroups.values()];
 }
 
 function isServicePrincipalRoleAssignment(

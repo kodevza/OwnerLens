@@ -242,6 +242,10 @@ export class OwnershipEvidenceQueryService {
       throw new RuntimeHttpError("Ownership evidence target was not found.", 404);
     }
 
+    const ownerCandidates = await this.applyStoredResourceGroupDisabledEvidence(
+      ownerRows.flatMap(mapResourceGroupOwnershipSqlRowToOwnerCandidate)
+    );
+
     return {
       target: {
         kind: "resourceGroup",
@@ -251,8 +255,31 @@ export class OwnershipEvidenceQueryService {
         subscriptionName: targetRow.subscriptionName,
         resourceGroup: targetRow.resourceGroup
       },
-      evidence: flattenCandidateEvidence(ownerRows.flatMap(mapResourceGroupOwnershipSqlRowToOwnerCandidate))
+      evidence: flattenCandidateEvidence(rankOwnerCandidates(
+        ownerCandidates
+      ))
     };
+  }
+
+  private async applyStoredResourceGroupDisabledEvidence(candidates: OwnerCandidate[]): Promise<OwnerCandidate[]> {
+    const disabledKeys = await this.readDisabledOwnerEvidenceKeys();
+    if (disabledKeys.size === 0) {
+      return candidates;
+    }
+
+    return candidates.map((candidate) => {
+      if (!isResourceGroupOwnerCandidateDisabled(candidate, disabledKeys)) {
+        return candidate;
+      }
+
+      return {
+        ...candidate,
+        evidence: candidate.evidence.map((evidence) => ({
+          ...evidence,
+          disabled: true
+        }))
+      };
+    });
   }
 }
 
@@ -274,6 +301,41 @@ function isDirectOwnerEvidenceDisabled(
 
 function getDirectOwnerEvidenceKey(candidate: Pick<OwnerCandidate, "key">, evidence: OwnerEvidence): string {
   return [candidate.key, evidence.user.trim().toLowerCase(), evidence.date ?? ""].join(":");
+}
+
+function isResourceGroupOwnerCandidateDisabled(
+  candidate: Pick<OwnerCandidate, "key" | "relatedScopes">,
+  disabledKeys: ReadonlySet<string>
+): boolean {
+  return candidate.relatedScopes.some((scope) => {
+    if (!scope.subscriptionId || !scope.resourceGroup) {
+      return false;
+    }
+
+    const resourceGroupKey = [
+      "resourceGroup",
+      scope.subscriptionId,
+      scope.resourceGroup,
+      candidate.key
+    ].join(":");
+
+    if (disabledKeys.has(resourceGroupKey)) {
+      return true;
+    }
+
+    if (!scope.principalId) {
+      return false;
+    }
+
+    return disabledKeys.has([
+      "resourceGroup",
+      scope.subscriptionId,
+      scope.resourceGroup,
+      "principal",
+      scope.principalId,
+      candidate.key
+    ].join(":"));
+  });
 }
 
 function mapResourceGroupOwnershipSqlRowToOwnerCandidate(
@@ -363,8 +425,7 @@ function mapSqlRowsToResourceGroupOwnershipRows(
 function getRoleAssignmentResourceGroupOwnershipTarget(
   roleAssignments: AzureRoleAssignment[]
 ): { subscriptionIds: string[]; resourceGroups: string[] } {
-  const subscriptionIds = new Map<string, string>();
-  const resourceGroups = new Map<string, string>();
+  const pairs = new Map<string, { subscriptionId: string; resourceGroup: string }>();
 
   for (const assignment of roleAssignments) {
     const subscriptionId = firstNonEmpty([
@@ -381,13 +442,19 @@ function getRoleAssignmentResourceGroupOwnershipTarget(
       continue;
     }
 
-    subscriptionIds.set(normalizeKey(subscriptionId), subscriptionId.trim());
-    resourceGroups.set(normalizeKey(resourceGroup), resourceGroup.trim());
+    const normalizedSubscriptionId = normalizeKey(subscriptionId);
+    const normalizedResourceGroup = normalizeKey(resourceGroup);
+    pairs.set(`${normalizedSubscriptionId}:${normalizedResourceGroup}`, {
+      subscriptionId: subscriptionId.trim(),
+      resourceGroup: resourceGroup.trim()
+    });
   }
 
+  const targets = [...pairs.values()];
+
   return {
-    subscriptionIds: [...subscriptionIds.values()],
-    resourceGroups: [...resourceGroups.values()]
+    subscriptionIds: targets.map((target) => target.subscriptionId),
+    resourceGroups: targets.map((target) => target.resourceGroup)
   };
 }
 

@@ -19,6 +19,7 @@ import {
   type LocalReportPaginatedCollection
 } from "../../../../core/runtime/collections";
 import type { RuntimeCollectionCsvExport } from "../../../../core/runtime/collectionExport";
+import type { DisabledOwnerEvidenceStore } from "../../../../core/runtime/DisabledOwnerEvidenceStore";
 import type { AzureResourcesCollectionQueryService } from "../resources/AzureResourcesCollectionQueryService";
 import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
 import type { ExportService } from "../ExportService";
@@ -42,6 +43,7 @@ export type EntraCollectionQueryServiceOptions = {
   azureResources: LocalAzureResourcesReportRuntime;
   azureResourcesQueries: AzureResourcesCollectionQueryService;
   zeroTrustAssessmentQueries: EntraZeroTrustAssessmentQueries;
+  disabledEvidenceStore: Pick<DisabledOwnerEvidenceStore, "readKeys">;
   exportService: ExportService;
 };
 
@@ -50,6 +52,7 @@ export class EntraCollectionQueryService {
   private readonly azureResources: LocalAzureResourcesReportRuntime;
   private readonly azureResourcesQueries: AzureResourcesCollectionQueryService;
   private readonly zeroTrustAssessmentQueries: EntraZeroTrustAssessmentQueries;
+  private readonly disabledEvidenceStore: Pick<DisabledOwnerEvidenceStore, "readKeys">;
   private readonly exportService: ExportService;
 
   constructor(options: EntraCollectionQueryServiceOptions) {
@@ -57,6 +60,7 @@ export class EntraCollectionQueryService {
     this.azureResources = options.azureResources;
     this.azureResourcesQueries = options.azureResourcesQueries;
     this.zeroTrustAssessmentQueries = options.zeroTrustAssessmentQueries;
+    this.disabledEvidenceStore = options.disabledEvidenceStore;
     this.exportService = options.exportService;
   }
 
@@ -175,7 +179,8 @@ export class EntraCollectionQueryService {
       return enrichManagedIdentitiesWithResourceGroupOwners(
         managedIdentities,
         resourceGroupOwnershipRows,
-        userAssignedManagedIdentities
+        userAssignedManagedIdentities,
+        await this.disabledEvidenceStore.readKeys()
       ) as unknown as Record<string, unknown>[];
     } catch (error) {
       if (error instanceof RuntimeHttpError && error.statusCode === 404) {
@@ -201,7 +206,8 @@ export class EntraCollectionQueryService {
     try {
       return enrichServicePrincipalsWithResourceGroupOwners(
         servicePrincipals,
-        await this.azureResourcesQueries.readResourceGroupOwnershipRows(ownershipPageOptions)
+        await this.azureResourcesQueries.readResourceGroupOwnershipRows(ownershipPageOptions),
+        await this.disabledEvidenceStore.readKeys()
       ) as unknown as Record<string, unknown>[];
     } catch (error) {
       if (error instanceof RuntimeHttpError && error.statusCode === 404) {
@@ -230,7 +236,8 @@ export class EntraCollectionQueryService {
     try {
       return enrichServicePrincipalsWithResourceGroupOwners(
         [enrichedServicePrincipal],
-        await this.azureResourcesQueries.readResourceGroupOwnershipRows()
+        await this.azureResourcesQueries.readResourceGroupOwnershipRows(),
+        await this.disabledEvidenceStore.readKeys()
       )[0] ?? null;
     } catch (error) {
       if (error instanceof RuntimeHttpError && error.statusCode === 404) {
@@ -305,7 +312,8 @@ function canUseDuckDbLookupLimit(options: LocalReportCollectionQueryOptions): bo
 function enrichManagedIdentitiesWithResourceGroupOwners(
   managedIdentities: ManagedIdentity[],
   resourceGroupOwnershipRows: ResourceGroupOwnershipRow[],
-  userAssignedManagedIdentities: AzureUserAssignedManagedIdentity[]
+  userAssignedManagedIdentities: AzureUserAssignedManagedIdentity[],
+  disabledKeys: ReadonlySet<string>
 ): ManagedIdentity[] {
   return managedIdentities.map((identity) => {
     const resourceGroupProjection = projectManagedIdentityOwners(
@@ -314,7 +322,10 @@ function enrichManagedIdentitiesWithResourceGroupOwners(
       resourceGroupOwnershipRows,
       userAssignedManagedIdentities
     );
-    const directOwnerCandidates = readEntraPrincipalDirectOwnerCandidates(identity);
+    const directOwnerCandidates = filterActiveDirectOwnerCandidates(
+      readEntraPrincipalDirectOwnerCandidates(identity),
+      disabledKeys
+    );
 
     return {
       ...identity,
@@ -343,14 +354,18 @@ function buildDirectOwnerProjection(ownerCandidates: OwnerCandidate[]): {
 
 function enrichServicePrincipalsWithResourceGroupOwners(
   servicePrincipals: ServicePrincipal[],
-  resourceGroupOwnershipRows: ResourceGroupOwnershipRow[]
+  resourceGroupOwnershipRows: ResourceGroupOwnershipRow[],
+  disabledKeys: ReadonlySet<string>
 ): ServicePrincipal[] {
   return servicePrincipals.map((servicePrincipal) => {
     const resourceGroupProjection = projectServicePrincipalOwners(
       servicePrincipal.roleAssignments,
       resourceGroupOwnershipRows
     );
-    const directOwnerCandidates = readEntraPrincipalDirectOwnerCandidates(servicePrincipal);
+    const directOwnerCandidates = filterActiveDirectOwnerCandidates(
+      readEntraPrincipalDirectOwnerCandidates(servicePrincipal),
+      disabledKeys
+    );
 
     return {
       ...servicePrincipal,
@@ -360,4 +375,35 @@ function enrichServicePrincipalsWithResourceGroupOwners(
         : {})
     };
   });
+}
+
+function filterActiveDirectOwnerCandidates(
+  candidates: OwnerCandidate[],
+  disabledKeys: ReadonlySet<string>
+): OwnerCandidate[] {
+  if (disabledKeys.size === 0) {
+    return candidates;
+  }
+
+  return candidates.filter((candidate) => !isDirectOwnerCandidateDisabled(candidate, disabledKeys));
+}
+
+function isDirectOwnerCandidateDisabled(
+  candidate: OwnerCandidate,
+  disabledKeys: ReadonlySet<string>
+): boolean {
+  const candidateKey = normalizeOwnerKey(candidate.key);
+
+  for (const disabledKey of disabledKeys) {
+    const normalizedDisabledKey = normalizeOwnerKey(disabledKey);
+    if (normalizedDisabledKey === candidateKey || normalizedDisabledKey.startsWith(`${candidateKey}:`)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function normalizeOwnerKey(value: string): string {
+  return value.trim().toLowerCase();
 }

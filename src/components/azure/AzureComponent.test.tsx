@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 
 import type { ZtaReport } from "../../core/azure/ztaReport";
 import { AzureComponent } from "./AzureComponent";
+import { OwnershipEvidenceComponent } from "./identity/OwnershipEvidenceComponent";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -1212,7 +1213,7 @@ test("opens selectable ownership evidence table from a service principal owner b
 
   await clickElementByLabel("Set alice@example.test ownership evidence Inactive");
   await waitForText(container, "Inactive");
-  expect(evidenceReadCount).toBe(1);
+  expect(evidenceReadCount).toBe(2);
 
   const statusRequest = fetchMock.mock.calls
     .map(([input]) => String(input))
@@ -1227,7 +1228,7 @@ test("opens selectable ownership evidence table from a service principal owner b
 
   await clickElementByLabel("Toggle ownership evidence option");
   await waitFor(() => {
-    expect(evidenceReadCount).toBe(2);
+    expect(evidenceReadCount).toBe(3);
   });
 
   const azureRbacEvidenceRequest = fetchMock.mock.calls
@@ -1248,6 +1249,7 @@ test("opens selectable ownership evidence table from a service principal owner b
 });
 
 test("sets direct service principal owner evidence status to inactive", async () => {
+  let evidenceReadCount = 0;
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);
 
@@ -1261,6 +1263,171 @@ test("sets direct service principal owner evidence status to inactive", async ()
     }
 
     if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      evidenceReadCount += 1;
+      return ownershipEvidenceResponse({
+        candidateKey: "owner-1",
+        displayName: "alice@example.test",
+        type: "ownerUser",
+        disabled: evidenceReadCount > 1
+      });
+    }
+
+    return servicePrincipalOwnerResponse({
+      displayName: "alice@example.test",
+      type: "ownerUser"
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await waitForText(container, "Service principal app");
+  await clickButton("Open ownership evidence for alice@example.test");
+  await waitForText(container, "Application owner");
+
+  await clickElementByLabel("Set alice@example.test ownership evidence Inactive");
+  await waitForText(container, "Inactive");
+  expect(evidenceReadCount).toBe(2);
+
+  const statusRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .find((requestUrl) => requestUrl.startsWith("/api/data/ownership/ownerCandidates/status"));
+  expect(statusRequest).toBeDefined();
+
+  const statusUrl = new URL(statusRequest ?? "", window.location.origin);
+  expect(statusUrl.searchParams.get("key")).toBe("owner-1:alice@example.test:2026-06-05T00:00:00.000Z");
+  expect(statusUrl.searchParams.get("status")).toBe("inactive");
+
+  act(() => root.unmount());
+});
+
+test("reloads ownership evidence after deactivating an indirect ownerGroup candidate", async () => {
+  let evidenceReadCount = 0;
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/ownership/ownerCandidates/status")) {
+      return jsonResponse({
+        key: "resourceGroup:sub-1:rg-mi:principal:mi-object-id:ownerGroup:platform-team",
+        status: "inactive",
+        disabled: true,
+        disabledCount: 1
+      });
+    }
+
+    if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      evidenceReadCount += 1;
+      return jsonResponse({
+        target: {
+          kind: "managedIdentity",
+          id: "mi-object-id",
+          displayName: "uami-prod"
+        },
+        evidence: evidenceReadCount === 1
+          ? [
+              {
+                key: "ownerGroup:platform-team:ownerGroup=platform-team:",
+                ownerCandidateKey: "ownerGroup:platform-team",
+                ownerDisplayName: "platform-team",
+                ownerType: "ownerGroup",
+                confidence: "high",
+                source: "tag",
+                path: "indirect",
+                discoverySource: "tag",
+                rank: 1,
+                evidence: "ownerGroup=platform-team",
+                date: null,
+                relatedScopes: [
+                  {
+                    subscriptionId: "sub-1",
+                    subscriptionName: "Platform",
+                    resourceGroup: "rg-mi",
+                    principalId: "mi-object-id"
+                  }
+                ]
+              }
+            ]
+          : [
+              {
+                key: "ownerTag:fallback@example.test:owner=fallback@example.test:",
+                ownerCandidateKey: "ownerTag:fallback@example.test",
+                ownerDisplayName: "fallback@example.test",
+                ownerType: "ownerTag",
+                confidence: "medium",
+                source: "tag",
+                path: "indirect",
+                discoverySource: "tag",
+                rank: 1,
+                evidence: "owner=fallback@example.test",
+                date: null,
+                relatedScopes: [
+                  {
+                    subscriptionId: "sub-1",
+                    subscriptionName: "Platform",
+                    resourceGroup: "rg-mi",
+                    principalId: "mi-object-id"
+                  }
+                ]
+              }
+            ]
+      });
+    }
+
+    return jsonResponse({});
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(
+    <OwnershipEvidenceComponent
+      allowAzureRbacFallback={false}
+      azureRbac={true}
+      displayName="uami-prod"
+      target={{ kind: "managedIdentity", principalId: "mi-object-id" }}
+    />
+  );
+
+  await waitForText(container, "platform-team");
+
+  await clickElementByLabel("Set platform-team ownership evidence Inactive");
+  await waitForText(container, "fallback@example.test");
+
+  expect(evidenceReadCount).toBe(2);
+  expect(container.textContent).not.toContain("platform-team");
+
+  const statusRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .find((requestUrl) => requestUrl.startsWith("/api/data/ownership/ownerCandidates/status"));
+  expect(statusRequest).toBeDefined();
+
+  const statusUrl = new URL(statusRequest ?? "", window.location.origin);
+  expect(statusUrl.searchParams.get("key")).toBe(
+    "resourceGroup:sub-1:rg-mi:principal:mi-object-id:ownerGroup:platform-team"
+  );
+  expect(statusUrl.searchParams.get("status")).toBe("inactive");
+
+  act(() => root.unmount());
+});
+
+test("keeps inactive status after a successful status update when evidence reload fails", async () => {
+  let evidenceReadCount = 0;
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/ownership/ownerCandidates/status")) {
+      return jsonResponse({
+        key: "owner-1:alice@example.test:2026-06-05T00:00:00.000Z",
+        status: "inactive",
+        disabled: true,
+        disabledCount: 1
+      });
+    }
+
+    if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      evidenceReadCount += 1;
+      if (evidenceReadCount > 1) {
+        return { ok: false, status: 500 } as Response;
+      }
+
       return ownershipEvidenceResponse({
         candidateKey: "owner-1",
         displayName: "alice@example.test",
@@ -1284,14 +1451,8 @@ test("sets direct service principal owner evidence status to inactive", async ()
   await clickElementByLabel("Set alice@example.test ownership evidence Inactive");
   await waitForText(container, "Inactive");
 
-  const statusRequest = fetchMock.mock.calls
-    .map(([input]) => String(input))
-    .find((requestUrl) => requestUrl.startsWith("/api/data/ownership/ownerCandidates/status"));
-  expect(statusRequest).toBeDefined();
-
-  const statusUrl = new URL(statusRequest ?? "", window.location.origin);
-  expect(statusUrl.searchParams.get("key")).toBe("owner-1:alice@example.test:2026-06-05T00:00:00.000Z");
-  expect(statusUrl.searchParams.get("status")).toBe("inactive");
+  expect(evidenceReadCount).toBe(2);
+  expect(container.textContent).not.toContain("Could not update ownership evidence status.");
 
   act(() => root.unmount());
 });
@@ -1507,7 +1668,7 @@ test("sets resource group owner candidate status to inactive from the evidence t
 
   await clickElementByLabel("Set alice@example.test ownership evidence Inactive");
   await waitForText(container, "Inactive");
-  expect(evidenceReadCount).toBe(1);
+  expect(evidenceReadCount).toBe(2);
 
   const statusRequest = fetchMock.mock.calls
     .map(([input]) => String(input))
@@ -1887,7 +2048,7 @@ test("opens Entra API permissions tab for the selected service principal from it
   await waitForText(container, "Risk");
   await waitForText(container, "high");
 
-  expect(getButton("Service principal app permissions")).toBeDefined();
+  expect(getButton("PER: Service principal app")).toBeDefined();
 
   const permissionsRequest = fetchMock.mock.calls
     .map(([input]) => String(input))

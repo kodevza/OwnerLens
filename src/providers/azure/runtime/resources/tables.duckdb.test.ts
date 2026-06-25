@@ -149,6 +149,31 @@ test("filters resource group ownership rows by subscription and resource group l
   ]);
 });
 
+test("filters resource group ownership rows by requested subscription/resource group pairs", async () => {
+  const rows = await withDuckDb(async ({ connection }) => {
+    await insertAzureResourceGroupRows(connection, [
+      resourceGroup("rg-one", { ownerGroup: "Team-One" }, { subscriptionId: "sub-1" }),
+      resourceGroup("rg-two", { ownerGroup: "Team-Two" }, { subscriptionId: "sub-1" }),
+      resourceGroup("rg-one", { ownerGroup: "Team-Three" }, { subscriptionId: "sub-2" }),
+      resourceGroup("rg-two", { ownerGroup: "Team-Four" }, { subscriptionId: "sub-2" })
+    ]);
+
+    return readAzureResourceGroupOwnershipSqlRows(
+      connection,
+      {
+        subscriptionIds: ["sub-1", "sub-2"],
+        resourceGroups: ["rg-one", "rg-two"]
+      },
+      2
+    );
+  });
+
+  expect(rows.map((row) => `${row.subscriptionId}/${row.resourceGroup}:${row.owner}`)).toEqual([
+    "sub-1/rg-one:team-one",
+    "sub-2/rg-two:team-four"
+  ]);
+});
+
 test("uses the latest successful write or action activity when tags are absent", async () => {
   const rows = await withDuckDb(async ({ connection }) => {
     await insertAzureResourceGroupRows(connection, [resourceGroup("rg-activity")]);
@@ -292,6 +317,49 @@ test("falls back to the next owner candidate when the strongest tag candidate is
   ]);
 });
 
+test("orders active owner candidates before disabled evidence rows", async () => {
+  const rows = await withDuckDb(async ({ connection }) => {
+    await insertAzureResourceGroupRows(connection, [
+      resourceGroup("rg-disabled-tag-order", {
+        ownerGroup: "platform-team",
+        costCenter: "cc-1001",
+        owner: "fallback@example.test"
+      })
+    ]);
+    await disableResourceGroupOwnerCandidate(connection, "rg-disabled-tag-order", "ownerGroup:platform-team");
+
+    return readAzureResourceGroupOwnershipSqlRows(
+      connection,
+      {
+        subscriptionId: "sub-1",
+        resourceGroup: "rg-disabled-tag-order"
+      },
+      3
+    );
+  });
+
+  expect(rows).toEqual([
+    expect.objectContaining({
+      owner: "cc-1001",
+      confidence: "high",
+      source: "tag.costCenter",
+      evidence: [{ user: "costCenter=cc-1001", date: null }]
+    }),
+    expect.objectContaining({
+      owner: "fallback@example.test",
+      confidence: "medium",
+      source: "tag.owner",
+      evidence: [{ user: "owner=fallback@example.test", date: null }]
+    }),
+    expect.objectContaining({
+      owner: null,
+      confidence: "none",
+      source: "tag.ownerGroup",
+      evidence: [{ user: "ownerGroup=platform-team", date: null, disabled: true }]
+    })
+  ]);
+});
+
 test("falls back to earlier activity when the latest activity candidate is disabled", async () => {
   const rows = await withDuckDb(async ({ connection }) => {
     await insertAzureResourceGroupRows(connection, [resourceGroup("rg-disabled-activity")]);
@@ -384,6 +452,83 @@ test("applies disabled owner candidates only to the matching principal scope", a
       principalId: "sp-1",
       confidence: "none",
       evidence: [{ user: "ownerGroup=platform-team", date: null, disabled: true }]
+    })
+  ]);
+});
+
+test("falls back to the next owner candidate when a principal-scoped ownerGroup tag is disabled", async () => {
+  const rows = await withDuckDb(async ({ connection }) => {
+    await insertAzureResourceGroupRows(connection, [
+      resourceGroup("rg-principal-disabled-fallback", {
+        ownerGroup: "platform-team",
+        owner: "fallback@example.test"
+      })
+    ]);
+    await disableOwnerEvidenceKey(
+      connection,
+      "azure",
+      "resourceGroup:sub-1:rg-principal-disabled-fallback:principal:mi-1:ownerGroup:platform-team"
+    );
+
+    return readAzureResourceGroupOwnershipSqlRows(connection, {
+      subscriptionId: "sub-1",
+      resourceGroup: "rg-principal-disabled-fallback",
+      principalId: "MI-1"
+    });
+  });
+
+  expect(rows[0]).toEqual(
+    expect.objectContaining({
+      owner: "fallback@example.test",
+      principalId: "mi-1",
+      confidence: "medium",
+      source: "tag.owner",
+      evidence: [{ user: "owner=fallback@example.test", date: null }]
+    })
+  );
+});
+
+test("returns no active owner when both owner user and owner group tag candidates are disabled", async () => {
+  const rows = await withDuckDb(async ({ connection }) => {
+    await insertAzureResourceGroupRows(connection, [
+      resourceGroup("rg-disabled-user-and-group", {
+        ownerGroup: "platform-team",
+        owner: "fallback@example.test"
+      })
+    ]);
+    await disableResourceGroupOwnerCandidate(
+      connection,
+      "rg-disabled-user-and-group",
+      "ownerGroup:platform-team"
+    );
+    await disableResourceGroupOwnerCandidate(
+      connection,
+      "rg-disabled-user-and-group",
+      "ownerTag:fallback@example.test"
+    );
+
+    return readAzureResourceGroupOwnershipSqlRows(
+      connection,
+      {
+        subscriptionId: "sub-1",
+        resourceGroup: "rg-disabled-user-and-group"
+      },
+      2
+    );
+  });
+
+  expect(rows).toEqual([
+    expect.objectContaining({
+      owner: null,
+      confidence: "none",
+      source: "tag.ownerGroup",
+      evidence: [{ user: "ownerGroup=platform-team", date: null, disabled: true }]
+    }),
+    expect.objectContaining({
+      owner: null,
+      confidence: "none",
+      source: "tag.owner",
+      evidence: [{ user: "owner=fallback@example.test", date: null, disabled: true }]
     })
   ]);
 });
