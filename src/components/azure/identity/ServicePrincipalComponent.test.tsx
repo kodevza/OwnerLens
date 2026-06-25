@@ -273,13 +273,18 @@ test("renders service principal tags as colored badges", async () => {
   globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
     jsonResponse(collection([servicePrincipalWithTags], { page: 1, count: 1 }))
   );
+  const onPrincipalDetailsClick = jest.fn();
 
-  const { container, root } = renderComponent(<ServicePrincipalComponent />);
+  const { container, root } = renderComponent(<ServicePrincipalComponent onPrincipalDetailsClick={onPrincipalDetailsClick} />);
 
   await waitForText(container, "owner:team-a");
 
-  const displayNameLink = getCell("Tagged app").querySelector("a");
-  expect(displayNameLink?.getAttribute("href")).toBe(
+  await clickButton("Tagged app");
+  expect(onPrincipalDetailsClick).toHaveBeenCalledWith(servicePrincipalWithTags);
+
+  const objectIdLink = getCell("Tagged app").querySelector("a");
+  expect(objectIdLink?.textContent).toBe("tagged-sp-id");
+  expect(objectIdLink?.getAttribute("href")).toBe(
     "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/ManagedAppMenuBlade/~/Overview/objectId/tagged-sp-id/appId/tagged-client-id"
   );
 

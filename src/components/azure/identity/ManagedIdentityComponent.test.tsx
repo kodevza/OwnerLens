@@ -204,13 +204,18 @@ test("renders managed identity tags as badges", async () => {
   globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
     jsonResponse(collection([identity], { count: 1 }))
   );
+  const onPrincipalDetailsClick = jest.fn();
 
-  const { container, root } = renderComponent(<ManagedIdentityComponent />);
+  const { container, root } = renderComponent(<ManagedIdentityComponent onPrincipalDetailsClick={onPrincipalDetailsClick} />);
 
   await waitForText(container, "ownerlens");
 
-  const displayNameLink = getCell("uami-a").querySelector("a");
-  expect(displayNameLink?.getAttribute("href")).toBe(
+  await clickButton("uami-a");
+  expect(onPrincipalDetailsClick).toHaveBeenCalledWith(identity);
+
+  const objectIdLink = getCell("uami-a").querySelector("a");
+  expect(objectIdLink?.textContent).toBe("principal-uami-1");
+  expect(objectIdLink?.getAttribute("href")).toBe(
     "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/ManagedAppMenuBlade/~/Overview/objectId/principal-uami-1/appId/client-1"
   );
 

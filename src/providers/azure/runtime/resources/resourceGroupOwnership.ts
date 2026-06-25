@@ -188,7 +188,6 @@ export function applyResourceGroupOwnerDisabledEvidence(
       disabled:
         disabledKeys.has(getResourceGroupOwnerCandidateDisabledKey(row, entry.user)) ||
         isDefaultDisabledOwnerEvidence(entry) ||
-        disabledKeys.has(getResourceGroupOwnerEvidenceKey(row, entry)) ||
         undefined
     }));
     const activeEvidence = evidence.filter((entry) => !entry.disabled);
@@ -285,13 +284,6 @@ function inferOwnerCandidateSource(source: string): OwnerCandidateSource {
   }
 
   return "resourceGroupOwner";
-}
-
-function getResourceGroupOwnerEvidenceKey(
-  row: Pick<OwnerReportRow, "targetKey">,
-  evidence: Pick<OwnerEvidence, "user" | "date">
-): string {
-  return [row.targetKey, evidence.user.trim().toLowerCase(), evidence.date ?? ""].join(":");
 }
 
 function getResourceGroupOwnerCandidateDisabledKey(

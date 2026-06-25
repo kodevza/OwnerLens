@@ -20,6 +20,7 @@ import type {
 
 import { readLatestAzureIdentityEnrichment } from "../enrichment/azureIdentityEnrichment";
 import { readEntraAppRoleAssignmentRows } from "./domain/appRoleAssignmentsTable";
+import { readEntraApplicationNotesByAppIds } from "./domain/applicationsTable";
 import { mapEntraServicePrincipalsToCore } from "./entraServicePrincipalMapper";
 import { readEntraUserGroupMembership } from "./domain/groupMembersTable";
 import { readEntraOAuth2PermissionGrantRows } from "./domain/oauth2PermissionGrantsTable";
@@ -59,10 +60,13 @@ export async function readServicePrincipals(
   connection: DuckDBConnection,
   options: EntraPrincipalReadOptions = {}
 ): Promise<ServicePrincipal[]> {
-  const servicePrincipals = mapEntraServicePrincipalsToCore(await readEntraServicePrincipalRows(connection, {
-    ...options,
-    principalKind: "servicePrincipal"
-  }));
+  const servicePrincipals = await attachApplicationNotes(
+    connection,
+    mapEntraServicePrincipalsToCore(await readEntraServicePrincipalRows(connection, {
+      ...options,
+      principalKind: "servicePrincipal"
+    }))
+  );
   const permissionsByPrincipalId = await readPrincipalPermissionSummary(
     connection,
     getPrincipalIds(servicePrincipals)
@@ -95,7 +99,10 @@ export async function findServicePrincipalById(
     return null;
   }
 
-  const servicePrincipals = mapEntraServicePrincipalsToCore([servicePrincipal]);
+  const servicePrincipals = await attachApplicationNotes(
+    connection,
+    mapEntraServicePrincipalsToCore([servicePrincipal])
+  );
   const permissionsByPrincipalId = await readPrincipalPermissionSummary(
     connection,
     getPrincipalIds(servicePrincipals)
@@ -112,10 +119,13 @@ export async function readManagedIdentities(
   connection: DuckDBConnection,
   options: EntraPrincipalReadOptions = {}
 ): Promise<ManagedIdentity[]> {
-  const managedIdentityPrincipals = mapEntraServicePrincipalsToCore(await readEntraServicePrincipalRows(connection, {
-    ...options,
-    principalKind: "managedIdentity"
-  }));
+  const managedIdentityPrincipals = await attachApplicationNotes(
+    connection,
+    mapEntraServicePrincipalsToCore(await readEntraServicePrincipalRows(connection, {
+      ...options,
+      principalKind: "managedIdentity"
+    }))
+  );
   const permissionsByPrincipalId = await readPrincipalPermissionSummary(
     connection,
     getPrincipalIds(managedIdentityPrincipals)
@@ -216,6 +226,21 @@ async function readPrincipalPermissionSummary(
 
 function getPrincipalIds(servicePrincipals: Pick<EntraServicePrincipal, "id">[]): string[] {
   return servicePrincipals.map((servicePrincipal) => servicePrincipal.id);
+}
+
+async function attachApplicationNotes<T extends { appId: string }>(
+  connection: DuckDBConnection,
+  servicePrincipals: T[]
+): Promise<T[]> {
+  const notesByAppId = await readEntraApplicationNotesByAppIds(
+    connection,
+    servicePrincipals.map((servicePrincipal) => servicePrincipal.appId)
+  );
+
+  return servicePrincipals.map((servicePrincipal) => ({
+    ...servicePrincipal,
+    notes: notesByAppId.get(servicePrincipal.appId.toLowerCase()) ?? null
+  }));
 }
 
 function normalizePrincipalIds(principalIds: string[]): string[] {

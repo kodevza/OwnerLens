@@ -19,7 +19,7 @@ export function useAzureViewNavigation<TView extends string>(
   }, [activeView]);
 
   const activateView = useCallback((nextView: TView) => {
-    if (!enabledViews.includes(nextView)) {
+    if (!enabledViews.includes(nextView) && !isDynamicTabView(nextView)) {
       return;
     }
 
@@ -90,6 +90,15 @@ export function useAzureViewNavigation<TView extends string>(
     activateView,
     navigateBack
   };
+}
+
+function isDynamicTabView(view: string): boolean {
+  return [
+    "azureRbac:",
+    "entraPermissions:",
+    "ownershipEvidence:",
+    "remediationPackage:"
+  ].some((prefix) => view.startsWith(prefix));
 }
 
 function isEditableBackspaceTarget(target: EventTarget | null): boolean {

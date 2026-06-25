@@ -725,7 +725,7 @@ test.skip("opens a remediation package tab after creating a package from Zero Tr
   expect(azureRbacRequest).toBeDefined();
   expect(new URL(azureRbacRequest ?? "", window.location.origin).searchParams.get("servicePrincipalId")).toBe("sp-object-id");
 
-  await clickButton("Close Service principal app Azure RBAC tab");
+  await clickButton("Close RBAC: Service principal app tab");
   await waitForText(container, "ZTA test zta-1");
 
   await clickButton("Open Entra API permissions 2/1");
@@ -955,7 +955,7 @@ test("opens Azure RBAC tab for the selected service principal from its RBAC badg
   await clickButton("Open Azure RBAC assignments 1/1");
   await waitForText(container, "Owner on subscription Platform");
 
-  expect(getButton("Service principal app")).toBeDefined();
+  expect(getButton("RBAC: Service principal app")).toBeDefined();
   expect(container.textContent).toContain("high");
 
   const azureRbacRequest = fetchMock.mock.calls
@@ -966,13 +966,126 @@ test("opens Azure RBAC tab for the selected service principal from its RBAC badg
   const url = new URL(azureRbacRequest ?? "", window.location.origin);
   expect(url.searchParams.get("servicePrincipalId")).toBe("sp-object-id");
 
-  await clickButton("Close Service principal app Azure RBAC tab");
+  await clickButton("Close RBAC: Service principal app tab");
   await waitFor(() => {
-    expect(queryButton("Close Service principal app Azure RBAC tab")).toBeNull();
+    expect(queryButton("Close RBAC: Service principal app tab")).toBeNull();
     expect(container.textContent).not.toContain("Owner on subscription Platform");
   });
 
   act(() => root.unmount());
+});
+
+test("keeps Azure RBAC filters isolated per closable resource tab and clears them after close", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+    const url = new URL(requestUrl, window.location.origin);
+
+    if (requestUrl.startsWith("/api/data/azureRbac")) {
+      const servicePrincipalId = url.searchParams.get("servicePrincipalId");
+      const isFirstApp = servicePrincipalId === "sp-one-id";
+
+      return jsonResponse({
+        collectionId: "azureRbac",
+        columns: [],
+        count: 1,
+        page: 1,
+        pageSize: 20,
+        rows: [
+          {
+            accessDisplayName: isFirstApp ? "Owner on subscription Platform" : "Reader on subscription Platform",
+            accessRisk: isFirstApp ? "high" : "low",
+            accessResourceGroup: null,
+            accessResourceId: null,
+            accessScope: "/subscriptions/sub-1",
+            accessScopeType: "Subscription",
+            accessSubscriptionId: "sub-1",
+            canDelegate: false,
+            condition: null,
+            conditionVersion: null,
+            principalDisplayName: isFirstApp ? "App One" : "App Two",
+            principalId: servicePrincipalId,
+            principalType: "ServicePrincipal",
+            roleAssignmentId: isFirstApp ? "assignment-one" : "assignment-two",
+            roleDefinitionId: isFirstApp ? "owner-role-id" : "reader-role-id",
+            roleDefinitionName: isFirstApp ? "Owner" : "Reader",
+            scope: "/subscriptions/sub-1",
+            scopeSubscriptionId: "sub-1",
+            servicePrincipalId,
+            signInName: null,
+            subscriptionId: "sub-1",
+            subscriptionName: "Platform"
+          }
+        ]
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 2,
+      page: 1,
+      pageSize: 20,
+      rows: [
+        servicePrincipalRow({ displayName: "App One", id: "sp-one-id" }),
+        servicePrincipalRow({ displayName: "App Two", id: "sp-two-id" })
+      ]
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await waitForText(container, "App One");
+  await clickButtonAt("Open Azure RBAC assignments 1/1", 0);
+  await waitForText(container, "Owner on subscription Platform");
+  await changeInput("Filter Role", "Owner");
+  await waitForAzureRbacRequest((requestUrl) =>
+    requestUrl.includes("servicePrincipalId=sp-one-id") &&
+    requestUrl.includes("filter%5B0%5D%5Bvalue%5D%5B0%5D=Owner")
+  );
+
+  await clickButton("Service principals");
+  await waitForText(container, "App Two");
+  await clickButtonAt("Open Azure RBAC assignments 1/1", 1);
+  await waitForText(container, "Reader on subscription Platform");
+
+  expect(getButton("RBAC: App One")).toBeDefined();
+  expect(getButton("RBAC: App Two")).toBeDefined();
+  expect(lastAzureRbacRequest("sp-two-id")).not.toContain("Owner");
+
+  await clickButton("RBAC: App One");
+  await waitForText(container, "Owner on subscription Platform");
+  expect(getInput("Filter Role").value).toBe("Owner");
+
+  await clickButton("Close RBAC: App One tab");
+  await waitFor(() => {
+    expect(queryButton("Close RBAC: App One tab")).toBeNull();
+  });
+
+  await clickButton("Service principals");
+  await clickButtonAt("Open Azure RBAC assignments 1/1", 0);
+  await waitForText(container, "Owner on subscription Platform");
+  expect(lastAzureRbacRequest("sp-one-id")).not.toContain("Owner");
+
+  act(() => root.unmount());
+
+  async function waitForAzureRbacRequest(predicate: (requestUrl: string) => boolean): Promise<void> {
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.map(([requestInput]) => String(requestInput)).some(predicate)).toBe(true);
+    });
+  }
+
+  function lastAzureRbacRequest(servicePrincipalId: string): string {
+    const requestUrl = fetchMock.mock.calls
+      .map(([requestInput]) => String(requestInput))
+      .reverse()
+      .find((candidate) => candidate.startsWith("/api/data/azureRbac") && candidate.includes(`servicePrincipalId=${servicePrincipalId}`));
+    if (!requestUrl) {
+      throw new Error(`Expected Azure RBAC request for ${servicePrincipalId}.`);
+    }
+
+    return requestUrl;
+  }
 });
 
 test("opens selectable ownership evidence table from a service principal owner badge", async () => {
@@ -1084,6 +1197,7 @@ test("opens selectable ownership evidence table from a service principal owner b
   await waitForText(container, "Resource group owner");
 
   expect(getButton("SP: Service principal app owners")).toBeDefined();
+  expect(getButton("SP: Service principal app owners").title).toBe("SP: Service principal app owners");
   expect(getCheckbox("Select ownership evidence alice@example.test alice@example.test").checked).toBe(false);
 
   const evidenceRequest = fetchMock.mock.calls
@@ -1129,6 +1243,138 @@ test("opens selectable ownership evidence table from a service principal owner b
     expect(queryButton("Close SP: Service principal app ownership evidence tab")).toBeNull();
     expect(container.textContent).not.toContain("Resource group owner");
   });
+
+  act(() => root.unmount());
+});
+
+test("sets direct service principal owner evidence status to inactive", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/ownership/ownerCandidates/status")) {
+      return jsonResponse({
+        key: "owner-1:alice@example.test:2026-06-05T00:00:00.000Z",
+        status: "inactive",
+        disabled: true,
+        disabledCount: 1
+      });
+    }
+
+    if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      return ownershipEvidenceResponse({
+        candidateKey: "owner-1",
+        displayName: "alice@example.test",
+        type: "ownerUser"
+      });
+    }
+
+    return servicePrincipalOwnerResponse({
+      displayName: "alice@example.test",
+      type: "ownerUser"
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await waitForText(container, "Service principal app");
+  await clickButton("Open ownership evidence for alice@example.test");
+  await waitForText(container, "Application owner");
+
+  await clickElementByLabel("Set alice@example.test ownership evidence Inactive");
+  await waitForText(container, "Inactive");
+
+  const statusRequest = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .find((requestUrl) => requestUrl.startsWith("/api/data/ownership/ownerCandidates/status"));
+  expect(statusRequest).toBeDefined();
+
+  const statusUrl = new URL(statusRequest ?? "", window.location.origin);
+  expect(statusUrl.searchParams.get("key")).toBe("owner-1:alice@example.test:2026-06-05T00:00:00.000Z");
+  expect(statusUrl.searchParams.get("status")).toBe("inactive");
+
+  act(() => root.unmount());
+});
+
+test("falls back to Azure RBAC ownership evidence when the default principal evidence is empty", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/ownership/evidence")) {
+      const url = new URL(requestUrl, window.location.origin);
+      if (url.searchParams.get("azureRbac") === "true") {
+        return jsonResponse({
+          target: {
+            kind: "servicePrincipal",
+            id: "sp-object-id",
+            displayName: "Service principal app"
+          },
+          evidence: [
+            {
+              key: "rbac-owner:alice@example.test:2026-06-05T00:00:00.000Z",
+              ownerCandidateKey: "ownerUser:alice@example.test",
+              ownerDisplayName: "alice@example.test",
+              ownerType: "ownerUser",
+              confidence: "medium",
+              source: "resourceGroupOwner",
+              path: "indirect",
+              discoverySource: "azureRbac",
+              rank: 1,
+              evidence: "Contributor on resource group rg-app",
+              date: "2026-06-05T00:00:00.000Z",
+              relatedScopes: [
+                {
+                  subscriptionId: "sub-1",
+                  subscriptionName: "Platform",
+                  resourceGroup: "rg-app",
+                  principalId: "sp-object-id"
+                }
+              ]
+            }
+          ]
+        });
+      }
+
+      return jsonResponse({
+        target: {
+          kind: "servicePrincipal",
+          id: "sp-object-id",
+          displayName: "Service principal app"
+        },
+        evidence: []
+      });
+    }
+
+    return servicePrincipalOwnerResponse({ displayName: "alice@example.test", type: "ownerUser" });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await waitForText(container, "Service principal app");
+  await clickButton("Open ownership evidence for alice@example.test");
+  await waitForText(container, "Contributor on resource group rg-app");
+  expect(getButton("Toggle ownership evidence option").getAttribute("aria-checked")).toBe("true");
+
+  const evidenceRequests = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .filter((requestUrl) => requestUrl.startsWith("/api/data/ownership/evidence"));
+  expect(evidenceRequests).toHaveLength(2);
+  expect(new URL(evidenceRequests[0], window.location.origin).searchParams.get("azureRbac")).toBe("false");
+  expect(new URL(evidenceRequests[1], window.location.origin).searchParams.get("azureRbac")).toBe("true");
+
+  await clickElementByLabel("Toggle ownership evidence option");
+  await waitForText(container, "No ownership evidence was found.");
+  expect(getButton("Toggle ownership evidence option").getAttribute("aria-checked")).toBe("false");
+
+  const directEvidenceRequests = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .filter((requestUrl) => requestUrl.startsWith("/api/data/ownership/evidence"));
+  expect(directEvidenceRequests.map((requestUrl) => new URL(requestUrl, window.location.origin).searchParams.get("azureRbac"))).toEqual([
+    "false",
+    "true",
+    "false"
+  ]);
 
   act(() => root.unmount());
 });
@@ -1437,7 +1683,7 @@ test("opens ownership evidence for application owner evidence", async () => {
   const rbacUrl = new URL(applicationRbacRequest ?? "", window.location.origin);
   expect(rbacUrl.searchParams.get("servicePrincipalId")).toBe("application-object-id");
 
-  await clickButton("Close Application owner app Azure RBAC tab");
+  await clickButton("Close RBAC: Application owner app tab");
   await waitForText(container, "Application owner");
 
   await clickButton("Open application ownership evidence for Application owner app");
@@ -1762,7 +2008,7 @@ test("opens Azure RBAC tab for the selected managed identity from its RBAC badge
   await clickButton("Open Azure RBAC assignments 2/1");
   await waitForText(container, "Contributor on resource group rg-app");
 
-  expect(getButton("uami-prod")).toBeDefined();
+  expect(getButton("RBAC: uami-prod")).toBeDefined();
   expect(container.textContent).toContain("high");
 
   const azureRbacRequest = fetchMock.mock.calls
@@ -1872,7 +2118,7 @@ test("opens Azure RBAC tab for the selected resource group from its RBAC badge",
   expect(url.searchParams.get("resourceGroup")).toBe("rg-app");
   expect(url.searchParams.get("servicePrincipalId")).toBeNull();
 
-  await clickButton("Close rg-app Azure RBAC tab");
+  await clickButton("Close RBAC: rg-app tab");
   await waitForText(container, "rg-app");
 
   act(() => root.unmount());
@@ -2107,6 +2353,38 @@ function testRoleAssignment(roleDefinitionName: string, scope: string) {
   };
 }
 
+function servicePrincipalRow({ displayName, id }: { displayName: string; id: string }) {
+  return {
+    accountEnabled: true,
+    appDisplayName: displayName,
+    appId: `${id}-client-id`,
+    appOwnerOrganizationId: null,
+    azureRbac: "Owner on subscription Platform",
+    displayName,
+    homepage: null,
+    id,
+    loginUrl: null,
+    permissionRisk: "high",
+    rbacRoleAssignmentCount: 1,
+    rbacRoleLevel: "high",
+    rbacSubscriptionCount: 1,
+    publisherName: null,
+    replyUrls: [],
+    roleAssignments: [],
+    oauthPermissionsCount: 0,
+    appRolesPermissionCount: 0,
+    entraPermissionRisk: "none",
+    servicePrincipalNames: [],
+    servicePrincipalType: "Application",
+    potentialOwners: [],
+    ownerConfidence: "none",
+    tags: [],
+    ztaMaxRisk: "none",
+    ztaRemediationCountAll: 0,
+    ztaRemediationFailedCount: 0
+  };
+}
+
 function renderComponent(component: React.ReactNode): { container: HTMLElement; root: Root } {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -2122,6 +2400,18 @@ function renderComponent(component: React.ReactNode): { container: HTMLElement; 
 async function clickButton(label: string) {
   await act(async () => {
     const button = getButton(label);
+    button.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    button.click();
+  });
+}
+
+async function clickButtonAt(label: string, index: number) {
+  await act(async () => {
+    const button = getButtons(label)[index];
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new Error(`Expected button ${label} at index ${index}.`);
+    }
+
     button.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
     button.click();
   });
@@ -2268,6 +2558,14 @@ function getButton(label: string): HTMLButtonElement {
   }
 
   return button;
+}
+
+function getButtons(label: string): HTMLButtonElement[] {
+  return [...document.querySelectorAll("button")].filter(
+    (candidate): candidate is HTMLButtonElement =>
+      candidate instanceof HTMLButtonElement &&
+      (candidate.getAttribute("aria-label") === label || candidate.textContent?.trim() === label)
+  );
 }
 
 function getCheckbox(label: string): HTMLInputElement {

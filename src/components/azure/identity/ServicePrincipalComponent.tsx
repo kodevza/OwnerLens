@@ -132,6 +132,7 @@ export function ServicePrincipalComponent({
   onFiltersChange,
   onOwnershipEvidenceClick,
   onPageChange,
+  onPrincipalDetailsClick,
   onRemediationPackageClick,
   onSortRulesChange,
   onZtaRemediationsClick
@@ -144,6 +145,7 @@ export function ServicePrincipalComponent({
   onFiltersChange?: (filters: ColumnFilters) => void;
   onOwnershipEvidenceClick?: (selection: OwnershipEvidenceSelection) => void;
   onPageChange?: (page: number) => void;
+  onPrincipalDetailsClick?: (servicePrincipal: ServicePrincipal) => void;
   onRemediationPackageClick?: (remediationPackage: RemediationPackage) => void;
   onSortRulesChange?: (sortRules: SortRule[]) => void;
   onZtaRemediationsClick?: (objectId: string) => void;
@@ -174,6 +176,7 @@ export function ServicePrincipalComponent({
         onAzureRbacClick,
         onEntraPermissionsClick,
         onOwnershipEvidenceClick,
+        onPrincipalDetailsClick,
         onZtaRemediationsClick
       }),
       RemediationPackages: (servicePrincipal: ServicePrincipal) => (
@@ -188,6 +191,7 @@ export function ServicePrincipalComponent({
       onAzureRbacClick,
       onEntraPermissionsClick,
       onOwnershipEvidenceClick,
+      onPrincipalDetailsClick,
       onRemediationPackageClick,
       onZtaRemediationsClick,
       openRemediationPackage

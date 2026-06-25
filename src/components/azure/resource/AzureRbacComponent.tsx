@@ -96,7 +96,25 @@ const azureRbacFields: ReportFieldDescriptor<AzureRbac>[] = [
   }
 ];
 
-export function AzureRbacComponent({ target }: { target: AzureRbacTarget }) {
+type AzureRbacComponentProps = {
+  initialFilters?: ColumnFilters;
+  initialPage?: number;
+  initialSortRules?: SortRule[];
+  onFiltersChange?: (filters: ColumnFilters) => void;
+  onPageChange?: (page: number) => void;
+  onSortRulesChange?: (sortRules: SortRule[]) => void;
+  target: AzureRbacTarget;
+};
+
+export function AzureRbacComponent({
+  initialFilters,
+  initialPage,
+  initialSortRules,
+  onFiltersChange,
+  onPageChange,
+  onSortRulesChange,
+  target
+}: AzureRbacComponentProps) {
   const loadPage = useCallback(
     ({
       filters,
@@ -119,9 +137,15 @@ export function AzureRbacComponent({ target }: { target: AzureRbacTarget }) {
       emptyMessage="No Azure RBAC assignments match the filter."
       fields={azureRbacFields}
       getRowKey={(row) => row.roleAssignmentId ?? `${row.servicePrincipalId}:${row.scope}:${row.roleDefinitionId ?? row.roleDefinitionName ?? ""}`}
+      initialFilters={initialFilters}
+      initialPage={initialPage}
+      initialSortRules={initialSortRules}
       loadPage={loadPage}
       loadingMessage="Loading Azure RBAC assignments..."
       minWidthClassName="min-w-[2200px]"
+      onFiltersChange={onFiltersChange}
+      onPageChange={onPageChange}
+      onSortRulesChange={onSortRulesChange}
     />
   );
 }

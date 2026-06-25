@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 
+import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 import type { OwnershipEvidenceItem, OwnershipEvidenceResponse } from "../../../core/ownership/types";
 import { SelectableGenericTable } from "../../../report/components/table/SelectableGenericTable";
 import { Card } from "../../../report/components/ui/card";
 import { EntraUserGroupsDropdown } from "./EntraUserGroupsDropdown";
 import { readOwnershipEvidence, updateEvidenceStatus, type EvidenceStatus, type OwnershipEvidenceTarget } from "../api";
-import { formatOwnershipEvidenceTarget } from "./ownershipEvidenceFormatters";
 import { ownershipEvidenceFields } from "./ownershipEvidenceFields";
 import { buildOwnershipEvidenceFieldRenderers, getOwnerCandidateStatusKey } from "./OwnershipEvidenceRenderers";
 import type { AzureRbacPrincipalSelection } from "./ServicePrincipalFieldRenderers";
@@ -30,16 +30,28 @@ type UserGroupsDropdownSelection = {
 };
 
 export function OwnershipEvidenceComponent({
+  allowAzureRbacFallback = true,
   azureRbac,
   displayName,
+  filters,
   onAzureRbacClick,
+  onAzureRbacFallback,
+  onFiltersChange,
   onOwnershipEvidenceClick,
+  onSortRulesChange,
+  sortRules,
   target
 }: {
+  allowAzureRbacFallback?: boolean;
   azureRbac: boolean;
   displayName: string;
+  filters?: ColumnFilters;
   onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
+  onAzureRbacFallback?: () => void;
+  onFiltersChange?: (filters: ColumnFilters) => void;
   onOwnershipEvidenceClick?: (selection: { displayName: string; target: OwnershipEvidenceTarget }) => void;
+  onSortRulesChange?: (sortRules: SortRule[]) => void;
+  sortRules?: SortRule[];
   target: OwnershipEvidenceTarget;
 }) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
@@ -56,9 +68,24 @@ export function OwnershipEvidenceComponent({
         target
       });
 
+      if (!azureRbac && allowAzureRbacFallback && isPrincipalTarget(target) && response.evidence.length === 0) {
+        if (onAzureRbacFallback) {
+          onAzureRbacFallback();
+          return;
+        }
+
+        const azureRbacResponse = await readOwnershipEvidence({
+          azureRbac: true,
+          signal,
+          target
+        });
+        setLoadState({ status: "ready", response: azureRbacResponse });
+        return;
+      }
+
       setLoadState({ status: "ready", response });
     },
-    [azureRbac, target]
+    [allowAzureRbacFallback, azureRbac, onAzureRbacFallback, target]
   );
 
   useEffect(() => {
@@ -180,19 +207,20 @@ export function OwnershipEvidenceComponent({
 
   return (
     <section className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-base font-semibold">{displayName}</h2>
-        <div className="mt-1 text-sm text-muted-foreground">{formatOwnershipEvidenceTarget(loadState.response)}</div>
-      </div>
+
       <SelectableGenericTable
         columnWidthsStorageKey="ownership-evidence"
         emptyMessage="No ownership evidence was found."
         fieldRenderers={fieldRenderers}
         fields={ownershipEvidenceFields}
+        filters={filters}
         getRowKey={(evidence) => evidence.key}
         getRowSelectionLabel={(evidence) => `Select ownership evidence ${evidence.ownerDisplayName} ${evidence.evidence}`}
         minWidthClassName="min-w-[1360px]"
         rows={loadState.response.evidence}
+        sortRules={sortRules}
+        onFiltersChange={onFiltersChange}
+        onSortRulesChange={onSortRulesChange}
       />
       {userGroupsDropdown ? (
         <EntraUserGroupsDropdown
@@ -205,4 +233,10 @@ export function OwnershipEvidenceComponent({
       ) : null}
     </section>
   );
+}
+
+function isPrincipalTarget(
+  target: OwnershipEvidenceTarget
+): target is Extract<OwnershipEvidenceTarget, { kind: "servicePrincipal" | "managedIdentity" }> {
+  return target.kind === "servicePrincipal" || target.kind === "managedIdentity";
 }
