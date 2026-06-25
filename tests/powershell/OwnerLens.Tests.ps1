@@ -130,6 +130,57 @@ Describe "Azure Monitor activity log collection" {
   }
 }
 
+Describe "Azure resource snapshot collection" {
+  BeforeEach {
+    . (Join-Path $PSScriptRoot "..\..\powershell\OwnerLens\Private\Invoke-OwnerLensPrepareResourceSnapshot.ps1")
+
+    function Get-AzContext {
+      [pscustomobject]@{
+        Subscription = [pscustomobject]@{
+          Id = "current-sub"
+        }
+      }
+    }
+
+    function Invoke-AzRestMethod {}
+
+    function Get-AzSubscription {
+      @(
+        [pscustomobject]@{
+          Id = "single-sub"
+          Name = "Test subscription"
+          TenantId = "tenant-1"
+          State = "Enabled"
+        }
+      )
+    }
+
+    function Get-AzUserAssignedIdentity {
+      @()
+    }
+
+    function Set-AzContext {}
+    function Get-AzResourceGroup { @() }
+    function Get-AzResource { @() }
+    function Get-AzRoleAssignment { @() }
+  }
+
+  It "writes requestedSubscriptions as an array for a single subscription filter" {
+    $outputPath = Join-Path $TestDrive "snapshot.json"
+
+    Invoke-OwnerLensPrepareResourceSnapshot `
+      -OutputPath $outputPath `
+      -SubscriptionIds "single-sub" `
+      -SkipAuditLogsExport
+
+    $snapshot = Get-Content -LiteralPath $outputPath -Raw | ConvertFrom-Json -AsHashtable
+
+    $requestedSubscriptions = $snapshot.meta.requestedSubscriptions
+    $requestedSubscriptions.GetType().FullName | Should -Be "System.Object[]"
+    $requestedSubscriptions | Should -Be @("single-sub")
+  }
+}
+
 Describe "OwnerLens REST request retry" {
   BeforeEach {
     . (Join-Path $PSScriptRoot "..\..\powershell\OwnerLens\Private\Invoke-OwnerLensRestRequestWithRetry.ps1")
