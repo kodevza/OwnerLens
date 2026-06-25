@@ -3,29 +3,11 @@ import type { LocalReportRuntime } from "./LocalReportRuntime";
 import {
   handleRuntimeRestRequest,
   type RuntimeRequest,
-  type RuntimeRestEndpoint,
   type RuntimeRestRequestOptions
 } from "../../../core/runtime/rest";
-import { emptyQuerySchema, runtimeRowSchema } from "../../../core/runtime/restSchemas";
+import { testEndpoint } from "../../../../tests/support/runtimeRestEndpoint";
 import type { AzureSnapshot } from "../inputTransferObject/generated/AzureSnapshot";
 import type { EntraSnapshot } from "../inputTransferObject/generated/EntraSnapshot";
-
-type TestRuntimeRestEndpoint = Omit<
-  RuntimeRestEndpoint,
-  "operationId" | "tags" | "summary" | "querySchema" | "responseSchema"
-> &
-  Partial<Pick<RuntimeRestEndpoint, "querySchema" | "responseSchema">>;
-
-function testEndpoint(endpoint: TestRuntimeRestEndpoint): RuntimeRestEndpoint {
-  return {
-    operationId: `test${endpoint.method ?? "GET"}${endpoint.path.replace(/\W+/g, "")}`,
-    tags: ["Test"],
-    summary: "Test endpoint.",
-    querySchema: emptyQuerySchema,
-    responseSchema: runtimeRowSchema,
-    ...endpoint
-  };
-}
 
 function getEndpoint(
   endpoints: ReturnType<typeof defineLocalReportRuntimeRestEndpoints>,

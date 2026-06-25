@@ -2,8 +2,6 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { DuckDBInstance } from "@duckdb/node-api";
-
 import { LocalReportRuntime } from "./LocalReportRuntime";
 import { defineLocalReportRuntimeRestEndpoints } from "./localReportRuntimeRest";
 import type { AzureSnapshot } from "../inputTransferObject/generated/AzureSnapshot";
@@ -23,37 +21,13 @@ import {
 import { insertEntraApplicationRows } from "./entra/domain/applicationsTable";
 import { prepareRuntimeSqlSchema } from "./SnapshotImporter";
 import type { ZeroTrustAssessmentReport } from "./zta/types";
+import {
+  installDuckDbHandleCleanup,
+  withDuckDb
+} from "../../../../tests/support/duckdb";
 
-type TestGlobal = typeof globalThis & {
-  gc?: () => void;
-};
+installDuckDbHandleCleanup();
 
-async function collectDuckDbNativeHandles(): Promise<void> {
-  // DuckDB's native result wrappers release their libuv handles through finalizers.
-  const gc = (globalThis as TestGlobal).gc;
-
-  if (!gc) {
-    return;
-  }
-
-  for (let cycle = 0; cycle < 3; cycle += 1) {
-    gc();
-    await new Promise<void>((resolve) => {
-      setImmediate(resolve);
-    });
-  }
-}
-
-afterEach(async () => {
-  await collectDuckDbNativeHandles();
-});
-
-afterAll(async () => {
-  await collectDuckDbNativeHandles();
-});
-
-type DuckDbTestInstance = Awaited<ReturnType<typeof DuckDBInstance.create>>;
-type DuckDbTestConnection = Awaited<ReturnType<DuckDbTestInstance["connect"]>>;
 type ZeroTrustAssessmentReportEndpointResponse = Awaited<
   ReturnType<LocalReportRuntime["queryZeroTrustAssessmentReport"]>
 >;
@@ -72,21 +46,6 @@ async function withRuntimeTestDir<T>(
   } finally {
     await runtime.close();
     await rm(dataDir, { force: true, recursive: true });
-  }
-}
-
-async function withDuckDb<T>(
-  fn: (ctx: { instance: DuckDbTestInstance; connection: DuckDbTestConnection }) => Promise<T>,
-  databasePath = ":memory:"
-): Promise<T> {
-  const instance = await DuckDBInstance.create(databasePath);
-  const connection = await instance.connect();
-
-  try {
-    return await fn({ instance, connection });
-  } finally {
-    connection.disconnectSync();
-    instance.closeSync();
   }
 }
 
@@ -138,11 +97,11 @@ async function readLatestSnapshotImportStatus(
           importedAt: null,
           skipped: false
         };
-  }, databasePath);
+  }, { databasePath });
 }
 
 async function readLatestEnrichmentStatus(databasePath: string) {
-  return withDuckDb(({ connection }) => readAzureIdentityEnrichmentStatus(connection), databasePath);
+  return withDuckDb(({ connection }) => readAzureIdentityEnrichmentStatus(connection), { databasePath });
 }
 
 type SnapshotImportStatusRow = {
@@ -2286,7 +2245,7 @@ test("records snapshot registry metadata and skips unchanged snapshots on runtim
         `
       );
       return rows.getRowObjectsJson();
-    }, databasePath);
+    }, { databasePath });
 
     expect(registryRows).toEqual([
       { source: "azureResources", skipped: false, row_count: "1" },
@@ -2370,7 +2329,7 @@ test("skips unchanged Zero Trust Assessment report without appending duplicate r
         reportCount: Number((reportRows.getRowObjectsJson()[0] as { count: string }).count),
         skippedCount: Number((skippedRows.getRowObjectsJson()[0] as { count: string }).count)
       };
-    }, databasePath);
+    }, { databasePath });
 
     expect(counts).toEqual({
       reportCount: 1,
@@ -3248,7 +3207,7 @@ test("closes runtime DuckDB file lock", async () => {
     const result = await withDuckDb(async ({ connection }) => {
       const rows = await connection.runAndReadAll("select 1 as ok");
       return rows.getRowObjectsJson();
-    }, databasePath);
+    }, { databasePath });
 
     expect(result).toEqual([{ ok: 1 }]);
 
@@ -3458,7 +3417,7 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
         "select count(*) as run_count from azure_runtime_enrichment_runs where status = 'completed'"
       );
       return rows.getRowObjectsJson();
-    }, databasePath);
+    }, { databasePath });
 
     expect(result[0]).toEqual({ run_count: "2" });
   });

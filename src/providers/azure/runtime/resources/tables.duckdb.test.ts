@@ -1,5 +1,3 @@
-import { DuckDBInstance } from "@duckdb/node-api";
-
 import type {
   AzureActivityLog,
   AzureResourceGroup
@@ -13,50 +11,21 @@ import {
   insertAzureResourceGroupRows,
   readAzureResourceGroupOwnershipSqlRows
 } from "./tables";
+import {
+  installDuckDbHandleCleanup,
+  withDuckDb as withRawDuckDb,
+  type DuckDbTestConnection
+} from "../../../../../tests/support/duckdb";
 
-type TestGlobal = typeof globalThis & {
-  gc?: () => void;
-};
-
-type DuckDbTestInstance = Awaited<ReturnType<typeof DuckDBInstance.create>>;
-type DuckDbTestConnection = Awaited<ReturnType<DuckDbTestInstance["connect"]>>;
-
-async function collectDuckDbNativeHandles(): Promise<void> {
-  const gc = (globalThis as TestGlobal).gc;
-
-  if (!gc) {
-    return;
-  }
-
-  for (let cycle = 0; cycle < 3; cycle += 1) {
-    gc();
-    await new Promise<void>((resolve) => {
-      setImmediate(resolve);
-    });
-  }
-}
-
-afterEach(async () => {
-  await collectDuckDbNativeHandles();
-});
-
-afterAll(async () => {
-  await collectDuckDbNativeHandles();
-});
+installDuckDbHandleCleanup();
 
 async function withDuckDb<T>(
-  fn: (ctx: { instance: DuckDbTestInstance; connection: DuckDbTestConnection }) => Promise<T>
+  fn: (ctx: { connection: DuckDbTestConnection }) => Promise<T>
 ): Promise<T> {
-  const instance = await DuckDBInstance.create(":memory:");
-  const connection = await instance.connect();
-
-  try {
+  return withRawDuckDb(async ({ connection }) => {
     await prepareRuntimeSqlSchema(connection);
-    return await fn({ instance, connection });
-  } finally {
-    connection.disconnectSync();
-    instance.closeSync();
-  }
+    return await fn({ connection });
+  });
 }
 
 test("returns no ownership evidence for a resource group without matching tags or activity", async () => {
