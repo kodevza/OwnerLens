@@ -15,12 +15,15 @@ function Open-OwnerLens {
     [ValidateNotNullOrEmpty()]
     [string]$DataPath = (Join-Path (Get-Location) "data"),
 
-    [string]$RuntimePath = ""
+    [string]$RuntimePath = "",
+
+    [ValidateRange(1, [int]::MaxValue)]
+    [int]$StartupTimeoutSeconds = 180
   )
 
   $state = Read-OwnerLensState
   if (-not $state -or -not (Test-OwnerLensTrackedProcess -State $state)) {
-    Start-OwnerLens -Port $Port -DataPath $DataPath -RuntimePath $RuntimePath | Out-Null
+    Start-OwnerLens -Port $Port -DataPath $DataPath -RuntimePath $RuntimePath -StartupTimeoutSeconds $StartupTimeoutSeconds | Out-Null
     $state = Read-OwnerLensState
   }
 

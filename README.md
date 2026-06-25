@@ -78,13 +78,15 @@ Open-OwnerLens
 ```
 
 `Start-OwnerLens` binds to `127.0.0.1`, chooses a free port, creates the data
-directory, stores runtime state under `$env:LOCALAPPDATA\OwnerLens`, and writes
-server stdout/stderr logs under `$env:LOCALAPPDATA\OwnerLens\logs`.
+directory, waits up to 180 seconds for the runtime API to become ready, stores
+runtime state under `$env:LOCALAPPDATA\OwnerLens`, and writes server stdout/stderr
+logs under `$env:LOCALAPPDATA\OwnerLens\logs`.
 
 Use an explicit port or data directory when needed:
 
 ```powershell
 Start-OwnerLens -Port 4174 -DataPath C:\OwnerLensData
+Start-OwnerLens -StartupTimeoutSeconds 240
 ```
 
 ## Create Snapshots
