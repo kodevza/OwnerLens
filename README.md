@@ -79,7 +79,7 @@ Connect-MgGraph -TenantId "<tenant-id>" -Scopes "Application.Read.All","Group.Re
 Collect snapshots from `pwsh`:
 
 ```powershell
-Import-Module ./artifacts/OwnerLens/OwnerLens.psd1 -Force
+Install-Module OwnerLens -Scope CurrentUser -AllowPrerelease
 Invoke-OwnerLensCollectAzure -SubscriptionIds "sub-id-1,sub-id-2"
 Invoke-OwnerLensCollectEntra -TenantId "<tenant-id>"
 ```
@@ -103,7 +103,7 @@ pwsh ./scripts/build-powershell-module.ps1
 Start the local app from `pwsh`:
 
 ```powershell
-Import-Module ./artifacts/OwnerLens/OwnerLens.psd1 -Force
+Install-Module OwnerLens -Scope CurrentUser -AllowPrerelease
 Start-OwnerLens -DataPath ./data
 Open-OwnerLens
 ```
