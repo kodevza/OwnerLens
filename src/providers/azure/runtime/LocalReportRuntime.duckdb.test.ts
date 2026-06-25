@@ -1860,6 +1860,7 @@ test("imports Entra snapshot into DuckDB and reads it back through the runtime",
         expect.objectContaining({
           id: "sp-1",
           displayName: "Example app",
+          notes: "Business critical app",
           oauthPermissionsCount: 1,
           appRolesPermissionCount: 1,
           entraPermissionRisk: "high",
@@ -3075,6 +3076,74 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
     } finally {
       await secondRuntime.close();
     }
+  });
+});
+
+test("persists disabled direct service principal owner evidence keys in DuckDB", async () => {
+  const directOwnerKey = "entraServicePrincipalOwner:ownerUser:owner-sp-1:alice@example.test:";
+  const entraSnapshot: EntraSnapshot = {
+    meta: {
+      provider: "entra",
+      snapshotVersion: "0.4",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      tenantId: "tenant-1",
+      account: "owner@example.test",
+      scopes: [],
+      servicePrincipalCount: 1,
+      applicationCount: 0,
+      oauth2PermissionGrantCount: 0,
+      appRoleAssignmentCount: 0
+    },
+    servicePrincipals: [
+      servicePrincipal("sp-direct", "app-direct", "Direct owner app", {
+        servicePrincipalType: "Application",
+        servicePrincipalOwners: [
+          {
+            id: "owner-sp-1",
+            displayName: "Alice Owner",
+            userPrincipalName: "alice@example.test",
+            mail: null,
+            ownerType: "User"
+          }
+        ]
+      })
+    ],
+    applications: [],
+    oauth2PermissionGrants: [],
+    appRoleAssignments: []
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(minimalAzureSnapshot()), "utf8");
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+
+    await runtime.initialize();
+    const endpoints = defineLocalReportRuntimeRestEndpoints(runtime);
+    const ownershipEvidenceEndpoint = getEndpoint(endpoints, "/api/data/ownership/evidence");
+    const ownerCandidateStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/ownerCandidates/status");
+
+    await expect(
+      ownerCandidateStatusEndpoint.handle({
+        req: {},
+        url: new URL(
+          `http://localhost/api/data/ownership/ownerCandidates/status?key=${encodeURIComponent(directOwnerKey)}&status=inactive`
+        )
+      })
+    ).resolves.toEqual({ key: directOwnerKey, status: "inactive", disabled: true, disabledCount: 1 });
+    await expect(
+      ownershipEvidenceEndpoint.handle({
+        req: {},
+        url: new URL("http://localhost/api/data/ownership/evidence?kind=servicePrincipal&principalId=sp-direct")
+      })
+    ).resolves.toMatchObject({
+      evidence: [
+        {
+          key: directOwnerKey,
+          ownerCandidateKey: "entraServicePrincipalOwner:ownerUser:owner-sp-1",
+          disabled: true
+        }
+      ]
+    });
   });
 });
 

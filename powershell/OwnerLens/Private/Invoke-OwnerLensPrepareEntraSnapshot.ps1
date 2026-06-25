@@ -31,7 +31,12 @@ function Get-EntraGroupMembersIncludingServicePrincipals {
   $uri = "/beta/groups/$($GroupId)/members?`$select=id,displayName,userPrincipalName,mail,appId,servicePrincipalType&`$top=999"
 
   while ($uri) {
-    $response = Invoke-MgGraphRequest -Method GET -Uri $uri -OutputType PSObject
+    $currentUri = $uri
+    $response = Invoke-OwnerLensRestRequestWithRetry `
+      -OperationName "Microsoft Graph group members request" `
+      -Request {
+        return Invoke-MgGraphRequest -Method GET -Uri $currentUri -OutputType PSObject -ErrorAction Stop
+      }
     $members += @($response.value)
 
     $nextLinkProperty = $response.PSObject.Properties["@odata.nextLink"]
@@ -46,7 +51,12 @@ function Get-EntraOAuth2PermissionGrants {
   $uri = "/v1.0/oauth2PermissionGrants?`$select=id,clientId,consentType,principalId,resourceId,scope&`$top=999"
 
   while ($uri) {
-    $response = Invoke-MgGraphRequest -Method GET -Uri $uri -OutputType PSObject
+    $currentUri = $uri
+    $response = Invoke-OwnerLensRestRequestWithRetry `
+      -OperationName "Microsoft Graph OAuth2 permission grants request" `
+      -Request {
+        return Invoke-MgGraphRequest -Method GET -Uri $currentUri -OutputType PSObject -ErrorAction Stop
+      }
     $grants += @($response.value)
 
     $nextLinkProperty = $response.PSObject.Properties["@odata.nextLink"]
@@ -117,7 +127,12 @@ function Get-EntraServicePrincipalAppRoleAssignmentsBatch {
     }
 
     $body = @{ requests = $batchRequests } | ConvertTo-Json -Depth 10
-    $response = Invoke-MgGraphRequest -Method POST -Uri "/v1.0/`$batch" -Body $body -ContentType "application/json" -OutputType PSObject
+    $currentBody = $body
+    $response = Invoke-OwnerLensRestRequestWithRetry `
+      -OperationName "Microsoft Graph app role assignments batch request" `
+      -Request {
+        return Invoke-MgGraphRequest -Method POST -Uri "/v1.0/`$batch" -Body $currentBody -ContentType "application/json" -OutputType PSObject -ErrorAction Stop
+      }
 
     foreach ($batchResponse in @($response.responses)) {
       $request = $requestById[[string]$batchResponse.id]

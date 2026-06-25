@@ -92,6 +92,31 @@ export async function readEntraApplicationRows(connection: DuckDBConnection): Pr
   return rows.map(mapApplicationRow);
 }
 
+export async function readEntraApplicationNotesByAppIds(
+  connection: DuckDBConnection,
+  appIds: readonly string[]
+): Promise<Map<string, string | null>> {
+  const normalizedAppIds = Array.from(new Set(appIds.map((appId) => appId.trim().toLowerCase()).filter(Boolean)));
+
+  if (normalizedAppIds.length === 0) {
+    return new Map();
+  }
+
+  const params = Object.fromEntries(normalizedAppIds.map((appId, index) => [`appId${index}`, appId]));
+  const placeholders = normalizedAppIds.map((_, index) => `$appId${index}`).join(", ");
+  const rows = await readRows<Pick<EntraApplicationRow, "app_id" | "notes">>(
+    connection,
+    `select
+      app_id,
+      notes
+    from entra_applications
+    where app_id in (${placeholders})`,
+    params
+  );
+
+  return new Map(rows.map((row) => [row.app_id.toLowerCase(), row.notes]));
+}
+
 type EntraApplicationRow = {
   id: string;
   app_id: string;
@@ -144,9 +169,10 @@ function mapApplicationRow(row: EntraApplicationRow): EntraApplication {
 
 async function readRows<Row extends Record<string, unknown>>(
   connection: DuckDBConnection,
-  sql: string
+  sql: string,
+  params?: Record<string, string>
 ): Promise<Row[]> {
-  const reader = await connection.runAndReadAll(sql);
+  const reader = await connection.runAndReadAll(sql, params);
   return reader.getRowObjectsJson() as Row[];
 }
 

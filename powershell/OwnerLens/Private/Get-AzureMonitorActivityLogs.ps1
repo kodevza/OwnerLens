@@ -78,7 +78,9 @@ function Get-AzureMonitorActivityLogs {
   param(
     [string]$SubscriptionId,
     [datetime]$StartTime,
-    [int]$MaxRecord
+    [int]$MaxRecord,
+    [int]$MaxRetryCount = 3,
+    [int]$RetryDelaySeconds = 5
   )
 
   $logs = [System.Collections.Generic.List[object]]::new()
@@ -97,11 +99,18 @@ function Get-AzureMonitorActivityLogs {
   $requestPath = "/subscriptions/$SubscriptionId/providers/microsoft.insights/eventtypes/management/values?api-version=2015-04-01&`$filter=$encodedFilter"
 
   while ($requestPath -and $logs.Count -lt $MaxRecord) {
-    if ($requestPath -match "^https?://") {
-      $response = Invoke-AzRestMethod -Method GET -Uri $requestPath
-    } else {
-      $response = Invoke-AzRestMethod -Method GET -Path $requestPath
-    }
+    $currentRequestPath = $requestPath
+    $response = Invoke-OwnerLensRestRequestWithRetry `
+      -OperationName "Azure Monitor activity log request" `
+      -MaxRetryCount $MaxRetryCount `
+      -RetryDelaySeconds $RetryDelaySeconds `
+      -Request {
+        if ($currentRequestPath -match "^https?://") {
+          return Invoke-AzRestMethod -Method GET -Uri $currentRequestPath -ErrorAction Stop
+        }
+
+        return Invoke-AzRestMethod -Method GET -Path $currentRequestPath -ErrorAction Stop
+      }
 
     $content = $response.Content | ConvertFrom-Json
     foreach ($entry in @($content.value)) {

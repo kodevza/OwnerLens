@@ -14,10 +14,10 @@ import type {
   OwnershipEvidenceTargetKind
 } from "../../../../core/ownership/types";
 import { rankOwnerCandidates } from "../../../../core/ownership/ownerCandidateRanking";
+import type { DisabledOwnerEvidenceStore } from "../../../../core/runtime/DisabledOwnerEvidenceStore";
 import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
 import type { PageOptions } from "../../../../core/runtime/pagination";
 import { projectServicePrincipalOwners } from "./principalOwnerProjection";
-import type { DisabledEvidenceStore } from "../DisabledEvidenceStore";
 import type { EntraCollectionQueryService } from "../entra/EntraCollectionQueryService";
 import type { AzureResourceGroupOwnershipSqlRow } from "../resources/tables";
 import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
@@ -44,7 +44,7 @@ export type OwnershipEvidenceRequest =
 export type OwnershipEvidenceQueryServiceOptions = {
   entraQueries: EntraCollectionQueryService;
   azureResources: LocalAzureResourcesReportRuntime;
-  disabledEvidenceStore?: Pick<DisabledEvidenceStore, "readKeys">;
+  disabledEvidenceStore?: Pick<DisabledOwnerEvidenceStore, "readKeys">;
 };
 
 type ResourceGroupOwnershipEvidenceRequest = Extract<OwnershipEvidenceRequest, { kind: "resourceGroup" }> & {
@@ -55,7 +55,7 @@ const DEFAULT_RESOURCE_GROUP_OWNERSHIP_EVIDENCE_LIMIT = 100;
 export class OwnershipEvidenceQueryService {
   private readonly entraQueries: EntraCollectionQueryService;
   private readonly azureResources: LocalAzureResourcesReportRuntime;
-  private readonly disabledEvidenceStore?: Pick<DisabledEvidenceStore, "readKeys">;
+  private readonly disabledEvidenceStore?: Pick<DisabledOwnerEvidenceStore, "readKeys">;
 
   constructor(options: OwnershipEvidenceQueryServiceOptions) {
     this.entraQueries = options.entraQueries;
@@ -269,7 +269,7 @@ function isDirectOwnerEvidenceDisabled(
   evidence: OwnerEvidence,
   disabledKeys: ReadonlySet<string>
 ): boolean {
-  return disabledKeys.has(candidate.key) || disabledKeys.has(getDirectOwnerEvidenceKey(candidate, evidence));
+  return disabledKeys.has(getDirectOwnerEvidenceKey(candidate, evidence));
 }
 
 function getDirectOwnerEvidenceKey(candidate: Pick<OwnerCandidate, "key">, evidence: OwnerEvidence): string {

@@ -9,9 +9,9 @@ import {
   type LocalReportCollectionQueryOptions,
   type LocalReportPaginatedCollection
 } from "../../../../core/runtime/collections";
+import type { DisabledOwnerEvidenceStore } from "../../../../core/runtime/DisabledOwnerEvidenceStore";
 import type { PageOptions } from "../../../../core/runtime/pagination";
 import type { RuntimeCollectionCsvExport } from "../../../../core/runtime/collectionExport";
-import type { DisabledEvidenceStore } from "../DisabledEvidenceStore";
 import type { ExportService } from "../ExportService";
 import type { LocalEntraReportRuntime } from "../entra/LocalEntraReportRuntime";
 import type { LocalAzureResourcesReportRuntime } from "./LocalAzureResourcesReportRuntime";
@@ -25,14 +25,14 @@ import type { AzureResourceGroupOwnershipSqlRow } from "./tables";
 export type AzureResourcesCollectionQueryServiceOptions = {
   entra: LocalEntraReportRuntime;
   azureResources: LocalAzureResourcesReportRuntime;
-  disabledEvidenceStore: DisabledEvidenceStore;
+  disabledEvidenceStore: DisabledOwnerEvidenceStore;
   exportService: ExportService;
 };
 
 export class AzureResourcesCollectionQueryService {
   private readonly entra: LocalEntraReportRuntime;
   private readonly azureResources: LocalAzureResourcesReportRuntime;
-  private readonly disabledEvidenceStore: DisabledEvidenceStore;
+  private readonly disabledEvidenceStore: DisabledOwnerEvidenceStore;
   private readonly exportService: ExportService;
 
   constructor(options: AzureResourcesCollectionQueryServiceOptions) {

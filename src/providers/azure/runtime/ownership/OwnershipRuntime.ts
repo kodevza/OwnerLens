@@ -1,7 +1,10 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type { OwnershipEvidenceResponse } from "../../../../core/ownership/types";
-import { DisabledEvidenceStore, type DisabledOwnerKey } from "../DisabledEvidenceStore";
+import {
+  DisabledOwnerEvidenceStore,
+  type DisabledOwnerKey
+} from "../../../../core/runtime/DisabledOwnerEvidenceStore";
 import type { EntraCollectionQueryService } from "../entra/EntraCollectionQueryService";
 import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
 import {
@@ -9,7 +12,7 @@ import {
   type OwnershipEvidenceRequest
 } from "./OwnershipEvidenceQueryService";
 
-export type { DisabledOwnerKey } from "../DisabledEvidenceStore";
+export type { DisabledOwnerKey } from "../../../../core/runtime/DisabledOwnerEvidenceStore";
 export type { OwnershipEvidenceRequest } from "./OwnershipEvidenceQueryService";
 export type { OwnershipEvidenceResponse } from "../../../../core/ownership/types";
 
@@ -22,16 +25,16 @@ export type OwnershipRuntimeOptions = {
 export class OwnershipRuntime {
   private readonly getEntraQueries: () => EntraCollectionQueryService;
   private readonly azureResources: LocalAzureResourcesReportRuntime;
-  private readonly disabledEvidenceStore: DisabledEvidenceStore;
+  private readonly disabledEvidenceStore: DisabledOwnerEvidenceStore;
   private evidenceQueries: OwnershipEvidenceQueryService | null = null;
 
   constructor(options: OwnershipRuntimeOptions) {
     this.getEntraQueries = options.getEntraQueries;
     this.azureResources = options.azureResources;
-    this.disabledEvidenceStore = new DisabledEvidenceStore(options.getConnection);
+    this.disabledEvidenceStore = new DisabledOwnerEvidenceStore(options.getConnection, "azure");
   }
 
-  getDisabledEvidenceStore(): DisabledEvidenceStore {
+  getDisabledEvidenceStore(): DisabledOwnerEvidenceStore {
     return this.disabledEvidenceStore;
   }
 

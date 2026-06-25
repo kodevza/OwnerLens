@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { GenericTable } from "../../../report/components/table/GenericTable";
+import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../../report/reportTypes";
 import type { PermissionRiskLevel } from "../../../core/risk/types";
 import { readEntraPermissions, type EntraPrincipalPermissionsResponse } from "../api";
@@ -100,7 +101,21 @@ const entraPermissionFields: ReportFieldDescriptor<EntraPermissionRow>[] = [
   }
 ];
 
-export function EntraPermissionsComponent({ principalId }: { principalId: string }) {
+type EntraPermissionsComponentProps = {
+  filters?: ColumnFilters;
+  onFiltersChange?: (filters: ColumnFilters) => void;
+  onSortRulesChange?: (sortRules: SortRule[]) => void;
+  principalId: string;
+  sortRules?: SortRule[];
+};
+
+export function EntraPermissionsComponent({
+  filters,
+  onFiltersChange,
+  onSortRulesChange,
+  principalId,
+  sortRules
+}: EntraPermissionsComponentProps) {
   const [permissions, setPermissions] = useState<EntraPrincipalPermissionsResponse | null>(null);
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
 
@@ -150,9 +165,13 @@ export function EntraPermissionsComponent({ principalId }: { principalId: string
         columnWidthsStorageKey="entra-api-permissions"
         emptyMessage="No Entra API permissions match the filter."
         fields={entraPermissionFields}
+        filters={filters}
         getRowKey={(row) => `${row.permissionType}:${row.id}`}
         minWidthClassName="min-w-[1800px]"
         rows={rows}
+        sortRules={sortRules}
+        onFiltersChange={onFiltersChange}
+        onSortRulesChange={onSortRulesChange}
       />
     </>
   );

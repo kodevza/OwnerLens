@@ -42,13 +42,11 @@ server.listen(port, "127.0.0.1");
   }
 }
 
-AfterEach {
-  if ($IsWindows) {
+Describe "OwnerLens module" -Skip:(-not $IsWindows) {
+  AfterEach {
     Stop-OwnerLens -ErrorAction SilentlyContinue | Out-Null
   }
-}
 
-Describe "OwnerLens module" -Skip:(-not $IsWindows) {
   It "imports successfully and exports commands" {
     $commands = Get-Command -Module OwnerLens
     $commands.Name | Should -Contain "Start-OwnerLens"
@@ -83,5 +81,90 @@ Describe "OwnerLens module" -Skip:(-not $IsWindows) {
   It "fails clearly for missing runtime path" {
     { Start-OwnerLens -RuntimePath (Join-Path $TestDrive "missing") -DataPath (Join-Path $TestDrive "data") } |
       Should -Throw "*OwnerLens runtime was not found*"
+  }
+}
+
+Describe "Azure Monitor activity log collection" {
+  BeforeEach {
+    . (Join-Path $PSScriptRoot "..\..\powershell\OwnerLens\Private\Invoke-OwnerLensRestRequestWithRetry.ps1")
+    . (Join-Path $PSScriptRoot "..\..\powershell\OwnerLens\Private\Get-AzureMonitorActivityLogs.ps1")
+    $script:AzureActivityLogCache = @{}
+  }
+
+  It "retries transient failures while following activity log pages" {
+    $script:activityLogRequestCount = 0
+
+    function Invoke-AzRestMethod {
+      param(
+        [string]$Method,
+        [string]$Path,
+        [string]$Uri
+      )
+
+      $script:activityLogRequestCount += 1
+
+      if ($script:activityLogRequestCount -eq 1) {
+        return [pscustomobject]@{
+          Content = '{"value":[],"nextLink":"https://management.azure.com/subscriptions/test-sub/providers/microsoft.insights/eventtypes/management/values?page=2"}'
+        }
+      }
+
+      if ($script:activityLogRequestCount -eq 2) {
+        throw "Error while copying content to a stream."
+      }
+
+      return [pscustomobject]@{
+        Content = '{"value":[{"eventTimestamp":"2026-06-25T08:04:57.0000000Z","resourceId":"/subscriptions/test-sub/resourceGroups/rg/providers/Microsoft.Web/sites/app","operationName":{"localizedValue":"Update web app","value":"Microsoft.Web/sites/write"},"status":{"localizedValue":"Succeeded"}}]}'
+      }
+    }
+
+    $logs = Get-AzureMonitorActivityLogs `
+      -SubscriptionId "test-sub" `
+      -StartTime ([datetime]"2026-06-25T08:00:00Z") `
+      -MaxRecord 10 `
+      -RetryDelaySeconds 0
+
+    $logs.Count | Should -Be 1
+    $logs[0].resourceId | Should -Be "/subscriptions/test-sub/resourceGroups/rg/providers/Microsoft.Web/sites/app"
+    $script:activityLogRequestCount | Should -Be 3
+  }
+}
+
+Describe "OwnerLens REST request retry" {
+  BeforeEach {
+    . (Join-Path $PSScriptRoot "..\..\powershell\OwnerLens\Private\Invoke-OwnerLensRestRequestWithRetry.ps1")
+  }
+
+  It "uses exponential backoff from a five second base delay by default" {
+    $script:restRequestCount = 0
+    $script:sleepDelays = @()
+
+    try {
+      function Start-Sleep {
+        param([int]$Seconds)
+
+        $script:sleepDelays += $Seconds
+      }
+
+      $result = Invoke-OwnerLensRestRequestWithRetry `
+        -OperationName "Test request" `
+        -Request {
+          $script:restRequestCount += 1
+
+          if ($script:restRequestCount -le 2) {
+            throw "transient"
+          }
+
+          return "ok"
+        }
+
+      $result | Should -Be "ok"
+      $script:restRequestCount | Should -Be 3
+      ($script:sleepDelays -join ",") | Should -Be "5,10"
+    } finally {
+      if (Test-Path function:Start-Sleep) {
+        Remove-Item -Path function:Start-Sleep -ErrorAction SilentlyContinue
+      }
+    }
   }
 }

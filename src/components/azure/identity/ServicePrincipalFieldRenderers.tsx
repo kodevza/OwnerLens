@@ -44,19 +44,20 @@ export type OwnershipEvidenceSelection = {
   target: OwnershipEvidenceTarget;
 };
 
-type ServicePrincipalFieldRendererOptions = {
+type ServicePrincipalFieldRendererOptions<TRow = EntraPrincipalIdentitySummary> = {
   onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
   onEntraPermissionsClick?: (principal: EntraPermissionsPrincipalSelection) => void;
   onOwnershipEvidenceClick?: (selection: OwnershipEvidenceSelection) => void;
+  onPrincipalDetailsClick?: (principal: TRow) => void;
   onZtaRemediationsClick?: (objectId: string) => void;
 };
 
-type ServicePrincipalFieldRendererMappedOptions<TRow> = ServicePrincipalFieldRendererOptions & {
+type ServicePrincipalFieldRendererMappedOptions<TRow> = ServicePrincipalFieldRendererOptions<TRow> & {
   getPrincipalSummary: (row: TRow) => EntraPrincipalIdentitySummary | null;
 };
 
 export function buildServicePrincipalFieldRenderers<TRow extends EntraPrincipalSummaryRow>(
-  options?: ServicePrincipalFieldRendererOptions
+  options?: ServicePrincipalFieldRendererOptions<TRow>
 ): ReportColumnRenderers<TRow>;
 export function buildServicePrincipalFieldRenderers<TRow>(
   options: ServicePrincipalFieldRendererMappedOptions<TRow>
@@ -66,8 +67,9 @@ export function buildServicePrincipalFieldRenderers<TRow>({
   onAzureRbacClick,
   onEntraPermissionsClick,
   onOwnershipEvidenceClick,
+  onPrincipalDetailsClick,
   onZtaRemediationsClick
-}: ServicePrincipalFieldRendererOptions & {
+}: ServicePrincipalFieldRendererOptions<TRow> & {
   getPrincipalSummary?: (row: TRow) => EntraPrincipalIdentitySummary | null;
 } = {}): ReportColumnRenderers<TRow> {
   const readPrincipalSummary =
@@ -77,7 +79,13 @@ export function buildServicePrincipalFieldRenderers<TRow>({
     displayName: (row) => {
       const sp = readPrincipalSummary(row);
       return sp ? (
-        <PrincipalDisplayName appId={sp.appId} disabled={sp.accountEnabled === false} displayName={sp.displayName} objectId={sp.id} />
+        <PrincipalDisplayName
+          appId={sp.appId}
+          disabled={sp.accountEnabled === false}
+          displayName={sp.displayName}
+          objectId={sp.id}
+          onDetailsClick={onPrincipalDetailsClick ? () => onPrincipalDetailsClick(row) : undefined}
+        />
       ) : (
         <EmptyValue />
       );
@@ -161,25 +169,37 @@ function PrincipalDisplayName({
   appId,
   disabled,
   displayName,
-  objectId
+  objectId,
+  onDetailsClick
 }: {
   appId?: string;
   disabled: boolean;
   displayName: string;
   objectId: string;
+  onDetailsClick?: () => void;
 }) {
   const href = buildEntraEnterpriseApplicationPortalUrl({ appId, objectId });
-  const title = `Open in Microsoft Entra admin center: ${displayName || objectId}`;
+  const portalTitle = `Open in Microsoft Entra admin center: ${objectId}`;
+  const detailsTitle = `Open application details: ${displayName || objectId}`;
 
   return (
     <div className="min-w-0">
       <div className={disabled ? "font-medium text-muted-foreground" : "font-medium"}>
-        <EntraLinkBadge href={href} title={title}>
-          {displayName || "-"}
-        </EntraLinkBadge>
+        {onDetailsClick ? (
+          <button
+            className="text-left text-current no-underline hover:text-blue-800 focus-visible:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title={detailsTitle}
+            type="button"
+            onClick={onDetailsClick}
+          >
+            {displayName || "-"}
+          </button>
+        ) : (
+          <span>{displayName || "-"}</span>
+        )}
       </div>
       <div className="mt-0.5 font-mono text-xs text-muted-foreground">
-        <EntraLinkBadge href={href} title={title}>
+        <EntraLinkBadge href={href} title={portalTitle}>
           {objectId}
         </EntraLinkBadge>
       </div>

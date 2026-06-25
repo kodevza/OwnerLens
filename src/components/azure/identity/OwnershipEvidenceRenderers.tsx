@@ -188,6 +188,10 @@ export function getOwnerCandidateStatusKey(
     ].join(":");
   }
 
+  if (evidence.path === "direct") {
+    return evidence.key;
+  }
+
   const scope = evidence.relatedScopes.find((candidateScope) => candidateScope.subscriptionId && candidateScope.resourceGroup);
   if (!scope?.subscriptionId || !scope.resourceGroup) {
     return null;

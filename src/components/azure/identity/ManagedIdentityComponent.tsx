@@ -118,6 +118,7 @@ export function ManagedIdentityComponent({
   onFiltersChange,
   onOwnershipEvidenceClick,
   onPageChange,
+  onPrincipalDetailsClick,
   onRemediationPackageClick,
   onSortRulesChange,
   onZtaRemediationsClick
@@ -130,6 +131,7 @@ export function ManagedIdentityComponent({
   onFiltersChange?: (filters: ColumnFilters) => void;
   onOwnershipEvidenceClick?: (selection: OwnershipEvidenceSelection) => void;
   onPageChange?: (page: number) => void;
+  onPrincipalDetailsClick?: (identity: ManagedIdentity) => void;
   onRemediationPackageClick?: (remediationPackage: RemediationPackage) => void;
   onSortRulesChange?: (sortRules: SortRule[]) => void;
   onZtaRemediationsClick?: (objectId: string) => void;
@@ -160,6 +162,7 @@ export function ManagedIdentityComponent({
         onAzureRbacClick,
         onEntraPermissionsClick,
         onOwnershipEvidenceClick,
+        onPrincipalDetailsClick,
         onZtaRemediationsClick
       }),
       RemediationPackages: (identity: ManagedIdentity) => (
@@ -174,6 +177,7 @@ export function ManagedIdentityComponent({
       onAzureRbacClick,
       onEntraPermissionsClick,
       onOwnershipEvidenceClick,
+      onPrincipalDetailsClick,
       onRemediationPackageClick,
       onZtaRemediationsClick,
       openRemediationPackage

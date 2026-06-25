@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { EntraPrincipalAzureRemediationSummary } from "../../core/azure/entra/servicePrincipal";
 import type { ZtaRelatedObject } from "../../core/azure/ztaReport";
+import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import type { OwnerConfidence } from "../../core/ownership/types";
 import type { JsonValue, RemediationPackage, RemediationTask } from "../../core/runtime/remediation";
 import type { PermissionRiskLevel } from "../../core/risk/types";
@@ -135,13 +136,21 @@ const remediationTaskFields: ReportFieldDescriptor<RemediationTask>[] = [
 ];
 
 export function RemediationPackageComponent({
+  filters,
   onAzureRbacClick,
   onEntraPermissionsClick,
-  remediationPackage
+  onFiltersChange,
+  onSortRulesChange,
+  remediationPackage,
+  sortRules
 }: {
+  filters?: ColumnFilters;
   remediationPackage: RemediationPackage;
   onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
   onEntraPermissionsClick?: (principal: EntraPermissionsPrincipalSelection) => void;
+  onFiltersChange?: (filters: ColumnFilters) => void;
+  onSortRulesChange?: (sortRules: SortRule[]) => void;
+  sortRules?: SortRule[];
 }) {
   const [currentPackage, setCurrentPackage] = useState(remediationPackage);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
@@ -211,12 +220,16 @@ export function RemediationPackageComponent({
         emptyMessage="No remediation tasks were created."
         fields={remediationTaskFields}
         fieldRenderers={fieldRenderers}
+        filters={filters}
         getRowKey={(task) => task.id}
         getRowSelectionLabel={(task) => `Select remediation task ${task.title}`}
         minWidthClassName="min-w-[1800px]"
         rows={currentPackage.tasks}
         selectedRowKeys={selectedTaskIds}
+        sortRules={sortRules}
+        onFiltersChange={onFiltersChange}
         onSelectionChange={setSelectedTaskIds}
+        onSortRulesChange={onSortRulesChange}
         renderSelectionOverlay={({ filters, selectAllMatchingFilters, selectedRowKeys, sortRules }) => (
           <CsvSelectionActionBar
             filters={filters}

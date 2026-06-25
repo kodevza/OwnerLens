@@ -20,7 +20,9 @@ export function ClosableTab({ active, closeLabel, label, onClose, value }: Closa
       )}
     >
       <TabsTrigger
+        aria-label={label}
         className="min-w-0 max-w-64 flex-1 justify-start overflow-hidden rounded-r-none border-0 bg-transparent pr-2 shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+        title={label}
         value={value}
       >
         <span className="truncate">{label}</span>

@@ -7,7 +7,7 @@ import type {
 import type { EntraServicePrincipal } from "../../inputTransferObject/generated/EntraSnapshot";
 import { insertEntraServicePrincipalRows } from "../entra/domain/servicePrincipalsTable";
 import { prepareRuntimeSqlSchema } from "../SnapshotImporter";
-import { disableOwnerEvidenceKey } from "../ownership/disabledOwnerEvidenceTable";
+import { disableOwnerEvidenceKey } from "../../../../core/runtime/DisabledOwnerEvidenceStore";
 import {
   insertAzureActivityLogRows,
   insertAzureResourceGroupRows,
@@ -372,6 +372,7 @@ test("applies disabled owner candidates only to the matching principal scope", a
     ]);
     await disableOwnerEvidenceKey(
       connection,
+      "azure",
       "resourceGroup:sub-1:rg-principal-disabled:principal:sp-1:ownerGroup:platform-team"
     );
 
@@ -397,6 +398,7 @@ test("applies disabled owner candidates only to the matching principal scope", a
     ]);
     await disableOwnerEvidenceKey(
       connection,
+      "azure",
       "resourceGroup:sub-1:rg-principal-disabled:principal:sp-1:ownerGroup:platform-team"
     );
 
@@ -447,7 +449,7 @@ async function disableResourceGroupOwnerCandidate(
   resourceGroupName: string,
   ownerCandidate: string
 ): Promise<void> {
-  await disableOwnerEvidenceKey(connection, `resourceGroup:sub-1:${resourceGroupName}:${ownerCandidate}`);
+  await disableOwnerEvidenceKey(connection, "azure", `resourceGroup:sub-1:${resourceGroupName}:${ownerCandidate}`);
 }
 
 function resourceGroup(

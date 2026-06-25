@@ -380,30 +380,58 @@ async function readAzureResourceGroupOwnershipRows(
           candidate.*,
           exists(
             select 1
-            from azure_disabled_resource_group_owner_candidates disabled
-            where lower(trim(disabled.subscription_id)) = lower(trim(candidate.subscription_id))
-              and lower(trim(disabled.resource_group)) = lower(trim(candidate.resource_group))
-              and lower(trim(disabled.owner_candidate)) = lower(trim(candidate.owner_candidate))
+            from disabled_owner_evidence_keys disabled
+            where disabled.provider = 'azure'
               and (
-                trim(disabled.principal_id) = ''
+                lower(trim(disabled.owner_key)) = lower(trim(concat(
+                  'resourceGroup:',
+                  candidate.subscription_id,
+                  ':',
+                  candidate.resource_group,
+                  ':',
+                  candidate.owner_candidate
+                )))
                 or (
                   candidate.principal_id is not null
-                  and lower(trim(disabled.principal_id)) = lower(trim(candidate.principal_id))
+                  and lower(trim(disabled.owner_key)) = lower(trim(concat(
+                    'resourceGroup:',
+                    candidate.subscription_id,
+                    ':',
+                    candidate.resource_group,
+                    ':principal:',
+                    candidate.principal_id,
+                    ':',
+                    candidate.owner_candidate
+                  )))
                 )
               )
           ) as disabled,
           case
             when exists(
               select 1
-              from azure_disabled_resource_group_owner_candidates disabled
-              where lower(trim(disabled.subscription_id)) = lower(trim(candidate.subscription_id))
-                and lower(trim(disabled.resource_group)) = lower(trim(candidate.resource_group))
-                and lower(trim(disabled.owner_candidate)) = lower(trim(candidate.owner_candidate))
+              from disabled_owner_evidence_keys disabled
+              where disabled.provider = 'azure'
                 and (
-                  trim(disabled.principal_id) = ''
+                  lower(trim(disabled.owner_key)) = lower(trim(concat(
+                    'resourceGroup:',
+                    candidate.subscription_id,
+                    ':',
+                    candidate.resource_group,
+                    ':',
+                    candidate.owner_candidate
+                  )))
                   or (
                     candidate.principal_id is not null
-                    and lower(trim(disabled.principal_id)) = lower(trim(candidate.principal_id))
+                    and lower(trim(disabled.owner_key)) = lower(trim(concat(
+                      'resourceGroup:',
+                      candidate.subscription_id,
+                      ':',
+                      candidate.resource_group,
+                      ':principal:',
+                      candidate.principal_id,
+                      ':',
+                      candidate.owner_candidate
+                    )))
                   )
                 )
             ) then to_json([

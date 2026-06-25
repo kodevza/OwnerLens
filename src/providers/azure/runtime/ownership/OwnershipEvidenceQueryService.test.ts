@@ -886,7 +886,7 @@ test("applies disabled evidence through the direct service principal owner wrapp
     },
     azureResources: {},
     disabledEvidenceStore: {
-      readKeys: jest.fn().mockResolvedValue(new Set(["ownerTag:platform-team"]))
+      readKeys: jest.fn().mockResolvedValue(new Set(["ownerTag:platform-team:owner=platform-team:"]))
     }
   } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
 
