@@ -60,35 +60,6 @@ Install-Module Microsoft.Graph -Scope CurrentUser
 
 Run all PowerShell commands in `pwsh`.
 
-## Run
-
-Build the PowerShell module from a source checkout:
-
-```powershell
-pwsh ./scripts/build-windows-runtime.ps1
-pwsh ./scripts/build-powershell-module.ps1
-```
-
-Start the local app from `pwsh`:
-
-```powershell
-Import-Module ./artifacts/OwnerLens/OwnerLens.psd1 -Force
-Start-OwnerLens -DataPath ./data
-Open-OwnerLens
-```
-
-`Start-OwnerLens` binds to `127.0.0.1`, chooses a free port, creates the data
-directory, waits up to 180 seconds for the runtime API to become ready, stores
-runtime state under `$env:LOCALAPPDATA\OwnerLens`, and writes server stdout/stderr
-logs under `$env:LOCALAPPDATA\OwnerLens\logs`.
-
-Use an explicit port or data directory when needed:
-
-```powershell
-Start-OwnerLens -Port 4174 -DataPath C:\OwnerLensData
-Start-OwnerLens -StartupTimeoutSeconds 240
-```
-
 ## Create Snapshots
 
 Collectors write these files by default:
@@ -118,6 +89,36 @@ More collector options are documented in [tools/README.md](tools/README.md).
 Snapshot files can contain sensitive tenant, subscription, identity, group,
 credential, and activity-log metadata. Review them before sharing. Files matching
 `data/*snapshot.json` are ignored by git.
+
+
+## Run
+
+Build the PowerShell module from a source checkout:
+
+```powershell
+pwsh ./scripts/build-windows-runtime.ps1
+pwsh ./scripts/build-powershell-module.ps1
+```
+
+Start the local app from `pwsh`:
+
+```powershell
+Import-Module ./artifacts/OwnerLens/OwnerLens.psd1 -Force
+Start-OwnerLens -DataPath ./data
+Open-OwnerLens
+```
+
+`Start-OwnerLens` binds to `127.0.0.1`, chooses a free port, creates the data
+directory, waits up to 180 seconds for the runtime API to become ready, stores
+runtime state under `$env:LOCALAPPDATA\OwnerLens`, and writes server stdout/stderr
+logs under `$env:LOCALAPPDATA\OwnerLens\logs`.
+
+Use an explicit port or data directory when needed:
+
+```powershell
+Start-OwnerLens -Port 4174 -DataPath C:\OwnerLensData
+Start-OwnerLens -StartupTimeoutSeconds 240
+```
 
 ## Development
 

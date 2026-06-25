@@ -114,7 +114,7 @@ $subscriptionFilters = @()
 if ([string]::IsNullOrWhiteSpace($SubscriptionIds)) {
   $subscriptionFilters = @($context.Subscription.Id)
 } else {
-  $subscriptionFilters = $SubscriptionIds.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+  $subscriptionFilters = @($SubscriptionIds.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 }
 
 Write-SnapshotProgress "Preparing Azure resource snapshot"
