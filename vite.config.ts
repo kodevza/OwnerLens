@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from "vite";
@@ -26,8 +27,25 @@ function localReportRuntimeApi(): Plugin {
 }
 
 export default defineConfig({
+  define: {
+    __OWNERLENS_VERSION__: JSON.stringify(resolveOwnerLensVersion())
+  },
   plugins: [react(), tailwindcss(), localReportRuntimeApi()]
 });
+
+function resolveOwnerLensVersion(): string {
+  try {
+    const gitVersion = execFileSync("git", ["describe", "--tags", "--abbrev=0"], {
+      cwd: new URL(".", import.meta.url),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+
+    return gitVersion || "dev";
+  } catch {
+    return "dev";
+  }
+}
 
 function installViteRuntimeRest(
   server: ViteDevServer | PreviewServer,
