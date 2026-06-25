@@ -1,4 +1,5 @@
 import type { AnchorHTMLAttributes, ReactNode } from "react";
+import { ExternalLink } from "lucide-react";
 
 import { cn } from "../../../lib/utils";
 
@@ -10,14 +11,18 @@ type EntraLinkBadgeProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" 
 export function EntraLinkBadge({ children, className, href, title, ...props }: EntraLinkBadgeProps) {
   return (
     <a
-      className={cn("text-current no-underline hover:text-blue-800 hover:no-underline focus-visible:text-blue-800", className)}
+      className={cn(
+        "inline-flex max-w-full items-center gap-1 text-current no-underline hover:text-blue-800 hover:no-underline focus-visible:text-blue-800",
+        className
+      )}
       {...props}
       href={href}
       rel="noreferrer"
       target="_blank"
       title={title}
     >
-      {children}
+      <span className="min-w-0 break-words">{children}</span>
+      <ExternalLink aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
     </a>
   );
 }

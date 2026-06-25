@@ -69,7 +69,7 @@ export async function enableOwnerEvidenceKey(
   await connection.run(
     `delete from disabled_owner_evidence_keys
     where provider = $provider
-      and owner_key = $key`,
+      and lower(trim(owner_key)) = lower(trim($key))`,
     {
       provider,
       key

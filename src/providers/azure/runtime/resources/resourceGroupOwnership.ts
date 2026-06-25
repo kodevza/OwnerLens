@@ -115,7 +115,7 @@ function buildResourceGroupOwnerCandidates(
   group: AzureResourceGroup,
   ownerRow: OwnerReportRow
 ): OwnerCandidate[] {
-  const owner = ownerRow.owner?.trim() || inferDisabledOwnerFromEvidence(ownerRow);
+  const owner = ownerRow.owner?.trim();
 
   if (!owner) {
     return [];
@@ -139,23 +139,6 @@ function buildResourceGroupOwnerCandidates(
       ]
     }
   ]);
-}
-
-function inferDisabledOwnerFromEvidence(ownerRow: OwnerReportRow): string | null {
-  if (ownerRow.confidence !== "none") {
-    return null;
-  }
-
-  const evidence = ownerRow.evidence.find((entry) => entry.disabled && entry.user.trim());
-  if (!evidence) {
-    return null;
-  }
-
-  if (ownerRow.source.startsWith("tag.")) {
-    return evidence.user.split("=", 2)[1]?.trim() || null;
-  }
-
-  return evidence.user.trim();
 }
 
 export function applyResourceGroupOwnerDisabledEvidence(
@@ -225,9 +208,20 @@ function buildResourceGroupOwnerIndex(ownerRows: OwnerReportRow[]): Map<string, 
 }
 
 function getPreferredOwnerRow(existing: OwnerReportRow, next: OwnerReportRow): OwnerReportRow {
-  return OWNER_CONFIDENCE_RANK[next.confidence] > OWNER_CONFIDENCE_RANK[existing.confidence]
+  const existingActiveEvidenceRank = getActiveEvidenceRank(existing);
+  const nextActiveEvidenceRank = getActiveEvidenceRank(next);
+
+  return nextActiveEvidenceRank > existingActiveEvidenceRank ||
+    (
+      nextActiveEvidenceRank === existingActiveEvidenceRank &&
+      OWNER_CONFIDENCE_RANK[next.confidence] > OWNER_CONFIDENCE_RANK[existing.confidence]
+    )
     ? next
     : existing;
+}
+
+function getActiveEvidenceRank(row: OwnerReportRow): number {
+  return row.evidence.length === 0 || row.evidence.some((evidence) => !evidence.disabled) ? 1 : 0;
 }
 
 function getResourceGroupOwnerIndexKey(subscriptionId: string, resourceGroup: string): string {

@@ -2946,8 +2946,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
           confidence: "low",
           source: "activity.lastModifier",
           evidence: [
-            { user: "alice@example.test", date: "2026-06-05T10:00:00.000Z" },
-            { user: "bob@example.test", date: "2026-06-04T10:00:00.000Z" }
+            { user: "alice@example.test", date: "2026-06-05T10:00:00.000Z" }
           ]
         })
       ]
@@ -2973,7 +2972,6 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
           confidence: "low",
           source: "activity.lastModifier",
           evidence: [
-            { user: "alice@example.test", date: "2026-06-05T10:00:00.000Z", disabled: true },
             { user: "bob@example.test", date: "2026-06-04T10:00:00.000Z" }
           ]
         })
@@ -3000,7 +2998,6 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
             owner: "bob@example.test",
             confidence: "low",
             evidence: [
-              { user: "alice@example.test", date: "2026-06-05T10:00:00.000Z", disabled: true },
               { user: "bob@example.test", date: "2026-06-04T10:00:00.000Z" }
             ]
           })
@@ -3026,8 +3023,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
             owner: "alice@example.test",
             confidence: "low",
             evidence: [
-              { user: "alice@example.test", date: "2026-06-05T10:00:00.000Z" },
-              { user: "bob@example.test", date: "2026-06-04T10:00:00.000Z" }
+              { user: "alice@example.test", date: "2026-06-05T10:00:00.000Z" }
             ]
           })
         ]
@@ -3035,6 +3031,261 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
     } finally {
       await secondRuntime.close();
     }
+  });
+});
+
+test("reactivates disabled owner evidence with case-insensitive owner keys", async () => {
+  const disabledKey = "resourceGroup:SUB-1:RG-ACTIVITY:ownerUser:ALICE@example.test";
+  const activeKey = "resourceGroup:sub-1:rg-activity:ownerUser:alice@example.test";
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot(),
+    meta: {
+      ...minimalAzureSnapshot().meta,
+      resourceGroupCount: 1,
+      activityLogCount: 1
+    },
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription 1",
+        resourceGroup: "rg-activity",
+        location: "westeurope",
+        tags: null
+      }
+    ],
+    activityLogs: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription 1",
+        eventTimestamp: "2026-06-05T10:00:00.000Z",
+        submissionTimestamp: null,
+        caller: "alice@example.test",
+        operationName: "Update resource group",
+        operationNameValue: "Microsoft.Resources/subscriptions/resourcegroups/write",
+        status: "Succeeded",
+        subStatus: null,
+        category: "Administrative",
+        resourceGroupName: "rg-activity",
+        resourceId: null,
+        resourceProviderName: "Microsoft.Resources",
+        resourceType: "Microsoft.Resources/resourceGroups",
+        authorizationAction: "Microsoft.Resources/subscriptions/resourcegroups/write",
+        authorizationScope: null
+      }
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(minimalEntraSnapshot()), "utf8");
+
+    await runtime.initialize();
+    const endpoints = defineLocalReportRuntimeRestEndpoints(runtime);
+    const ownershipEvidenceEndpoint = getEndpoint(endpoints, "/api/data/ownership/evidence");
+    const ownerCandidateStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/ownerCandidates/status");
+
+    await expect(
+      ownerCandidateStatusEndpoint.handle({
+        req: {},
+        url: new URL(
+          `http://localhost/api/data/ownership/ownerCandidates/status?key=${encodeURIComponent(disabledKey)}&status=inactive`
+        )
+      })
+    ).resolves.toMatchObject({ disabled: true, disabledCount: 1 });
+    await expect(
+      ownershipEvidenceEndpoint.handle({
+        req: {},
+        url: new URL("http://localhost/api/data/ownership/evidence?kind=resourceGroup&subscriptionId=sub-1&resourceGroup=rg-activity")
+      })
+    ).resolves.toMatchObject({
+      evidence: [
+        expect.objectContaining({
+          ownerCandidateKey: "ownerUser:alice@example.test",
+          disabled: true
+        })
+      ]
+    });
+
+    await expect(
+      ownerCandidateStatusEndpoint.handle({
+        req: {},
+        url: new URL(
+          `http://localhost/api/data/ownership/ownerCandidates/status?key=${encodeURIComponent(activeKey)}&status=active`
+        )
+      })
+    ).resolves.toMatchObject({ disabled: false, disabledCount: 0 });
+    await expect(
+      ownershipEvidenceEndpoint.handle({
+        req: {},
+        url: new URL("http://localhost/api/data/ownership/evidence?kind=resourceGroup&subscriptionId=sub-1&resourceGroup=rg-activity")
+      })
+    ).resolves.toMatchObject({
+      evidence: [
+        expect.not.objectContaining({
+          disabled: true
+        })
+      ]
+    });
+  });
+});
+
+test("falls back from a disabled ownerGroup tag to activity owner in resource group ownership collection", async () => {
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      activityLogCount: 1
+    },
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-app",
+        location: "westeurope",
+        tags: { ownerGroup: "platform-team" }
+      }
+    ],
+    activityLogs: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        eventTimestamp: "2026-06-05T10:00:00.000Z",
+        submissionTimestamp: null,
+        caller: "activity-owner@example.test",
+        operationName: "Update resource group",
+        operationNameValue: "Microsoft.Resources/subscriptions/resourcegroups/write",
+        status: "Succeeded",
+        subStatus: null,
+        category: "Administrative",
+        resourceGroupName: "rg-app",
+        resourceId: "/subscriptions/sub-1/resourceGroups/rg-app",
+        resourceProviderName: "Microsoft.Resources",
+        resourceType: "Microsoft.Resources/resourceGroups",
+        authorizationAction: "Microsoft.Resources/subscriptions/resourcegroups/write",
+        authorizationScope: null
+      }
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(minimalEntraSnapshot()), "utf8");
+    await runtime.initialize();
+
+    const endpoints = defineLocalReportRuntimeRestEndpoints(runtime);
+    const ownershipEndpoint = getEndpoint(endpoints, "/api/data/azureResources/resourceGroupOwnership");
+    const ownerCandidateStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/ownerCandidates/status");
+
+    await ownerCandidateStatusEndpoint.handle({
+      req: {},
+      url: new URL(
+        "http://localhost/api/data/ownership/ownerCandidates/status?key=resourceGroup%3Asub-1%3Arg-app%3AownerGroup%3Aplatform-team&status=inactive"
+      )
+    });
+
+    await expect(
+      ownershipEndpoint.handle({
+        req: {},
+        url: new URL("http://localhost/api/data/azureResources/resourceGroupOwnership?page=1&count=10")
+      })
+    ).resolves.toMatchObject({
+      rows: [
+        expect.objectContaining({
+          resourceGroup: "rg-app",
+          owner: "activity-owner@example.test",
+          confidence: "low",
+          source: "activity.lastModifier",
+          ownerCandidates: [
+            expect.objectContaining({
+              displayName: "activity-owner@example.test",
+              confidence: "low"
+            })
+          ]
+        })
+      ]
+    });
+  });
+});
+
+test("falls back from disabled direct service principal owner to resource group owner in service principal collection", async () => {
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      roleAssignmentCount: 1
+    },
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-app",
+        location: "westeurope",
+        tags: { ownerGroup: "platform-team" }
+      }
+    ],
+    roleAssignments: [
+      roleAssignment("sp-app", "Contributor", "/subscriptions/sub-1/resourceGroups/rg-app", "ResourceGroup")
+    ]
+  };
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 1
+    },
+    servicePrincipals: [
+      servicePrincipal("sp-app", "app-app", "Application app", {
+        servicePrincipalType: "Application",
+        servicePrincipalOwners: [
+          {
+            id: "owner-direct-1",
+            displayName: "Direct Owner",
+            userPrincipalName: "direct-owner@example.test",
+            mail: null,
+            ownerType: "User"
+          }
+        ]
+      })
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await runtime.initialize();
+
+    const endpoints = defineLocalReportRuntimeRestEndpoints(runtime);
+    const servicePrincipalsEndpoint = getEndpoint(endpoints, "/api/data/entra/servicePrincipals");
+    const ownerCandidateStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/ownerCandidates/status");
+
+    await ownerCandidateStatusEndpoint.handle({
+      req: {},
+      url: new URL(
+        "http://localhost/api/data/ownership/ownerCandidates/status?key=entraServicePrincipalOwner%3AownerUser%3Aowner-direct-1&status=inactive"
+      )
+    });
+
+    await expect(
+      servicePrincipalsEndpoint.handle({
+        req: {},
+        url: new URL("http://localhost/api/data/entra/servicePrincipals?page=1&count=10")
+      })
+    ).resolves.toMatchObject({
+      rows: [
+        expect.objectContaining({
+          id: "sp-app",
+          potentialOwners: ["platform-team"],
+          ownerConfidence: "high",
+          ownerCandidates: [
+            expect.objectContaining({
+              key: "ownerGroup:platform-team",
+              displayName: "platform-team",
+              confidence: "high"
+            })
+          ]
+        })
+      ]
+    });
   });
 });
 
@@ -3139,7 +3390,10 @@ test("applies disabled resource group owner evidence when reading managed identi
         subscriptionName: "Subscription One",
         resourceGroup: "rg-app",
         location: "westeurope",
-        tags: { ownerGroup: "platform-team" }
+        tags: {
+          ownerGroup: "platform-team",
+          owner: "fallback@example.test"
+        }
       }
     ],
     userAssignedManagedIdentities: [
@@ -3172,21 +3426,44 @@ test("applies disabled resource group owner evidence when reading managed identi
           ownerDisplayName: "platform-team",
           confidence: "high",
           evidence: "ownerGroup=platform-team"
+        },
+        {
+          ownerCandidateKey: "ownerTag:fallback@example.test",
+          ownerDisplayName: "fallback@example.test",
+          confidence: "medium",
+          evidence: "owner=fallback@example.test"
         }
       ]
     });
 
+    const ownerCandidateStatusEndpoint = getEndpoint(
+      defineLocalReportRuntimeRestEndpoints(runtime),
+      "/api/data/ownership/ownerCandidates/status"
+    );
     await expect(
-      runtime.setOwnerCandidateDisabled(
-        "resourceGroup:sub-1:rg-app:principal:principal-uami-1:ownerGroup:platform-team",
-        true
-      )
-    ).resolves.toBe(1);
+      ownerCandidateStatusEndpoint.handle({
+        req: {},
+        url: new URL(
+          "http://localhost/api/data/ownership/ownerCandidates/status?key=resourceGroup%3Asub-1%3Arg-app%3Aprincipal%3Aprincipal-uami-1%3AownerGroup%3Aplatform-team&status=inactive"
+        )
+      })
+    ).resolves.toEqual({
+      key: "resourceGroup:sub-1:rg-app:principal:principal-uami-1:ownerGroup:platform-team",
+      status: "inactive",
+      disabled: true,
+      disabledCount: 1
+    });
 
     await expect(
       runtime.readOwnershipEvidence({ kind: "managedIdentity", principalId: "principal-uami-1", azureRbac: true })
     ).resolves.toMatchObject({
       evidence: [
+        {
+          ownerCandidateKey: "ownerTag:fallback@example.test",
+          ownerDisplayName: "fallback@example.test",
+          confidence: "medium",
+          evidence: "owner=fallback@example.test"
+        },
         {
           ownerCandidateKey: "ownerGroup:platform-team",
           ownerDisplayName: "platform-team",

@@ -463,6 +463,48 @@ test("reads resource group owner evidence for distinct Azure RBAC resource group
   );
 });
 
+test("keeps Azure RBAC resource group lookup targets paired when subscription ids repeat", async () => {
+  const readAzureResourceGroupOwnershipSqlRows = jest.fn().mockResolvedValue([]);
+  const service = new OwnershipEvidenceQueryService({
+    entraQueries: {
+      findServicePrincipalById: jest.fn().mockResolvedValue(
+        servicePrincipal({
+          id: "sp-rbac",
+          displayName: "RBAC App",
+          roleAssignments: [
+            roleAssignment({
+              principalId: "sp-rbac",
+              scope: "/subscriptions/sub-1/resourceGroups/rg-api",
+              roleDefinitionName: "Contributor"
+            }),
+            roleAssignment({
+              principalId: "sp-rbac",
+              scope: "/subscriptions/sub-1/resourceGroups/rg-worker",
+              roleDefinitionName: "Reader"
+            })
+          ]
+        })
+      )
+    },
+    azureResources: {
+      readAzureResourceGroupOwnershipSqlRows,
+      readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([])
+    }
+  } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
+
+  await expect(
+    service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "SP-RBAC", azureRbac: true })
+  ).resolves.toMatchObject({ evidence: [] });
+  expect(readAzureResourceGroupOwnershipSqlRows).toHaveBeenCalledWith(
+    {
+      subscriptionIds: ["sub-1", "sub-1"],
+      resourceGroups: ["rg-api", "rg-worker"],
+      principalIds: ["sp-rbac"]
+    },
+    100
+  );
+});
+
 test("does not return direct service principal owner evidence in Azure RBAC mode", async () => {
   const readAzureResourceGroupOwnershipSqlRows = jest.fn();
   const service = new OwnershipEvidenceQueryService({
@@ -872,6 +914,101 @@ test("reads managed identity ownership evidence with a principal-scoped resource
   );
 });
 
+test("applies stored principal-scoped disabled state to final managed identity ownership evidence", async () => {
+  const readAzureResourceGroupOwnershipSqlRows = jest.fn().mockResolvedValue([
+    {
+      subscriptionId: "sub-1",
+      subscriptionName: "Production",
+      resourceGroup: "rg-mi",
+      location: "westeurope",
+      tags: {
+        ownerGroup: "platform-team",
+        owner: "fallback@example.test"
+      },
+      targetKey: "resourceGroup:sub-1:rg-mi",
+      kind: "resourceGroup",
+      owner: "platform-team",
+      ownerCandidate: "ownerGroup:platform-team",
+      ownerDisplayName: "platform-team",
+      principalId: "mi-principal-id",
+      confidence: "high",
+      source: "tag.ownerGroup",
+      evidence: [{ user: "ownerGroup=platform-team", date: null }]
+    },
+    {
+      subscriptionId: "sub-1",
+      subscriptionName: "Production",
+      resourceGroup: "rg-mi",
+      location: "westeurope",
+      tags: {
+        ownerGroup: "platform-team",
+        owner: "fallback@example.test"
+      },
+      targetKey: "resourceGroup:sub-1:rg-mi",
+      kind: "resourceGroup",
+      owner: "fallback@example.test",
+      ownerCandidate: "ownerTag:fallback@example.test",
+      ownerDisplayName: "fallback@example.test",
+      principalId: "mi-principal-id",
+      confidence: "medium",
+      source: "tag.owner",
+      evidence: [{ user: "owner=fallback@example.test", date: null }]
+    }
+  ]);
+  const service = new OwnershipEvidenceQueryService({
+    entraQueries: {
+      readManagedIdentityRows: jest.fn().mockResolvedValue([
+        managedIdentity({
+          id: "mi-principal-id",
+          appId: "mi-client-id",
+          displayName: "uami-api",
+          resourceGroup: "rg-mi"
+        })
+      ])
+    },
+    azureResources: {
+      readAzureResourceGroupOwnershipSqlRows,
+      readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([
+        {
+          subscriptionId: "sub-1",
+          subscriptionName: "Production",
+          resourceId: "/subscriptions/sub-1/resourceGroups/rg-mi/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-api",
+          name: "uami-api",
+          resourceGroup: "rg-mi",
+          location: "westeurope",
+          clientId: "mi-client-id",
+          principalId: "mi-principal-id",
+          tenantId: "tenant-1",
+          tags: null
+        }
+      ])
+    },
+    disabledEvidenceStore: {
+      readKeys: jest.fn().mockResolvedValue(new Set([
+        "resourceGroup:sub-1:rg-mi:principal:mi-principal-id:ownerGroup:platform-team"
+      ]))
+    }
+  } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
+
+  await expect(
+    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID", azureRbac: true })
+  ).resolves.toMatchObject({
+    evidence: [
+      {
+        ownerCandidateKey: "ownerTag:fallback@example.test",
+        ownerDisplayName: "fallback@example.test",
+        evidence: "owner=fallback@example.test"
+      },
+      {
+        ownerCandidateKey: "ownerGroup:platform-team",
+        ownerDisplayName: "platform-team",
+        evidence: "ownerGroup=platform-team",
+        disabled: true
+      }
+    ]
+  });
+});
+
 test("applies disabled evidence through the direct service principal owner wrapper", async () => {
   const service = new OwnershipEvidenceQueryService({
     entraQueries: {
@@ -1147,6 +1284,9 @@ function buildOwnershipEvidenceService({
     zeroTrustAssessmentQueries: {
       readRemediationSummaries: jest.fn().mockResolvedValue(new Map()),
       readRemediationPackageSummariesByPrincipalId: jest.fn().mockResolvedValue(new Map())
+    },
+    disabledEvidenceStore: {
+      readKeys: jest.fn().mockResolvedValue(new Set<string>())
     },
     exportService: {}
   } as unknown as ConstructorParameters<typeof EntraCollectionQueryService>[0]);

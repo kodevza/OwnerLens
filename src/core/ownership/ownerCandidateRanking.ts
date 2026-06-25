@@ -31,12 +31,17 @@ export function maxOwnerConfidence(left: OwnerConfidence, right: OwnerConfidence
 
 function compareOwnerCandidates(left: OwnerCandidate, right: OwnerCandidate): number {
   return (
+    compareDescending(getActiveEvidenceRank(left), getActiveEvidenceRank(right)) ||
     compareDescending(OWNER_CONFIDENCE_RANK[left.confidence], OWNER_CONFIDENCE_RANK[right.confidence]) ||
     compareDescending(SOURCE_WEIGHT[left.source], SOURCE_WEIGHT[right.source]) ||
     compareDescending(left.relatedScopes.length, right.relatedScopes.length) ||
     compareDescending(left.evidence.length, right.evidence.length) ||
     left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" })
   );
+}
+
+function getActiveEvidenceRank(candidate: OwnerCandidate): number {
+  return candidate.evidence.length === 0 || candidate.evidence.some((evidence) => !evidence.disabled) ? 1 : 0;
 }
 
 function compareDescending(left: number, right: number): number {
