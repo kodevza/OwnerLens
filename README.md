@@ -8,6 +8,43 @@ exports owner mappings, gaps, and remediation assignments to CSV or JSON.
 Owner signals include Azure tags, cost center mappings, Azure RBAC, groups,
 managed identities, service principals, app registrations, and activity logs.
 
+The application is intended to: 
+
+👉 reconcile cloud provider ownership data (currently Azure), 
+
+👉 export the resolved ownership results for Identity and Access Management (IAM) systems, 
+
+OwnerLens helps split actionable remediations by the
+most likely accountable owners and provides traceable evidence for why each
+remediation was assigned.
+
+```mermaid
+
+flowchart TD
+    A["1. Entra + Azure Resource Snapshot<br/><br/>Service Principals<br/>Managed Identities<br/>Groups<br/>Azure RBAC<br/>Tags<br/>Activity Logs"]
+
+    B["2. OwnerLens Review UI<br/><br/>Resolve likely owners<br/>Show confidence<br/>Show evidence<br/>Find ownership gaps"]
+
+    C["3. Export to IAM / Recertification<br/><br/>CSV / JSON<br/>Owner mapping<br/>Gap report<br/>Input for SailPoint / Saviynt / Omada / Entra Governance"]
+
+
+    A --> B --> C
+```    
+## Features
+
+➡️ Resolve owners from configurable Azure tags such as `ownerGroup`,
+  `costCenter`, and `owner`. Configure tag names and confidence levels in
+  [src/core/config.ts](src/core/config.ts).
+
+➡️ Review ownership confidence and supporting evidence.
+
+➡️ Inspect Azure role assignment and permission risk signals.
+
+➡️ Review managed identity and service principal relationships.
+
+➡️ Export resolved ownership results to CSV and JSON files for resource groups, service principals, and managed identities.
+
+
 ## Requirements
 
 - PowerShell 7 (`pwsh`) on `PATH` for the OwnerLens module and snapshot
