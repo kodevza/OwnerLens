@@ -78,7 +78,8 @@ Open-OwnerLens
 ```
 
 `Start-OwnerLens` binds to `127.0.0.1`, chooses a free port, creates the data
-directory, and stores runtime state under `$env:LOCALAPPDATA\OwnerLens`.
+directory, stores runtime state under `$env:LOCALAPPDATA\OwnerLens`, and writes
+server stdout/stderr logs under `$env:LOCALAPPDATA\OwnerLens\logs`.
 
 Use an explicit port or data directory when needed:
 

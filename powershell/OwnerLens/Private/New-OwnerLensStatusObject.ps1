@@ -22,5 +22,8 @@ function New-OwnerLensStatusObject {
     DataPath = if ($State) { [string]$State.DataPath } else { $null }
     StartedAt = if ($State) { [datetimeoffset]::Parse([string]$State.StartedAt) } else { $null }
     Health = $Health
+    LogDirectory = if ($State -and $State.LogDirectory) { [string]$State.LogDirectory } else { $null }
+    StdoutLogPath = if ($State -and $State.StdoutLogPath) { [string]$State.StdoutLogPath } else { $null }
+    StderrLogPath = if ($State -and $State.StderrLogPath) { [string]$State.StderrLogPath } else { $null }
   }
 }

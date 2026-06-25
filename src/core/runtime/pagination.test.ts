@@ -6,11 +6,11 @@ test("uses default page size of 50", () => {
   expect(buildPage(rows, {}).pageSize).toBe(50);
 });
 
-test("clamps page size to max 500", () => {
-  const page = buildPage(Array.from({ length: 600 }, (_, index) => index), { pageSize: 1000 });
+test("does not cap requested page size", () => {
+  const page = buildPage(Array.from({ length: 1000 }, (_, index) => index), { pageSize: 1000 });
 
-  expect(page.pageSize).toBe(500);
-  expect(page.rows).toHaveLength(500);
+  expect(page.pageSize).toBe(1000);
+  expect(page.rows).toHaveLength(1000);
 });
 
 test("clamps page to available range", () => {
