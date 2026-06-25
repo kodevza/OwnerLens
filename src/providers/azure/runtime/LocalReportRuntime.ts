@@ -38,8 +38,14 @@ import {
   type OwnershipEvidenceResponse
 } from "./ownership/OwnershipRuntime";
 import { RemediationRuntime } from "./remediation/RemediationRuntime";
+import {
+  PowershellScriptService,
+  type GeneratePowerShellScriptRequest,
+  type RuntimePowerShellScript
+} from "./scripts/PowershellScriptService";
 
 export type LocalReportRuntimeOptions = {
+  appRoot?: string;
   dataDir: string;
   databasePath?: string;
 };
@@ -56,9 +62,11 @@ export class LocalReportRuntime {
   private readonly snapshotImporter: SnapshotImporter;
   private readonly enrichmentService: EnrichmentService;
   private readonly exportService: ExportService;
+  private readonly powershellScriptService: PowershellScriptService;
   private initializePromise: Promise<void> | null = null;
 
   constructor(options: LocalReportRuntimeOptions) {
+    const appRoot = options.appRoot ?? process.cwd();
     this.dataDir = options.dataDir;
     this.host = new RuntimeHost({ databasePath: options.databasePath ?? ":memory:" });
     this.entra = new LocalEntraReportRuntime({
@@ -98,6 +106,11 @@ export class LocalReportRuntime {
       azureResourcesQueries: this.azureResourcesQueries,
       zeroTrustAssessmentQueries: this.remediationRuntime,
       exportService: this.exportService
+    });
+    this.powershellScriptService = new PowershellScriptService({
+      appRoot,
+      azureResourcesQueries: this.azureResourcesQueries,
+      entraQueries: this.entraQueries
     });
   }
 
@@ -291,6 +304,11 @@ export class LocalReportRuntime {
   async deleteRemediationTasks(request: DeleteRuntimeRemediationTasksRequest): Promise<RemediationPackage> {
     await this.initialize();
     return this.remediationRuntime.deleteRemediationTasks(request);
+  }
+
+  async generatePowerShellScript(request: GeneratePowerShellScriptRequest): Promise<RuntimePowerShellScript> {
+    await this.initialize();
+    return this.powershellScriptService.generate(request);
   }
 
   async close(): Promise<void> {

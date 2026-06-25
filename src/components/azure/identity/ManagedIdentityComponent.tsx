@@ -6,7 +6,12 @@ import type { PermissionRiskLevel } from "../../../core/risk/types";
 import type { RemediationPackage } from "../../../core/runtime/remediation";
 import { getTagNames } from "../../../core/azure/tags";
 import { azureManagedIdentityColumnHelp } from "../azureReportConfig";
-import { exportManagedIdentitiesCsv, readManagedIdentities, readRemediationPackage } from "../api";
+import {
+  exportManagedIdentitiesCsv,
+  generatePowerShellScript,
+  readManagedIdentities,
+  readRemediationPackage
+} from "../api";
 import { SelectableGenericTable } from "../../../report/components/table/SelectableGenericTable";
 import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../../report/reportTypes";
@@ -213,6 +218,28 @@ export function ManagedIdentityComponent({
             selectedRowKeys={selectedRowKeys}
             sortRules={sortRules}
             onExportCsv={exportManagedIdentitiesCsv}
+            powerShellScriptAction={{
+              selectionLabel: selectAllMatchingFilters
+                ? "all filtered managed identities"
+                : `${selectedRowKeys.length} selected managed identities`,
+              templates: [
+                {
+                  id: "setServicePrincipalOwnerTag",
+                  label: "Set owner tag",
+                  generate: () =>
+                    generatePowerShellScript({
+                      collectionId: "entra.managedIdentities",
+                      templateId: "setServicePrincipalOwnerTag",
+                      selection: {
+                        filters,
+                        selectAllMatchingFilters,
+                        selectedRowKeys,
+                        sortRules
+                      }
+                    })
+                }
+              ]
+            }}
           />
         )}
       />

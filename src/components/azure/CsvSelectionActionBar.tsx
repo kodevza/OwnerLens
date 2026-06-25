@@ -1,6 +1,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 
 import type { CsvExportSelection } from "./api";
+import type { SelectionPowerShellScriptAction } from "../../report/components/PowerShellScriptOverlay";
 import { SelectionActionBar } from "../../report/components/SelectionActionBar";
 import { Button } from "../../report/components/ui/button";
 
@@ -8,6 +9,7 @@ type CsvSelectionActionBarProps = CsvExportSelection & {
   children?: ReactNode;
   itemLabel: string;
   onExportCsv: (selection: CsvExportSelection) => Promise<void>;
+  powerShellScriptAction?: SelectionPowerShellScriptAction;
 };
 
 export function CsvSelectionActionBar({
@@ -17,7 +19,8 @@ export function CsvSelectionActionBar({
   selectAllMatchingFilters,
   selectedRowKeys,
   sortRules,
-  onExportCsv
+  onExportCsv,
+  powerShellScriptAction
 }: CsvSelectionActionBarProps) {
   const [exportState, setExportState] = useState<{
     status: "idle" | "exporting" | "error";
@@ -40,7 +43,10 @@ export function CsvSelectionActionBar({
   const isExporting = exportState.status === "exporting";
 
   return (
-    <SelectionActionBar errorMessage={exportState.status === "error" ? exportState.message : undefined}>
+    <SelectionActionBar
+      errorMessage={exportState.status === "error" ? exportState.message : undefined}
+      powerShellScriptAction={powerShellScriptAction}
+    >
       {children}
       <Button
         aria-label={`Export ${selectionLabel} to CSV`}

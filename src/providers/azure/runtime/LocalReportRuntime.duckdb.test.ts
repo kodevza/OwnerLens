@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { LocalReportRuntime } from "./LocalReportRuntime";
-import { defineLocalReportRuntimeRestEndpoints } from "./localReportRuntimeRest";
+import { defineLocalReportRuntimeRestEndpoints } from "./localReportRuntimeRestEndpoints";
 import type { AzureSnapshot } from "../inputTransferObject/generated/AzureSnapshot";
 import type { EntraSnapshot } from "../inputTransferObject/generated/EntraSnapshot";
 import {

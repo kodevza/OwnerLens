@@ -3,7 +3,7 @@ import type {
   ManagedIdentityPermissionRiskAssignment,
   ManagedIdentityPermissionRiskLevel
 } from "../../../../core/azure/identityEnrichment";
-import { classifyAzureScope, isBroadAzureScope } from "./azureScopeClassifier.ts";
+import { classifyAzureScope, isBroadAzureScope } from "./azureScopeClassifier";
 
 const HIGH_RISK_ROLES = new Set([
   "owner",

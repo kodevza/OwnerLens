@@ -2,7 +2,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 
 import { getRuntimeRestErrorStatusCode } from "../core/runtime/rest";
-import { defineLocalReportRuntimeRestEndpoints } from "../providers/azure/runtime/localReportRuntimeRest";
+import { defineLocalReportRuntimeRestEndpoints } from "../providers/azure/runtime/localReportRuntimeRestEndpoints";
 import type { LocalReportRuntime } from "../providers/azure/runtime/LocalReportRuntime";
 import { registerRuntimeRoutes } from "./registerRuntimeRoutes";
 import { runtimeErrorResponse } from "./runtimeErrorHandler";

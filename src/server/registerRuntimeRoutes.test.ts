@@ -51,7 +51,12 @@ test("returns runtime JSON errors for unknown runtime paths", async () => {
 
   expect(response.status).toBe(404);
   expect(response.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
-  expect(await response.json()).toEqual({ error: "Runtime API endpoint not found." });
+  expect(await response.json()).toEqual({
+    error: {
+      code: "runtime.notFound",
+      message: "Runtime API endpoint not found."
+    }
+  });
 });
 
 test("checks runtime tokens before invoking registered runtime routes", async () => {
@@ -74,7 +79,12 @@ test("checks runtime tokens before invoking registered runtime routes", async ()
 
   expect(response.status).toBe(401);
   expect(handle).not.toHaveBeenCalled();
-  expect(await response.json()).toEqual({ error: "Runtime API token is missing or invalid." });
+  expect(await response.json()).toEqual({
+    error: {
+      code: "runtime.unauthorized",
+      message: "Runtime API token is missing or invalid."
+    }
+  });
 });
 
 test("validates runtime route query parameters before invoking handlers", async () => {
@@ -105,7 +115,41 @@ test("validates runtime route query parameters before invoking handlers", async 
   expect(response.status).toBe(400);
   expect(handle).not.toHaveBeenCalled();
   expect(await response.json()).toEqual({
-    error: "Runtime API validation failed for testGETapidatavalidated query: / must have required property 'id'"
+    error: {
+      code: "runtime.badRequest",
+      message: "Runtime API validation failed for testGETapidatavalidated query: / must have required property 'id'"
+    }
+  });
+});
+
+test("returns runtime error codes from endpoint errors", async () => {
+  const app = new Hono();
+
+  registerRuntimeRoutes(app, {
+    basePath: "/api/data",
+    endpoints: [
+      testEndpoint({
+        path: "/api/data/schema-check",
+        handle: () => {
+          throw new RuntimeHttpError(
+            "Runtime database schema is newer than this OwnerLens version.",
+            409,
+            "runtime.schemaVersionIncompatible"
+          );
+        }
+      })
+    ],
+    getErrorStatusCode: getRuntimeRestErrorStatusCode
+  });
+
+  const response = await app.request("/api/data/schema-check");
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({
+    error: {
+      code: "runtime.schemaVersionIncompatible",
+      message: "Runtime database schema is newer than this OwnerLens version."
+    }
   });
 });
 

@@ -29,6 +29,8 @@ type AppliedMigration = {
 
 export type MigrationLogger = Pick<Console, "log">;
 
+export class MigrationCompatibilityError extends Error {}
+
 export async function migrate(
   db: DuckMigrationConnection,
   dir = "migrations",
@@ -44,6 +46,15 @@ export async function migrate(
 
   const applied = await readAppliedMigrations(db);
   const files = (await fs.readdir(dir)).filter((file) => file.endsWith(".sql")).sort();
+  const knownVersions = new Set(files.map((file) => file.replace(/\.sql$/, "")));
+
+  for (const version of applied.keys()) {
+    if (!knownVersions.has(version)) {
+      throw new MigrationCompatibilityError(
+        "Runtime database schema is newer than this OwnerLens version. Upgrade OwnerLens or use a matching ./data/runtime.duckdb."
+      );
+    }
+  }
 
   for (const file of files) {
     const version = file.replace(/\.sql$/, "");

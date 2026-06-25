@@ -56,6 +56,26 @@ export const collectionQuerySchema = querySchema(
   }
 );
 
+export const powershellScriptQuerySchema = querySchema(
+  {
+    collection: {
+      enum: ["azureResources.resourceGroupOwnership", "entra.servicePrincipals", "entra.managedIdentities"]
+    },
+    template: {
+      enum: ["setResourceGroupOwnerTag", "setResourceGroupOwnerGroupTag", "setServicePrincipalOwnerTag"]
+    },
+    page: queryStringSchema,
+    pageSize: queryStringSchema,
+    count: queryStringSchema,
+    selectedRowKey: queryStringOrStringArraySchema
+  },
+  {
+    "^filter\\[\\d+\\]\\[(column|value|values)\\](\\[\\d+\\])?$": queryStringSchema,
+    "^sort\\[\\d+\\]\\[(column|direction)\\]$": queryStringSchema
+  },
+  ["template"]
+);
+
 export const csvCollectionQuerySchema = querySchema(
   {
     id: queryStringSchema,
@@ -91,6 +111,41 @@ export const collectionResponseSchema = (collectionId: string, rowSchema: Runtim
 export const runtimeRowSchema: RuntimeRestJsonSchema = {
   type: "object",
   additionalProperties: true
+};
+
+export const powershellScriptResponseSchema: RuntimeRestJsonSchema = {
+  type: "object",
+  required: ["kind", "templateId", "fileName", "contentType", "body", "count", "targetIds"],
+  additionalProperties: false,
+  properties: {
+    kind: { const: "powershellScript" },
+    templateId: { enum: ["setResourceGroupOwnerTag", "setResourceGroupOwnerGroupTag", "setServicePrincipalOwnerTag"] },
+    fileName: { type: "string" },
+    contentType: { const: "text/x-powershell; charset=utf-8" },
+    body: { type: "string" },
+    count: { type: "integer" },
+    targetIds: {
+      type: "array",
+      items: { type: "string" }
+    }
+  }
+};
+
+export const runtimeErrorResponseSchema: RuntimeRestJsonSchema = {
+  type: "object",
+  required: ["error"],
+  additionalProperties: false,
+  properties: {
+    error: {
+      type: "object",
+      required: ["code", "message"],
+      additionalProperties: false,
+      properties: {
+        code: { type: "string" },
+        message: { type: "string" }
+      }
+    }
+  }
 };
 
 export const snapshotListResponseSchema: RuntimeRestJsonSchema = {

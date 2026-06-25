@@ -12,22 +12,62 @@ import { Button } from "../../../report/components/ui/button";
 import { TagBadges } from "../TagBadges";
 import { ZtaRemediationPackageBadges } from "../remediation/ZtaRemediationPackageBadges";
 import { EntraLinkBadge, buildEntraEnterpriseApplicationPortalUrl } from "./EntraLinkBadge";
+import type {
+  AzureRbacPrincipalSelection,
+  EntraPermissionsPrincipalSelection,
+  OwnershipEvidenceSelection
+} from "./ServicePrincipalFieldRenderers";
+import { formatAzureRbacSummary, OwnerBadge } from "./ServicePrincipalFieldRenderers";
 
 export type EntraPrincipalDetails = ServicePrincipal | ManagedIdentity;
 
 type DetailRow = {
+  action?: DetailRowAction;
   copyable?: boolean;
   label: string;
   value: unknown;
-  renderAs?: "boolean" | "confidence" | "count" | "risk" | "stringBadges" | "tags" | "type" | "ztaPackages";
+  renderAs?: "actionCount" | "boolean" | "confidence" | "count" | "ownerBadge" | "risk" | "stringBadges" | "tags" | "type" | "ztaPackages";
 };
 
-export function ServicePrincipalDetailsComponent({ servicePrincipal }: { servicePrincipal: EntraPrincipalDetails }) {
+type DetailRowAction = {
+  ariaLabel: string;
+  onClick: () => void;
+  title: string;
+};
+
+export function ServicePrincipalDetailsComponent({
+  onAzureRbacClick,
+  onEntraPermissionsClick,
+  onOwnershipEvidenceClick,
+  servicePrincipal
+}: {
+  onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
+  onEntraPermissionsClick?: (principal: EntraPermissionsPrincipalSelection) => void;
+  onOwnershipEvidenceClick?: (selection: OwnershipEvidenceSelection) => void;
+  servicePrincipal: EntraPrincipalDetails;
+}) {
   const portalHref = buildEntraEnterpriseApplicationPortalUrl({
     appId: servicePrincipal.appId,
     objectId: servicePrincipal.id
   });
-  const { analysisRows, applicationRows } = buildServicePrincipalDetailRowGroups(servicePrincipal);
+  const principalSelection = {
+    displayName: servicePrincipal.displayName,
+    objectId: servicePrincipal.id
+  };
+  const { analysisRows, applicationRows } = buildServicePrincipalDetailRowGroups(servicePrincipal, {
+    onAzureRbacClick: onAzureRbacClick ? () => onAzureRbacClick(principalSelection) : undefined,
+    onEntraPermissionsClick: onEntraPermissionsClick ? () => onEntraPermissionsClick(principalSelection) : undefined,
+    onOwnershipEvidenceClick: onOwnershipEvidenceClick
+      ? () =>
+          onOwnershipEvidenceClick({
+            displayName: servicePrincipal.displayName,
+            target: {
+              kind: servicePrincipal.servicePrincipalType === "ManagedIdentity" ? "managedIdentity" : "servicePrincipal",
+              principalId: servicePrincipal.id
+            }
+          })
+      : undefined
+  });
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
   const copyValue = useCallback(async (row: DetailRow) => {
     const text = getCopyText(row.value);
@@ -87,10 +127,22 @@ function DetailGroup({
   );
 }
 
-function buildServicePrincipalDetailRowGroups(servicePrincipal: EntraPrincipalDetails): {
+function buildServicePrincipalDetailRowGroups(
+  servicePrincipal: EntraPrincipalDetails,
+  actions: {
+    onAzureRbacClick?: () => void;
+    onEntraPermissionsClick?: () => void;
+    onOwnershipEvidenceClick?: () => void;
+  }
+): {
   analysisRows: DetailRow[];
   applicationRows: DetailRow[];
 } {
+  const azureRbacTitle = formatAzureRbacSummary({
+    rbacRoleAssignmentCount: servicePrincipal.rbacRoleAssignmentCount,
+    roleAssignments: servicePrincipal.roleAssignments
+  });
+
   return {
     applicationRows: [
       { label: "Display name", value: servicePrincipal.displayName },
@@ -113,17 +165,59 @@ function buildServicePrincipalDetailRowGroups(servicePrincipal: EntraPrincipalDe
       { label: "Metadata", value: servicePrincipal.metadata }
     ],
     analysisRows: [
-      { label: "Owner confidence", value: servicePrincipal.ownerConfidence, renderAs: "confidence" },
-      { label: "Owner candidates", value: servicePrincipal.ownerCandidates },
-      { label: "Potential owners", value: servicePrincipal.potentialOwners, renderAs: "stringBadges" },
+      {
+        label: "Owner candidates",
+        value: servicePrincipal,
+        renderAs: "ownerBadge",
+        action: actions.onOwnershipEvidenceClick
+          ? {
+              ariaLabel: `Open ownership evidence for ${servicePrincipal.ownerCandidates?.[0]?.displayName ?? servicePrincipal.displayName}`,
+              onClick: actions.onOwnershipEvidenceClick,
+              title: `Open ownership evidence for ${servicePrincipal.displayName || servicePrincipal.id}`
+            }
+          : undefined
+      },
       { label: "Permission risk", value: servicePrincipal.permissionRisk, renderAs: "risk" },
       { label: "OAuth permissions", value: servicePrincipal.oauthPermissionsCount, renderAs: "count" },
-      { label: "Application permissions", value: servicePrincipal.appRolesPermissionCount, renderAs: "count" },
+      {
+        label: "Application permissions",
+        value: servicePrincipal.appRolesPermissionCount,
+        renderAs: "actionCount",
+        action: actions.onEntraPermissionsClick
+          ? {
+              ariaLabel: `Open Entra API permissions ${servicePrincipal.appRolesPermissionCount}`,
+              onClick: actions.onEntraPermissionsClick,
+              title: `Open Entra API permissions for ${servicePrincipal.displayName || servicePrincipal.id}`
+            }
+          : undefined
+      },
       { label: "Entra permission risk", value: servicePrincipal.entraPermissionRisk, renderAs: "risk" },
-      { label: "Azure RBAC assignments", value: servicePrincipal.rbacRoleAssignmentCount, renderAs: "count" },
+      {
+        label: "Azure RBAC assignments",
+        value: servicePrincipal.rbacRoleAssignmentCount,
+        renderAs: "actionCount",
+        action: actions.onAzureRbacClick
+          ? {
+              ariaLabel: `Open Azure RBAC assignments ${servicePrincipal.rbacRoleAssignmentCount}`,
+              onClick: actions.onAzureRbacClick,
+              title: azureRbacTitle
+            }
+          : undefined
+      },
       { label: "Azure RBAC subscriptions", value: servicePrincipal.rbacSubscriptionCount, renderAs: "count" },
       { label: "Azure RBAC risk", value: servicePrincipal.rbacRoleLevel, renderAs: "risk" },
-      { label: "Role assignments", value: servicePrincipal.roleAssignments },
+      {
+        label: "Role assignments",
+        value: servicePrincipal.roleAssignments.length,
+        renderAs: "actionCount",
+        action: actions.onAzureRbacClick
+          ? {
+              ariaLabel: `Open role assignments ${servicePrincipal.roleAssignments.length}`,
+              onClick: actions.onAzureRbacClick,
+              title: azureRbacTitle
+            }
+          : undefined
+      },
       { label: "Assigned resource group", value: "resourceGroup" in servicePrincipal ? servicePrincipal.resourceGroup : undefined },
       { label: "Assigned resource groups", value: "assignedResourceGroups" in servicePrincipal ? servicePrincipal.assignedResourceGroups : undefined, renderAs: "stringBadges" },
       { label: "Managed identity assignments", value: "managedIdentityAssignments" in servicePrincipal ? servicePrincipal.managedIdentityAssignments : undefined }
@@ -184,6 +278,20 @@ function renderDetailValue(row: DetailRow) {
     );
   }
 
+  if (renderAs === "ownerBadge" && isEntraPrincipalDetails(value)) {
+    return (
+      <OwnerBadge
+        confidence={value.ownerConfidence ?? "none"}
+        ownerCandidates={value.ownerCandidates ?? []}
+        onClick={row.action?.onClick}
+      />
+    );
+  }
+
+  if (renderAs === "actionCount" && typeof value === "number") {
+    return <ActionCountBadge action={row.action} value={value} />;
+  }
+
   if (renderAs === "risk" && isPermissionRisk(value)) {
     return <PermissionRiskBadge riskLevel={value} />;
   }
@@ -233,6 +341,30 @@ function renderDetailValue(row: DetailRow) {
   }
 
   return String(value);
+}
+
+function ActionCountBadge({ action, value }: { action?: DetailRowAction; value: number }) {
+  const badge = (
+    <Badge className="min-w-8 justify-center tabular-nums" variant={value > 0 ? "outline" : "none"}>
+      {value}
+    </Badge>
+  );
+
+  if (!action) {
+    return badge;
+  }
+
+  return (
+    <button
+      aria-label={action.ariaLabel}
+      className="cursor-pointer rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      title={action.title}
+      type="button"
+      onClick={action.onClick}
+    >
+      {badge}
+    </button>
+  );
 }
 
 function formatJson(value: unknown): string {
@@ -350,4 +482,8 @@ function isOwnerConfidence(value: unknown): value is OwnerConfidence {
 
 function isPermissionRisk(value: unknown): value is PermissionRiskLevel {
   return value === "high" || value === "medium" || value === "low" || value === "none";
+}
+
+function isEntraPrincipalDetails(value: unknown): value is EntraPrincipalDetails {
+  return typeof value === "object" && value !== null && "id" in value && "servicePrincipalType" in value;
 }
