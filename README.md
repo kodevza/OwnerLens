@@ -93,13 +93,6 @@ credential, and activity-log metadata. Review them before sharing. Files matchin
 
 ## Run
 
-Build the PowerShell module from a source checkout:
-
-```powershell
-pwsh ./scripts/build-windows-runtime.ps1
-pwsh ./scripts/build-powershell-module.ps1
-```
-
 Start the local app from `pwsh`:
 
 ```powershell
