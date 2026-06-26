@@ -12,12 +12,10 @@ import { parseRuntimeCollectionQueryOptions } from "../runtimeRestQuery";
 type OwnershipEvidenceRequest =
   | {
       kind: "servicePrincipal" | "managedIdentity";
-      azureRbac?: boolean;
       principalId: string;
     }
   | {
       kind: "resourceGroup";
-      azureRbac?: boolean;
       subscriptionId: string;
       resourceGroup: string;
       page?: number;
@@ -63,13 +61,11 @@ export function defineOwnershipLocalReportRuntimeRestEndpoints(
 }
 
 function parseOwnershipEvidenceRequest(url: URL): OwnershipEvidenceRequest {
-  const azureRbac = readOptionalBooleanSearchParam(url, "azureRbac");
   const kind = readRequiredSearchParam(url, "kind");
 
   if (kind === "servicePrincipal" || kind === "managedIdentity") {
     return {
       kind,
-      ...(azureRbac === undefined ? {} : { azureRbac }),
       principalId: readRequiredSearchParam(url, "principalId")
     };
   }
@@ -79,7 +75,6 @@ function parseOwnershipEvidenceRequest(url: URL): OwnershipEvidenceRequest {
 
     return {
       kind,
-      ...(azureRbac === undefined ? {} : { azureRbac }),
       subscriptionId: readRequiredSearchParam(url, "subscriptionId"),
       resourceGroup: readRequiredSearchParam(url, "resourceGroup"),
       page,
@@ -97,21 +92,6 @@ function readRequiredSearchParam(url: URL, name: string): string {
   }
 
   return value;
-}
-
-function readOptionalBooleanSearchParam(url: URL, name: string): boolean | undefined {
-  const value = url.searchParams.get(name)?.trim().toLowerCase();
-  if (value === undefined) {
-    return undefined;
-  }
-  if (value === "true") {
-    return true;
-  }
-  if (value === "false") {
-    return false;
-  }
-
-  throw new RuntimeHttpError(`Invalid boolean query parameter: ${name}`, 400);
 }
 
 function readEvidenceStatusSearchParam(url: URL): "active" | "inactive" {

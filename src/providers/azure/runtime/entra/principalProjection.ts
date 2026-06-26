@@ -44,6 +44,7 @@ export function toManagedIdentities(
       ...getAzureIdentityRuntimeEnrichment(servicePrincipal, enrichment),
       ...getEntraPrincipalPermissionSummary(servicePrincipal, permissionsByPrincipalId),
       ...getZtaRemediationSummary(servicePrincipal, ztaSummariesByPrincipalId),
+      resourceGroup: assignmentEnrichment?.assignedResourceGroups[0],
       managedIdentityAssignments: assignmentEnrichment?.managedIdentityAssignments ?? [],
       assignedResourceGroups: assignmentEnrichment?.assignedResourceGroups ?? []
     };

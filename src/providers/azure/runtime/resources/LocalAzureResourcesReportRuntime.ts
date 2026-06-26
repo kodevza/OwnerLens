@@ -30,6 +30,7 @@ import {
 } from "./snapshotStore";
 import {
   readAzureActivityLogRows,
+  readAzurePrincipalResourceGroupOwnerCandidateViewRows,
   readAzureResourceGroupOwnershipCollectionSqlRows,
   readAzureResourceGroupOwnerCandidateViewRows,
   readAzureResourceGroupRows,
@@ -38,6 +39,7 @@ import {
   readAzureRoleAssignmentRows,
   readAzureSubscriptionRows,
   readAzureUserAssignedManagedIdentityRows,
+  type AzurePrincipalResourceGroupOwnerCandidateViewRow,
   type AzureResourceGroupOwnerCandidateViewRow,
   type AzureResourceGroupOwnershipSqlRow
 } from "./tables";
@@ -147,6 +149,15 @@ export class LocalAzureResourcesReportRuntime {
   }, limit: number): Promise<AzureResourceGroupOwnerCandidateViewRow[]> {
     this.assertImported();
     return readAzureResourceGroupOwnerCandidateViewRows(this.getConnection(), target, limit);
+  }
+
+  async readAzurePrincipalResourceGroupOwnerCandidateViewRows(target: {
+    principalId: string;
+    subscriptionIds: string[];
+    resourceGroups: string[];
+  }, limit: number): Promise<AzurePrincipalResourceGroupOwnerCandidateViewRow[]> {
+    this.assertImported();
+    return readAzurePrincipalResourceGroupOwnerCandidateViewRows(this.getConnection(), target, limit);
   }
 
   async readAzureResourceGroupOwnershipCollectionSqlRows(limit = 20): Promise<AzureResourceGroupOwnershipSqlRow[]> {

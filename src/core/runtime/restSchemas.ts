@@ -230,7 +230,6 @@ export const azureRbacQuerySchema = querySchema({
 });
 
 export const ownershipEvidenceQuerySchema = querySchema({
-  azureRbac: { enum: ["true", "false"] },
   kind: { enum: ["servicePrincipal", "managedIdentity", "resourceGroup"] },
   principalId: queryStringSchema,
   subscriptionId: queryStringSchema,

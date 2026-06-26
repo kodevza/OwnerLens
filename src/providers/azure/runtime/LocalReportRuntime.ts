@@ -113,8 +113,6 @@ export class LocalReportRuntime {
     });
     this.entraQueries = new EntraCollectionQueryService({
       entra: this.entra,
-      azureResources: this.azureResources,
-      azureResourcesQueries: this.azureResourcesQueries,
       zeroTrustAssessmentQueries: this.remediationRuntime,
       disabledEvidenceStore: this.ownershipRuntime.getDisabledEvidenceStore(),
       exportService: this.exportService

@@ -3084,17 +3084,6 @@
         "summary": "Read owner evidence for a service principal, managed identity, or resource group.",
         "parameters": [
           {
-            "name": "azureRbac",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          },
-          {
             "name": "kind",
             "in": "query",
             "required": true,

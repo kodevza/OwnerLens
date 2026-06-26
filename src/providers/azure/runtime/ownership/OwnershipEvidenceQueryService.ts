@@ -2,8 +2,7 @@ import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdenti
 import type { ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
 import type {
   AzureRoleAssignment,
-  AzureUserAssignedManagedIdentity,
-  ResourceGroupOwnershipRow
+  AzureUserAssignedManagedIdentity
 } from "../../../../core/azure/resources";
 import type {
   OwnerCandidate,
@@ -18,27 +17,21 @@ import { rankOwnerCandidates } from "../../../../core/ownership/ownerCandidateRa
 import type { DisabledOwnerEvidenceStore } from "../../../../core/runtime/DisabledOwnerEvidenceStore";
 import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
 import type { PageOptions } from "../../../../core/runtime/pagination";
-import { projectServicePrincipalOwners } from "./principalOwnerProjection";
 import type { EntraCollectionQueryService } from "../entra/EntraCollectionQueryService";
 import type {
+  AzurePrincipalResourceGroupOwnerCandidateViewRow,
   AzureResourceGroupOwnerCandidateViewRow,
-  AzureResourceGroupOwnershipSqlRow
 } from "../resources/tables";
 import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
-import {
-  flattenCandidateEvidence,
-  readEntraPrincipalDirectOwnerCandidates
-} from "./OwnershipEvidenceHelper";
+import { flattenCandidateEvidence } from "./OwnershipEvidenceHelper";
 
 export type OwnershipEvidenceRequest =
   | {
       kind: "servicePrincipal" | "managedIdentity";
-      azureRbac?: boolean;
       principalId: string;
     }
   | {
       kind: "resourceGroup";
-      azureRbac?: boolean;
       subscriptionId: string;
       resourceGroup: string;
       page?: number;
@@ -70,9 +63,9 @@ export class OwnershipEvidenceQueryService {
   async readOwnershipEvidence(request: OwnershipEvidenceRequest): Promise<OwnershipEvidenceResponse> {
     switch (request.kind) {
       case "servicePrincipal":
-        return this.readServicePrincipalEvidence(request.principalId, request.azureRbac ?? false);
+        return this.readServicePrincipalEvidence(request.principalId);
       case "managedIdentity":
-        return this.readManagedIdentityEvidence(request.principalId, request.azureRbac ?? false);
+        return this.readManagedIdentityEvidence(request.principalId);
       case "resourceGroup":
         return this.readResourceGroupEvidence(request);
       default:
@@ -80,7 +73,7 @@ export class OwnershipEvidenceQueryService {
     }
   }
 
-  private async readServicePrincipalEvidence(principalId: string, azureRbac: boolean): Promise<OwnershipEvidenceResponse> {
+  private async readServicePrincipalEvidence(principalId: string): Promise<OwnershipEvidenceResponse> {
     const row = await this.entraQueries.findServicePrincipalById(principalId);
 
     if (!row) {
@@ -93,40 +86,10 @@ export class OwnershipEvidenceQueryService {
         id: row.id,
         displayName: row.displayName
       },
-      evidence: withOwnershipEvidenceStatusKeys(
-        flattenCandidateEvidence(rankOwnerCandidates(
-          azureRbac
-            ? await this.readServicePrincipalOwnerCandidates(row)
-            : await this.readDirectServicePrincipalOwnerCandidates(row)
-        )),
-        azureRbac ? row.id : undefined
-      )
+      evidence: withOwnershipEvidenceStatusKeys(flattenCandidateEvidence(rankOwnerCandidates(
+        await this.readPrincipalOwnerCandidates(row.id, getRoleAssignmentResourceGroupOwnershipTarget(row.roleAssignments ?? []))
+      )))
     };
-  }
-
-  private async readDirectServicePrincipalOwnerCandidates(row: ServicePrincipal): Promise<OwnerCandidate[]> {
-    return this.readDirectEntraPrincipalOwnerCandidates(row);
-  }
-
-  private async readDirectManagedIdentityOwnerCandidates(row: ManagedIdentity): Promise<OwnerCandidate[]> {
-    return this.readDirectEntraPrincipalOwnerCandidates(row);
-  }
-
-  private async readDirectEntraPrincipalOwnerCandidates(row: ServicePrincipal | ManagedIdentity): Promise<OwnerCandidate[]> {
-    const ownerCandidates = readEntraPrincipalDirectOwnerCandidates(row);
-    const disabledKeys = await this.readDisabledOwnerEvidenceKeys();
-
-    if (disabledKeys.size === 0) {
-      return ownerCandidates;
-    }
-
-    return ownerCandidates.map((candidate) => ({
-      ...candidate,
-      evidence: candidate.evidence.map((evidence) => ({
-        ...evidence,
-        disabled: isDirectOwnerEvidenceDisabled(candidate, evidence, disabledKeys) || undefined
-      }))
-    }));
   }
 
   private async readDisabledOwnerEvidenceKeys(): Promise<ReadonlySet<string>> {
@@ -134,29 +97,20 @@ export class OwnershipEvidenceQueryService {
     return new Set([...(keys ?? [])].map(normalizeKey));
   }
 
-  private async readServicePrincipalOwnerCandidates(row: ServicePrincipal): Promise<OwnerCandidate[]> {
-    const roleAssignments = row.roleAssignments ?? [];
-    const target = getRoleAssignmentResourceGroupOwnershipTarget(roleAssignments);
-
-    if (target.subscriptionIds.length === 0 || target.resourceGroups.length === 0) {
-      return [];
-    }
-
+  private async readPrincipalOwnerCandidates(
+    principalId: string,
+    target: { subscriptionIds: string[]; resourceGroups: string[] }
+  ): Promise<OwnerCandidate[]> {
     try {
-      const resourceGroupOwnershipRows = mapSqlRowsToResourceGroupOwnershipRows(
-        await this.azureResources.readAzureResourceGroupOwnershipSqlRows(
+      return this.applyStoredPrincipalOwnerDisabledEvidence(
+        (await this.azureResources.readAzurePrincipalResourceGroupOwnerCandidateViewRows(
           {
-            ...target,
-            principalIds: [row.id]
+            principalId,
+            ...target
           },
           DEFAULT_RESOURCE_GROUP_OWNERSHIP_EVIDENCE_LIMIT
-        )
+        )).flatMap(mapPrincipalResourceGroupOwnerCandidateViewRowToOwnerCandidate)
       );
-
-      return projectServicePrincipalOwners(
-        roleAssignments,
-        resourceGroupOwnershipRows
-      ).ownerCandidates;
     } catch (error) {
       if (error instanceof RuntimeHttpError && error.statusCode === 404) {
         return [];
@@ -166,7 +120,7 @@ export class OwnershipEvidenceQueryService {
     }
   }
 
-  private async readManagedIdentityEvidence(principalId: string, azureRbac: boolean): Promise<OwnershipEvidenceResponse> {
+  private async readManagedIdentityEvidence(principalId: string): Promise<OwnershipEvidenceResponse> {
     const normalizedPrincipalId = normalizeKey(principalId);
     const row = (await this.entraQueries.readManagedIdentityRows()).find(
       (candidate) => normalizeKey(String(candidate.id ?? "")) === normalizedPrincipalId
@@ -176,30 +130,7 @@ export class OwnershipEvidenceQueryService {
       throw new RuntimeHttpError("Ownership evidence target was not found.", 404);
     }
 
-    if (!azureRbac) {
-      const directOwnerCandidates = await this.readDirectManagedIdentityOwnerCandidates(row);
-
-      return {
-        target: {
-          kind: "managedIdentity",
-          id: row.id,
-          displayName: row.displayName
-        },
-        evidence: withOwnershipEvidenceStatusKeys(flattenCandidateEvidence(rankOwnerCandidates(
-          directOwnerCandidates
-        )))
-      };
-    }
-
     const identityResourceGroup = await this.readManagedIdentityResourceGroup(row);
-    if (identityResourceGroup) {
-      return this.readResourceGroupEvidence({
-        kind: "resourceGroup",
-        subscriptionId: identityResourceGroup.subscriptionId,
-        resourceGroup: identityResourceGroup.resourceGroup,
-        principalIds: [row.id]
-      });
-    }
 
     return {
       target: {
@@ -207,7 +138,20 @@ export class OwnershipEvidenceQueryService {
         id: row.id,
         displayName: row.displayName
       },
-      evidence: []
+      evidence: withOwnershipEvidenceStatusKeys(flattenCandidateEvidence(rankOwnerCandidates(
+        await this.readPrincipalOwnerCandidates(
+          row.id,
+          identityResourceGroup
+            ? {
+                subscriptionIds: [identityResourceGroup.subscriptionId],
+                resourceGroups: [identityResourceGroup.resourceGroup]
+              }
+            : {
+                subscriptionIds: [],
+                resourceGroups: []
+              }
+        )
+      )))
     };
   }
 
@@ -289,6 +233,28 @@ export class OwnershipEvidenceQueryService {
           ...evidence,
           disabled: true
         }))
+      };
+    });
+  }
+
+  private async applyStoredPrincipalOwnerDisabledEvidence(candidates: OwnerCandidate[]): Promise<OwnerCandidate[]> {
+    const disabledKeys = await this.readDisabledOwnerEvidenceKeys();
+    if (disabledKeys.size === 0) {
+      return candidates;
+    }
+
+    return candidates.map((candidate) => {
+      const disabledEvidence = candidate.evidence.map((evidence) => ({
+        ...evidence,
+        disabled:
+          isDirectOwnerEvidenceDisabled(candidate, evidence, disabledKeys) ||
+          isResourceGroupOwnerCandidateDisabled(candidate, disabledKeys) ||
+          undefined
+      }));
+
+      return {
+        ...candidate,
+        evidence: disabledEvidence
       };
     });
   }
@@ -409,6 +375,50 @@ function mapResourceGroupOwnerCandidateViewRowToOwnerCandidate(
   }));
 }
 
+function mapPrincipalResourceGroupOwnerCandidateViewRowToOwnerCandidate(
+  row: AzurePrincipalResourceGroupOwnerCandidateViewRow,
+  index: number
+): OwnerCandidate[] {
+  return [
+    {
+      key: getPrincipalOwnerCandidateKey(row),
+      displayName: row.owner,
+      type: row.ownerType,
+      confidence: row.confidence,
+      source: row.source,
+      rank: index + 1,
+      evidence: [
+        {
+          user: row.evidenceValue,
+          date: row.evidenceDate,
+          key: row.evidenceKey
+        }
+      ],
+      relatedScopes: row.path === "indirect" && row.subscriptionId && row.resourceGroup
+        ? [
+            {
+              subscriptionId: row.subscriptionId,
+              subscriptionName: row.subscriptionName ?? undefined,
+              resourceGroup: row.resourceGroup,
+              principalId: row.principalId
+            }
+          ]
+        : []
+    }
+  ];
+}
+
+function getPrincipalOwnerCandidateKey(row: AzurePrincipalResourceGroupOwnerCandidateViewRow): string {
+  if (
+    row.source === "entraApplicationOwner" ||
+    row.source === "entraServicePrincipalOwner"
+  ) {
+    return row.ownerCandidate;
+  }
+
+  return getResourceGroupOwnerCandidateKey(row.ownerCandidate, row.ownerType, row.owner);
+}
+
 function buildResourceGroupRelatedScope(
   row: Pick<AzureResourceGroupOwnerCandidateViewRow, "subscriptionId" | "subscriptionName" | "resourceGroup">,
   principalId: string | undefined
@@ -452,42 +462,6 @@ function getScopedResourceGroupEvidenceKey(
   ].join(":");
 }
 
-function mapResourceGroupOwnershipSqlRowToOwnerCandidate(
-  row: AzureResourceGroupOwnershipSqlRow,
-  index: number
-): OwnerCandidate[] {
-  const owner = row.owner?.trim() || inferDisabledResourceGroupOwner(row);
-
-  if (!owner) {
-    return [];
-  }
-
-  const ownerType = row.ownerType ?? inferResourceGroupOwnerType(owner, row.source, row.ownerCandidate);
-
-  return [
-    {
-      key: getResourceGroupOwnerCandidateKey(row.ownerCandidate, ownerType, owner),
-      displayName: owner,
-      type: ownerType,
-      confidence: row.confidence,
-      source: inferResourceGroupOwnerCandidateSource(row.source),
-      rank: index + 1,
-      evidence: row.evidence.map((evidence) => ({
-        ...evidence,
-        key: evidence.key ?? row.evidenceKey ?? undefined
-      })),
-      relatedScopes: [
-        {
-          subscriptionId: row.subscriptionId,
-          subscriptionName: row.subscriptionName,
-          resourceGroup: row.resourceGroup,
-          principalId: row.principalId ?? undefined
-        }
-      ]
-    }
-  ];
-}
-
 function getResourceGroupOwnerCandidateKey(
   ownerCandidate: string | null | undefined,
   ownerType: OwnerType,
@@ -502,41 +476,6 @@ function getResourceGroupOwnerCandidateKey(
   }
 
   return `${ownerType}:${owner.trim().toLowerCase()}`;
-}
-
-function mapSqlRowsToResourceGroupOwnershipRows(
-  rows: AzureResourceGroupOwnershipSqlRow[]
-): ResourceGroupOwnershipRow[] {
-  const rowsByTargetKey = new Map<string, ResourceGroupOwnershipRow>();
-
-  for (const row of rows) {
-    const existing = rowsByTargetKey.get(row.targetKey);
-    const ownerCandidates = mapResourceGroupOwnershipSqlRowToOwnerCandidate(row, existing?.ownerCandidates.length ?? 0);
-
-    if (existing) {
-      existing.ownerCandidates.push(...ownerCandidates);
-      continue;
-    }
-
-    rowsByTargetKey.set(row.targetKey, {
-      subscriptionId: row.subscriptionId,
-      subscriptionName: row.subscriptionName,
-      resourceGroup: row.resourceGroup,
-      location: row.location,
-      tags: row.tags,
-      targetKey: row.targetKey,
-      ownerCandidates,
-      owner: row.owner,
-      confidence: row.confidence,
-      source: row.source,
-      evidence: row.evidence,
-      roleAssignments: [],
-      rbacRoleAssignmentCount: 0,
-      rbacRoleLevel: "none"
-    });
-  }
-
-  return [...rowsByTargetKey.values()];
 }
 
 function getRoleAssignmentResourceGroupOwnershipTarget(
@@ -592,52 +531,6 @@ function firstNonEmpty(values: Array<string | null | undefined>): string | null 
   }
 
   return null;
-}
-
-function inferDisabledResourceGroupOwner(row: AzureResourceGroupOwnershipSqlRow): string | null {
-  if (row.confidence !== "none") {
-    return null;
-  }
-
-  if (row.source.startsWith("activity.")) {
-    return row.ownerDisplayName?.trim() || null;
-  }
-
-  const evidence = row.evidence.find((entry) => entry.disabled && entry.user.trim());
-  if (!evidence) {
-    return null;
-  }
-
-  if (row.source.startsWith("tag.")) {
-    return evidence.user.split("=", 2)[1]?.trim() || null;
-  }
-
-  return evidence.user.trim();
-}
-
-function inferResourceGroupOwnerType(owner: string, source: string, ownerCandidate?: string | null): OwnerType {
-  const ownerCandidateType = parseOwnerCandidateType(ownerCandidate);
-  if (ownerCandidateType) {
-    return ownerCandidateType;
-  }
-
-  if (source === "tag.ownerGroup") {
-    return "ownerGroup";
-  }
-
-  if (source === "tag.ownerUser") {
-    return "ownerUser";
-  }
-
-  if (source.startsWith("tag.")) {
-    return "ownerTag";
-  }
-
-  if (owner.includes("@")) {
-    return "ownerUser";
-  }
-
-  return "unknown";
 }
 
 function parseOwnerCandidateType(ownerCandidate: string | null | undefined): OwnerType | null {

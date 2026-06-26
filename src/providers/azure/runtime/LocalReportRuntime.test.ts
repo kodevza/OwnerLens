@@ -740,7 +740,7 @@ test("defines local report runtime REST endpoints", async () => {
   await expect(
     ownershipEvidenceEndpoint.handle({
       req: {},
-      url: new URL("http://localhost/api/data/ownership/evidence?kind=servicePrincipal&principalId=sp-1&azureRbac=true")
+      url: new URL("http://localhost/api/data/ownership/evidence?kind=servicePrincipal&principalId=sp-1")
     })
   ).resolves.toEqual({
     target: {
@@ -989,7 +989,6 @@ test("defines local report runtime REST endpoints", async () => {
   );
   expect(runtime.readOwnershipEvidence).toHaveBeenCalledWith({
     kind: "servicePrincipal",
-    azureRbac: true,
     principalId: "sp-1"
   });
   expect(runtime.readOwnershipEvidence).toHaveBeenCalledWith({

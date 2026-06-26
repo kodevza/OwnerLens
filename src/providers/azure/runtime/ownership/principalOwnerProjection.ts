@@ -45,12 +45,13 @@ export function projectManagedIdentityOwners(
         {
           row: ownership,
           scope: {
-            subscriptionId: identity.subscriptionId,
-            subscriptionName: identity.subscriptionName,
-            resourceGroup: identity.resourceGroup,
-            scope: identity.resourceId,
-            roleDefinitionName: null
-          }
+          subscriptionId: identity.subscriptionId,
+          subscriptionName: identity.subscriptionName,
+          resourceGroup: identity.resourceGroup,
+          principalId,
+          scope: identity.resourceId,
+          roleDefinitionName: null
+        }
         }
       ])
     : [];

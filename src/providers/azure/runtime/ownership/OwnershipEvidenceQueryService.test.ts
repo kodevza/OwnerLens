@@ -41,7 +41,7 @@ test("returns indirect cost center tag evidence for a service principal with Azu
     ]
   });
 
-  await expect(service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "SP-RBAC", azureRbac: true })).resolves.toEqual({
+  await expect(service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "SP-RBAC" })).resolves.toEqual({
     target: {
       kind: "servicePrincipal",
       id: "sp-rbac",
@@ -49,7 +49,7 @@ test("returns indirect cost center tag evidence for a service principal with Azu
     },
     evidence: [
       {
-        key: "ownerTag:cc-1001:costcenter=cc-1001:",
+        key: "resourceGroup:sub-1:rg-api:principal:sp-rbac:ownerTag:cc-1001",
         statusKey: "resourceGroup:sub-1:rg-api:principal:sp-rbac:ownerTag:cc-1001",
         ownerCandidateKey: "ownerTag:cc-1001",
         ownerDisplayName: "cc-1001",
@@ -66,9 +66,7 @@ test("returns indirect cost center tag evidence for a service principal with Azu
             subscriptionId: "sub-1",
             subscriptionName: "Production",
             resourceGroup: "rg-api",
-            principalId: "sp-rbac",
-            scope: "/subscriptions/sub-1/resourceGroups/rg-api",
-            roleDefinitionName: "Contributor"
+            principalId: "sp-rbac"
           }
         ]
       }
@@ -111,7 +109,7 @@ test("returns indirect activity log owner evidence for a service principal with 
     ]
   });
 
-  await expect(service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "sp-rbac", azureRbac: true })).resolves.toEqual({
+  await expect(service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "sp-rbac" })).resolves.toEqual({
     target: {
       kind: "servicePrincipal",
       id: "sp-rbac",
@@ -119,7 +117,7 @@ test("returns indirect activity log owner evidence for a service principal with 
     },
     evidence: [
       {
-        key: "ownerUser:alice@example.test:alice@example.test:2026-06-05T10:00:00.000Z",
+        key: "resourceGroup:sub-1:rg-api:principal:sp-rbac:ownerUser:alice@example.test",
         statusKey: "resourceGroup:sub-1:rg-api:principal:sp-rbac:ownerUser:alice@example.test",
         ownerCandidateKey: "ownerUser:alice@example.test",
         ownerDisplayName: "alice@example.test",
@@ -129,16 +127,14 @@ test("returns indirect activity log owner evidence for a service principal with 
         path: "indirect",
         discoverySource: "activityLog",
         rank: 1,
-        evidence: "alice@example.test",
+        evidence: "/subscriptions/sub-1/resourceGroups/rg-api/providers/Microsoft.Resources/deployments/deploy-1",
         date: "2026-06-05T10:00:00.000Z",
         relatedScopes: [
           {
             subscriptionId: "sub-1",
             subscriptionName: "Production",
             resourceGroup: "rg-api",
-            principalId: "sp-rbac",
-            scope: "/subscriptions/sub-1/resourceGroups/rg-api",
-            roleDefinitionName: "Contributor"
+            principalId: "sp-rbac"
           }
         ]
       }
@@ -213,7 +209,7 @@ test("returns the app caller as indirect activity log owner evidence for a servi
     ]
   });
 
-  await expect(service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "sp-rbac", azureRbac: true })).resolves.toEqual({
+  await expect(service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "sp-rbac" })).resolves.toEqual({
     target: {
       kind: "servicePrincipal",
       id: "sp-rbac",
@@ -221,7 +217,7 @@ test("returns the app caller as indirect activity log owner evidence for a servi
     },
     evidence: [
       {
-        key: `application:${callerObjectId}:${callerObjectId}:2026-06-13T14:19:58.4125071Z`,
+        key: `resourceGroup:${subscriptionId}:${resourceGroup}:principal:sp-rbac:application:${callerObjectId}`,
         statusKey: `resourceGroup:${subscriptionId}:${resourceGroup}:principal:sp-rbac:application:${callerObjectId}`,
         ownerCandidateKey: `application:${callerObjectId}`,
         ownerDisplayName: callerObjectId,
@@ -231,16 +227,14 @@ test("returns the app caller as indirect activity log owner evidence for a servi
         path: "indirect",
         discoverySource: "activityLog",
         rank: 1,
-        evidence: callerObjectId,
+        evidence: threatProtectionScope,
         date: "2026-06-13T14:19:58.4125071Z",
         relatedScopes: [
           {
             subscriptionId,
             subscriptionName: "Test",
             resourceGroup,
-            principalId: "sp-rbac",
-            scope: getResourceGroupScope(subscriptionId, resourceGroup),
-            roleDefinitionName: "Contributor"
+            principalId: "sp-rbac"
           }
         ]
       }
@@ -291,7 +285,7 @@ test("returns direct service principal, application, and tag owner evidence for 
         roleAssignments: [
           roleAssignment({
             principalId: "sp-direct",
-            scope: "/subscriptions/sub-1/resourceGroups/rg-api",
+            scope: "/subscriptions/sub-1",
             roleDefinitionName: "Contributor"
           })
         ]
@@ -307,11 +301,11 @@ test("returns direct service principal, application, and tag owner evidence for 
     },
     evidence: [
       {
-        key: "entraApplicationOwner:ownerGroup:app-owner-1:app-owner@example.test:",
-        statusKey: "entraApplicationOwner:ownerGroup:app-owner-1:app-owner@example.test:",
-        ownerCandidateKey: "entraApplicationOwner:ownerGroup:app-owner-1",
+        key: "entraApplicationOwner:ownerUser:app-owner-1:app-owner@example.test:",
+        statusKey: "entraApplicationOwner:ownerUser:app-owner-1:app-owner@example.test:",
+        ownerCandidateKey: "entraApplicationOwner:ownerUser:app-owner-1",
         ownerDisplayName: "app-owner@example.test",
-        ownerType: "ownerGroup",
+        ownerType: "ownerUser",
         confidence: "high",
         source: "entraApplicationOwner",
         path: "direct",
@@ -356,36 +350,40 @@ test("returns direct service principal, application, and tag owner evidence for 
 });
 
 test("reads resource group owner evidence for distinct Azure RBAC resource groups of a service principal", async () => {
-  const readAzureResourceGroupOwnershipSqlRows = jest.fn().mockResolvedValue([
+  const readAzurePrincipalResourceGroupOwnerCandidateViewRows = jest.fn().mockResolvedValue([
     {
       subscriptionId: "sub-1",
       subscriptionName: "Production",
       resourceGroup: "rg-api",
-      location: "westeurope",
-      tags: { costCenter: "CC-1001" },
-      targetKey: "resourceGroup:sub-1:rg-api",
-      kind: "resourceGroup",
+      principalId: "sp-rbac",
       owner: "cc-1001",
       ownerCandidate: "ownerTag:cc-1001",
-      ownerDisplayName: "cc-1001",
+      ownerType: "ownerTag",
+      evidenceKey: "resourceGroup:sub-1:rg-api:principal:sp-rbac:ownerTag:cc-1001",
       confidence: "high",
-      source: "tag.costCenter",
-      evidence: [{ user: "costCenter=CC-1001", date: null }]
+      source: "resourceGroupOwner",
+      path: "indirect",
+      discoverySource: "tag",
+      evidenceValue: "costCenter=CC-1001",
+      evidenceDate: null,
+      priority: 1
     },
     {
       subscriptionId: "sub-2",
       subscriptionName: "Development",
       resourceGroup: "rg-worker",
-      location: "westeurope",
-      tags: { ownerGroup: "Worker-Team" },
-      targetKey: "resourceGroup:sub-2:rg-worker",
-      kind: "resourceGroup",
+      principalId: "sp-rbac",
       owner: "worker-team",
       ownerCandidate: "ownerGroup:worker-team",
-      ownerDisplayName: "worker-team",
+      ownerType: "ownerGroup",
+      evidenceKey: "resourceGroup:sub-2:rg-worker:principal:sp-rbac:ownerGroup:worker-team",
       confidence: "high",
-      source: "tag.ownerGroup",
-      evidence: [{ user: "ownerGroup=Worker-Team", date: null }]
+      source: "resourceGroupOwner",
+      path: "indirect",
+      discoverySource: "tag",
+      evidenceValue: "ownerGroup=Worker-Team",
+      evidenceDate: null,
+      priority: 2
     }
   ]);
   const service = new OwnershipEvidenceQueryService({
@@ -417,12 +415,12 @@ test("reads resource group owner evidence for distinct Azure RBAC resource group
       )
     },
     azureResources: {
-      readAzureResourceGroupOwnershipSqlRows,
+      readAzurePrincipalResourceGroupOwnerCandidateViewRows,
       readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([])
     }
   } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
 
-  await expect(service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "SP-RBAC", azureRbac: true })).resolves.toMatchObject({
+  await expect(service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "SP-RBAC" })).resolves.toMatchObject({
     evidence: [
       {
         ownerCandidateKey: "ownerTag:cc-1001",
@@ -434,9 +432,7 @@ test("reads resource group owner evidence for distinct Azure RBAC resource group
             subscriptionId: "sub-1",
             subscriptionName: "Production",
             resourceGroup: "rg-api",
-            principalId: "sp-rbac",
-            scope: "/subscriptions/sub-1/resourceGroups/rg-api",
-            roleDefinitionName: "Contributor"
+            principalId: "sp-rbac"
           }
         ])
       },
@@ -450,27 +446,25 @@ test("reads resource group owner evidence for distinct Azure RBAC resource group
             subscriptionId: "sub-2",
             subscriptionName: "Development",
             resourceGroup: "rg-worker",
-            principalId: "sp-rbac",
-            scope: "/subscriptions/sub-2/resourceGroups/rg-worker",
-            roleDefinitionName: "Contributor"
+            principalId: "sp-rbac"
           }
         ])
       }
     ]
   });
-  expect(readAzureResourceGroupOwnershipSqlRows).toHaveBeenCalledTimes(1);
-  expect(readAzureResourceGroupOwnershipSqlRows).toHaveBeenCalledWith(
+  expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledTimes(1);
+  expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
     {
       subscriptionIds: ["sub-1", "sub-2"],
       resourceGroups: ["rg-api", "rg-worker"],
-      principalIds: ["sp-rbac"]
+      principalId: "sp-rbac"
     },
     100
   );
 });
 
 test("keeps Azure RBAC resource group lookup targets paired when subscription ids repeat", async () => {
-  const readAzureResourceGroupOwnershipSqlRows = jest.fn().mockResolvedValue([]);
+  const readAzurePrincipalResourceGroupOwnerCandidateViewRows = jest.fn().mockResolvedValue([]);
   const service = new OwnershipEvidenceQueryService({
     entraQueries: {
       findServicePrincipalById: jest.fn().mockResolvedValue(
@@ -493,26 +487,44 @@ test("keeps Azure RBAC resource group lookup targets paired when subscription id
       )
     },
     azureResources: {
-      readAzureResourceGroupOwnershipSqlRows,
+      readAzurePrincipalResourceGroupOwnerCandidateViewRows,
       readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([])
     }
   } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
 
   await expect(
-    service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "SP-RBAC", azureRbac: true })
+    service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "SP-RBAC" })
   ).resolves.toMatchObject({ evidence: [] });
-  expect(readAzureResourceGroupOwnershipSqlRows).toHaveBeenCalledWith(
+  expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
     {
       subscriptionIds: ["sub-1", "sub-1"],
       resourceGroups: ["rg-api", "rg-worker"],
-      principalIds: ["sp-rbac"]
+      principalId: "sp-rbac"
     },
     100
   );
 });
 
-test("does not return direct service principal owner evidence in Azure RBAC mode", async () => {
-  const readAzureResourceGroupOwnershipSqlRows = jest.fn();
+test("returns direct service principal owner evidence without an Azure RBAC toggle", async () => {
+  const readAzurePrincipalResourceGroupOwnerCandidateViewRows = jest.fn().mockResolvedValue([
+    {
+      principalId: "sp-direct",
+      subscriptionId: null,
+      subscriptionName: null,
+      resourceGroup: null,
+      owner: "sp-owner@example.test",
+      ownerCandidate: "entraServicePrincipalOwner:ownerUser:sp-owner-1",
+      ownerType: "ownerUser",
+      evidenceKey: "entraServicePrincipalOwner:ownerUser:sp-owner-1:sp-owner@example.test:",
+      confidence: "high",
+      source: "entraServicePrincipalOwner",
+      path: "direct",
+      discoverySource: "servicePrincipalOwner",
+      evidenceValue: "sp-owner@example.test",
+      evidenceDate: null,
+      priority: 1
+    }
+  ]);
   const service = new OwnershipEvidenceQueryService({
     entraQueries: {
       findServicePrincipalById: jest.fn().mockResolvedValue(
@@ -548,21 +560,33 @@ test("does not return direct service principal owner evidence in Azure RBAC mode
       )
     },
     azureResources: {
-      readAzureResourceGroupOwnershipSqlRows,
+      readAzurePrincipalResourceGroupOwnerCandidateViewRows,
       readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([])
     }
   } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
 
   await expect(
-    service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "SP-DIRECT", azureRbac: true })
+    service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "SP-DIRECT" })
   ).resolves.toMatchObject({
     target: {
       kind: "servicePrincipal",
       id: "sp-direct"
     },
-    evidence: []
+    evidence: [
+      {
+        ownerCandidateKey: "entraServicePrincipalOwner:ownerUser:sp-owner-1",
+        path: "direct"
+      }
+    ]
   });
-  expect(readAzureResourceGroupOwnershipSqlRows).not.toHaveBeenCalled();
+  expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
+    {
+      principalId: "sp-direct",
+      subscriptionIds: [],
+      resourceGroups: []
+    },
+    100
+  );
 });
 
 test("returns resource group evidence for a managed identity with a resolved resource group", async () => {
@@ -606,15 +630,12 @@ test("returns resource group evidence for a managed identity with a resolved res
   });
 
   await expect(
-    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID", azureRbac: true })
+    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID" })
   ).resolves.toEqual({
     target: {
-      kind: "resourceGroup",
-      id: "resourceGroup:sub-1:rg-mi",
-      displayName: "rg-mi",
-      subscriptionId: "sub-1",
-      subscriptionName: "Production",
-      resourceGroup: "rg-mi"
+      kind: "managedIdentity",
+      id: "mi-principal-id",
+      displayName: "uami-api"
     },
     evidence: [
       {
@@ -622,8 +643,8 @@ test("returns resource group evidence for a managed identity with a resolved res
         ownerDisplayName: "identity-platform",
         ownerType: "ownerGroup",
         confidence: "high",
-        source: "tag",
-        path: "direct",
+        source: "resourceGroupOwner",
+        path: "indirect",
         discoverySource: "tag",
         rank: 1,
         evidence: "ownerGroup=identity-platform",
@@ -643,8 +664,26 @@ test("returns resource group evidence for a managed identity with a resolved res
   });
 });
 
-test("does not return direct managed identity owner evidence in Azure RBAC mode", async () => {
-  const readAzureResourceGroupOwnerCandidateViewRows = jest.fn();
+test("returns direct managed identity owner evidence without an Azure RBAC toggle", async () => {
+  const readAzurePrincipalResourceGroupOwnerCandidateViewRows = jest.fn().mockResolvedValue([
+    {
+      principalId: "mi-principal-id",
+      subscriptionId: null,
+      subscriptionName: null,
+      resourceGroup: null,
+      owner: "mi-owner@example.test",
+      ownerCandidate: "entraServicePrincipalOwner:ownerUser:mi-owner-1",
+      ownerType: "ownerUser",
+      evidenceKey: "entraServicePrincipalOwner:ownerUser:mi-owner-1:mi-owner@example.test:",
+      confidence: "high",
+      source: "entraServicePrincipalOwner",
+      path: "direct",
+      discoverySource: "servicePrincipalOwner",
+      evidenceValue: "mi-owner@example.test",
+      evidenceDate: null,
+      priority: 1
+    }
+  ]);
   const service = new OwnershipEvidenceQueryService({
     entraQueries: {
       readManagedIdentityRows: jest.fn().mockResolvedValue([
@@ -666,26 +705,39 @@ test("does not return direct managed identity owner evidence in Azure RBAC mode"
       ])
     },
     azureResources: {
-      readAzureResourceGroupOwnerCandidateViewRows,
+      readAzurePrincipalResourceGroupOwnerCandidateViewRows,
       readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([])
     }
   } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
 
   await expect(
-    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID", azureRbac: true })
+    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID" })
   ).resolves.toMatchObject({
     target: {
       kind: "managedIdentity",
       id: "mi-principal-id"
     },
-    evidence: []
+    evidence: [
+      {
+        ownerCandidateKey: "entraServicePrincipalOwner:ownerUser:mi-owner-1",
+        path: "direct"
+      }
+    ]
   });
-  expect(readAzureResourceGroupOwnerCandidateViewRows).not.toHaveBeenCalled();
+  expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
+    {
+      principalId: "mi-principal-id",
+      subscriptionIds: [],
+      resourceGroups: []
+    },
+    100
+  );
 });
 
 test("returns Azure RBAC evidence for a managed identity without using direct owner fallback", async () => {
-  const readAzureResourceGroupOwnerCandidateViewRows = jest.fn().mockResolvedValue([
+  const readAzurePrincipalResourceGroupOwnerCandidateViewRows = jest.fn().mockResolvedValue([
     {
+      principalId: "mi-principal-id",
       subscriptionId: "sub-1",
       subscriptionName: "Production",
       resourceGroup: "rg-mi",
@@ -694,7 +746,9 @@ test("returns Azure RBAC evidence for a managed identity without using direct ow
       ownerType: "ownerGroup",
       evidenceKey: "resourceGroup:sub-1:rg-mi:ownerGroup:resource-group-owner",
       confidence: "high",
-      source: "tag.ownerGroup",
+      source: "resourceGroupOwner",
+      path: "indirect",
+      discoverySource: "tag",
       evidenceValue: "ownerGroup=resource-group-owner",
       evidenceDate: null,
       priority: 1
@@ -715,7 +769,7 @@ test("returns Azure RBAC evidence for a managed identity without using direct ow
       ])
     },
     azureResources: {
-      readAzureResourceGroupOwnerCandidateViewRows,
+      readAzurePrincipalResourceGroupOwnerCandidateViewRows,
       readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([
         {
           subscriptionId: "sub-1",
@@ -737,7 +791,7 @@ test("returns Azure RBAC evidence for a managed identity without using direct ow
   } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
 
   await expect(
-    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID", azureRbac: true })
+    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID" })
   ).resolves.toMatchObject({
     evidence: [
       {
@@ -748,10 +802,11 @@ test("returns Azure RBAC evidence for a managed identity without using direct ow
       }
     ]
   });
-  expect(readAzureResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
+  expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
     {
-      subscriptionId: "sub-1",
-      resourceGroup: "rg-mi"
+      principalId: "mi-principal-id",
+      subscriptionIds: ["sub-1"],
+      resourceGroups: ["rg-mi"]
     },
     100
   );
@@ -766,9 +821,7 @@ test("returns direct service principal owner and tag evidence for a managed iden
           subscriptionName: "Production",
           resourceGroup: "rg-mi",
           location: "westeurope",
-          tags: {
-            ownerGroup: "resource-group-owner"
-          }
+          tags: null
         }
       ],
       userAssignedManagedIdentities: [
@@ -853,8 +906,9 @@ test("returns direct service principal owner and tag evidence for a managed iden
 });
 
 test("reads managed identity ownership evidence with a principal-scoped resource group lookup", async () => {
-  const readAzureResourceGroupOwnerCandidateViewRows = jest.fn().mockResolvedValue([
+  const readAzurePrincipalResourceGroupOwnerCandidateViewRows = jest.fn().mockResolvedValue([
     {
+      principalId: "mi-principal-id",
       subscriptionId: "sub-1",
       subscriptionName: "Production",
       resourceGroup: "rg-mi",
@@ -863,7 +917,9 @@ test("reads managed identity ownership evidence with a principal-scoped resource
       ownerType: "ownerGroup",
       evidenceKey: "resourceGroup:sub-1:rg-mi:ownerGroup:identity-platform",
       confidence: "high",
-      source: "tag.ownerGroup",
+      source: "resourceGroupOwner",
+      path: "indirect",
+      discoverySource: "tag",
       evidenceValue: "ownerGroup=identity-platform",
       evidenceDate: null,
       priority: 1
@@ -881,7 +937,7 @@ test("reads managed identity ownership evidence with a principal-scoped resource
       ])
     },
     azureResources: {
-      readAzureResourceGroupOwnerCandidateViewRows,
+      readAzurePrincipalResourceGroupOwnerCandidateViewRows,
       readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([
         {
           subscriptionId: "sub-1",
@@ -900,7 +956,7 @@ test("reads managed identity ownership evidence with a principal-scoped resource
   } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
 
   await expect(
-    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID", azureRbac: true })
+    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID" })
   ).resolves.toMatchObject({
     evidence: [
       {
@@ -913,18 +969,20 @@ test("reads managed identity ownership evidence with a principal-scoped resource
       }
     ]
   });
-  expect(readAzureResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
+  expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
     {
-      subscriptionId: "sub-1",
-      resourceGroup: "rg-mi"
+      principalId: "mi-principal-id",
+      subscriptionIds: ["sub-1"],
+      resourceGroups: ["rg-mi"]
     },
     100
   );
 });
 
 test("applies stored principal-scoped disabled state to final managed identity ownership evidence", async () => {
-  const readAzureResourceGroupOwnerCandidateViewRows = jest.fn().mockResolvedValue([
+  const readAzurePrincipalResourceGroupOwnerCandidateViewRows = jest.fn().mockResolvedValue([
     {
+      principalId: "mi-principal-id",
       subscriptionId: "sub-1",
       subscriptionName: "Production",
       resourceGroup: "rg-mi",
@@ -933,12 +991,15 @@ test("applies stored principal-scoped disabled state to final managed identity o
       ownerType: "ownerGroup",
       evidenceKey: "resourceGroup:sub-1:rg-mi:ownerGroup:platform-team",
       confidence: "high",
-      source: "tag.ownerGroup",
+      source: "resourceGroupOwner",
+      path: "indirect",
+      discoverySource: "tag",
       evidenceValue: "ownerGroup=platform-team",
       evidenceDate: null,
       priority: 1
     },
     {
+      principalId: "mi-principal-id",
       subscriptionId: "sub-1",
       subscriptionName: "Production",
       resourceGroup: "rg-mi",
@@ -947,7 +1008,9 @@ test("applies stored principal-scoped disabled state to final managed identity o
       ownerType: "ownerTag",
       evidenceKey: "resourceGroup:sub-1:rg-mi:ownerTag:fallback@example.test",
       confidence: "medium",
-      source: "tag.owner",
+      source: "resourceGroupOwner",
+      path: "indirect",
+      discoverySource: "tag",
       evidenceValue: "owner=fallback@example.test",
       evidenceDate: null,
       priority: 2
@@ -965,7 +1028,7 @@ test("applies stored principal-scoped disabled state to final managed identity o
       ])
     },
     azureResources: {
-      readAzureResourceGroupOwnerCandidateViewRows,
+      readAzurePrincipalResourceGroupOwnerCandidateViewRows,
       readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([
         {
           subscriptionId: "sub-1",
@@ -989,7 +1052,7 @@ test("applies stored principal-scoped disabled state to final managed identity o
   } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
 
   await expect(
-    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID", azureRbac: true })
+    service.readOwnershipEvidence({ kind: "managedIdentity", principalId: "MI-PRINCIPAL-ID" })
   ).resolves.toMatchObject({
     evidence: [
       {
@@ -1019,7 +1082,27 @@ test("applies disabled evidence through the direct service principal owner wrapp
         roleAssignments: []
       }))
     },
-    azureResources: {},
+    azureResources: {
+      readAzurePrincipalResourceGroupOwnerCandidateViewRows: jest.fn().mockResolvedValue([
+        {
+          principalId: "sp-direct",
+          subscriptionId: null,
+          subscriptionName: null,
+          resourceGroup: null,
+          owner: "platform-team",
+          ownerCandidate: "ownerUser:platform-team",
+          ownerType: "ownerUser",
+          evidenceKey: "ownerUser:platform-team:owner=platform-team:",
+          confidence: "medium",
+          source: "tag",
+          path: "direct",
+          discoverySource: "tag",
+          evidenceValue: "owner=platform-team",
+          evidenceDate: null,
+          priority: 1
+        }
+      ])
+    },
     disabledEvidenceStore: {
       readKeys: jest.fn().mockResolvedValue(new Set(["ownerUser:platform-team:owner=platform-team:"]))
     }
@@ -1140,9 +1223,9 @@ test("returns direct resource group evidence for each requested owner", async ()
         evidence: "ownerGroup=platform-team"
       },
       {
-        ownerCandidateKey: "ownerTag:api-owner@example.test",
+        ownerCandidateKey: "ownerUser:api-owner@example.test",
         ownerDisplayName: "api-owner@example.test",
-        ownerType: "ownerTag",
+        ownerType: "ownerUser",
         confidence: "medium",
         source: "tag",
         evidence: "owner=api-owner@example.test"
@@ -1201,8 +1284,7 @@ test("returns the same resource group owner evidence for a managed identity assi
   });
   const managedIdentityEvidence = await service.readOwnershipEvidence({
     kind: "managedIdentity",
-    principalId: "mi-principal-id",
-    azureRbac: true
+    principalId: "mi-principal-id"
   });
 
   expect(resourceGroupEvidence.evidence).toMatchObject([
@@ -1215,9 +1297,9 @@ test("returns the same resource group owner evidence for a managed identity assi
       evidence: "ownerUser=alice@example.test"
     },
     {
-      ownerCandidateKey: "ownerTag:bob@example.test",
+      ownerCandidateKey: "ownerUser:bob@example.test",
       ownerDisplayName: "bob@example.test",
-      ownerType: "ownerTag",
+      ownerType: "ownerUser",
       confidence: "medium",
       source: "tag",
       evidence: "owner=bob@example.test"
@@ -1234,8 +1316,8 @@ test("returns the same resource group owner evidence for a managed identity assi
       ]
     },
     {
-      ownerCandidateKey: "ownerTag:bob@example.test",
-      key: "resourceGroup:sub-1:rg-mi:principal:mi-principal-id:ownerTag:bob@example.test",
+      ownerCandidateKey: "ownerUser:bob@example.test",
+      key: "resourceGroup:sub-1:rg-mi:principal:mi-principal-id:ownerUser:bob@example.test",
       relatedScopes: [
         {
           principalId: "mi-principal-id"
@@ -1279,6 +1361,14 @@ function buildOwnershipEvidenceService({
     readAzureResourceGroupOwnerCandidateViewRows: jest.fn(({ subscriptionId, resourceGroup }, limit) =>
       Promise.resolve(readTestResourceGroupOwnerCandidateViewRows(azureSnapshot, { subscriptionId, resourceGroup }, limit))
     ),
+    readAzurePrincipalResourceGroupOwnerCandidateViewRows: jest.fn(({ principalId, subscriptionIds, resourceGroups }, limit) =>
+      Promise.resolve(readTestPrincipalResourceGroupOwnerCandidateViewRows(
+        azureSnapshot,
+        [...servicePrincipals, ...managedIdentities],
+        { principalId, subscriptionIds, resourceGroups },
+        limit
+      ))
+    ),
     readAzureResourceGroupOwnershipSqlRows: jest.fn(({ subscriptionIds, resourceGroups }, limit) =>
       Promise.resolve(readTestResourceGroupOwnershipSqlRows(azureSnapshot, { subscriptionIds, resourceGroups }, limit))
     ),
@@ -1300,8 +1390,6 @@ function buildOwnershipEvidenceService({
   } as unknown as ConstructorParameters<typeof AzureResourcesCollectionQueryService>[0]);
   const entraQueries = new EntraCollectionQueryService({
     entra: entraRuntime,
-    azureResources: azureResourcesRuntime,
-    azureResourcesQueries,
     zeroTrustAssessmentQueries: {
       readRemediationSummaries: jest.fn().mockResolvedValue(new Map()),
       readRemediationPackageSummariesByPrincipalId: jest.fn().mockResolvedValue(new Map())
@@ -1695,6 +1783,189 @@ function readTestResourceGroupOwnerCandidateViewRows(
   ];
 }
 
+function readTestPrincipalResourceGroupOwnerCandidateViewRows(
+  snapshot: AzureSnapshot,
+  principals: Array<ServicePrincipal | ManagedIdentity>,
+  target: { principalId: string; subscriptionIds: string[]; resourceGroups: string[] },
+  limit = 100
+): Array<{
+  principalId: string;
+  subscriptionId: string | null;
+  subscriptionName: string | null;
+  resourceGroup: string | null;
+  owner: string;
+  ownerType: "ownerUser" | "ownerGroup" | "ownerTag" | "application" | "unknown";
+  ownerCandidate: string;
+  evidenceKey: string;
+  confidence: "high" | "medium" | "low";
+  source: "resourceGroupOwner" | "entraApplicationOwner" | "entraServicePrincipalOwner" | "activity" | "tag";
+  path: "direct" | "indirect";
+  discoverySource: "activityLog" | "tag" | "applicationOwner" | "servicePrincipalOwner";
+  evidenceValue: string;
+  evidenceDate: string | null;
+  priority: number;
+}> {
+  const principal = principals.find((candidate) => candidate.id.toLowerCase() === target.principalId.toLowerCase());
+  const directRows = principal ? readTestDirectPrincipalOwnerCandidateViewRows(principal) : [];
+  const indirectRows = target.subscriptionIds.flatMap((subscriptionId, index) =>
+    readTestResourceGroupOwnerCandidateViewRows(
+      snapshot,
+      {
+        subscriptionId,
+        resourceGroup: target.resourceGroups[index] ?? ""
+      },
+      limit
+    ).map((row) => ({
+      ...row,
+      principalId: target.principalId.trim().toLowerCase(),
+      evidenceKey: [
+        "resourceGroup",
+        row.subscriptionId.trim().toLowerCase(),
+        row.resourceGroup.trim().toLowerCase(),
+        "principal",
+        target.principalId.trim().toLowerCase(),
+        row.ownerCandidate
+      ].join(":"),
+      source: "resourceGroupOwner" as const,
+      path: "indirect" as const,
+      discoverySource: row.source.startsWith("activity.") ? "activityLog" as const : "tag" as const,
+      priority: 1000 + row.priority
+    }))
+  );
+
+  return [...directRows, ...indirectRows]
+    .sort(compareTestPrincipalCandidateRows)
+    .slice(0, Math.max(1, Math.trunc(limit)));
+}
+
+function readTestDirectPrincipalOwnerCandidateViewRows(
+  principal: ServicePrincipal | ManagedIdentity
+): ReturnType<typeof readTestPrincipalResourceGroupOwnerCandidateViewRows> {
+  const principalId = principal.id.trim().toLowerCase();
+  const tagRows = getTestOwnerTags(readTestPrincipalTags(principal.tags)).map((tag, index) => {
+    const owner = tag.value.trim().toLowerCase();
+    const ownerCandidate = `${tag.type}:${owner}`;
+
+    return {
+      principalId,
+      subscriptionId: null,
+      subscriptionName: null,
+      resourceGroup: null,
+      owner,
+      ownerType: tag.type,
+      ownerCandidate,
+      evidenceKey: `${ownerCandidate}:${tag.name}=${tag.value}:`,
+      confidence: tag.confidence,
+      source: "tag" as const,
+      path: "direct" as const,
+      discoverySource: "tag" as const,
+      evidenceValue: `${tag.name}=${tag.value}`,
+      evidenceDate: null,
+      priority: index + 1
+    };
+  });
+  const applicationOwnerRows = readTestEntraOwnerRows(
+    principalId,
+    principal.applicationOwners ?? [],
+    "entraApplicationOwner",
+    "applicationOwner",
+    100
+  );
+  const servicePrincipalOwnerRows = readTestEntraOwnerRows(
+    principalId,
+    principal.servicePrincipalOwners ?? [],
+    "entraServicePrincipalOwner",
+    "servicePrincipalOwner",
+    200
+  );
+
+  return [...tagRows, ...applicationOwnerRows, ...servicePrincipalOwnerRows];
+}
+
+function readTestPrincipalTags(tags: ServicePrincipal["tags"] | ManagedIdentity["tags"]): Record<string, string> | null {
+  if (!Array.isArray(tags)) {
+    return tags;
+  }
+
+  const entries = tags.flatMap((tag) => {
+    const match = tag.match(/^([^=:]+)\s*[=:]\s*(.+)$/);
+    return match ? [[match[1], match[2]] as const] : [];
+  });
+
+  return Object.fromEntries(entries);
+}
+
+function readTestEntraOwnerRows(
+  principalId: string,
+  owners: NonNullable<ServicePrincipal["applicationOwners"]>,
+  source: "entraApplicationOwner" | "entraServicePrincipalOwner",
+  discoverySource: "applicationOwner" | "servicePrincipalOwner",
+  priorityOffset: number
+): ReturnType<typeof readTestPrincipalResourceGroupOwnerCandidateViewRows> {
+  return owners.flatMap((owner, index) => {
+    const ownerValue = owner.userPrincipalName ?? owner.mail ?? owner.displayName ?? owner.id;
+    if (!ownerValue) {
+      return [];
+    }
+
+    const ownerType = inferTestEntraOwnerType(owner);
+    const ownerKey = (owner.id ?? owner.userPrincipalName ?? owner.mail ?? owner.displayName ?? ownerValue).trim().toLowerCase();
+    const ownerCandidate = `${source}:${ownerType}:${ownerKey}`;
+
+    return [
+      {
+        principalId,
+        subscriptionId: null,
+        subscriptionName: null,
+        resourceGroup: null,
+        owner: ownerValue,
+        ownerType,
+        ownerCandidate,
+        evidenceKey: `${ownerCandidate}:${ownerValue}:`,
+        confidence: "high" as const,
+        source,
+        path: "direct" as const,
+        discoverySource,
+        evidenceValue: ownerValue,
+        evidenceDate: null,
+        priority: priorityOffset + index + 1
+      }
+    ];
+  });
+}
+
+function inferTestEntraOwnerType(owner: NonNullable<ServicePrincipal["applicationOwners"]>[number]): "ownerUser" | "ownerGroup" | "unknown" {
+  const ownerType = owner.ownerType?.trim().toLowerCase() ?? "";
+  if (ownerType === "user" || ownerType.endsWith(".user") || owner.userPrincipalName?.includes("@") || owner.mail?.includes("@")) {
+    return "ownerUser";
+  }
+  if (ownerType === "group" || ownerType.endsWith(".group")) {
+    return "ownerGroup";
+  }
+  return "unknown";
+}
+
+function compareTestPrincipalCandidateRows(
+  left: ReturnType<typeof readTestPrincipalResourceGroupOwnerCandidateViewRows>[number],
+  right: ReturnType<typeof readTestPrincipalResourceGroupOwnerCandidateViewRows>[number]
+): number {
+  const confidenceRank = { high: 3, medium: 2, low: 1 };
+  const sourceRank = {
+    tag: 5,
+    resourceGroupOwner: 5,
+    entraApplicationOwner: 4,
+    entraServicePrincipalOwner: 3,
+    activity: 1
+  };
+
+  return (
+    confidenceRank[right.confidence] - confidenceRank[left.confidence] ||
+    sourceRank[right.source] - sourceRank[left.source] ||
+    left.priority - right.priority ||
+    left.ownerCandidate.localeCompare(right.ownerCandidate)
+  );
+}
+
 function getTestResourceGroupEvidenceKey(
   group: AzureSnapshot["resourceGroups"][number],
   ownerCandidate: string
@@ -1752,7 +2023,7 @@ function getTestOwnerTags(tags: Record<string, string> | null): Array<{
     { name: "ownerGroup", confidence: "high" as const, type: "ownerGroup" as const },
     { name: "ownerUser", confidence: "high" as const, type: "ownerUser" as const },
     { name: "costCenter", confidence: "high" as const, type: "ownerTag" as const },
-    { name: "owner", confidence: "medium" as const, type: "ownerTag" as const }
+    { name: "owner", confidence: "medium" as const, type: "ownerUser" as const }
   ]) {
     const key = Object.keys(tags ?? {}).find((candidate) => candidate.toLowerCase() === tag.name.toLowerCase());
     const value = key ? tags?.[key]?.trim() : null;
