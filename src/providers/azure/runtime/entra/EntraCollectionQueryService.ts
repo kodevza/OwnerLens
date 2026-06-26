@@ -3,10 +3,6 @@ import type {
   EntraPrincipalAzureRemediationSummary,
   ServicePrincipal
 } from "../../../../core/azure/entra/servicePrincipal";
-import type {
-  ZtaRemediationPackageSummary,
-  ZtaRemediationSummary
-} from "../../../../core/azure/ztaReport";
 
 import {
   buildPaginatedCollection,
@@ -21,27 +17,19 @@ import { getRuntimeServicePrincipalFilters } from "./domain/servicePrincipalsTab
 import { maxOwnerConfidence } from "../../../../core/ownership/ownerCandidateRanking";
 import type { OwnerCandidate, OwnerConfidence } from "../../../../core/ownership/types";
 
-export type EntraZeroTrustAssessmentQueries = {
-  readRemediationSummaries(): Promise<Map<string, ZtaRemediationSummary>>;
-  readRemediationPackageSummariesByPrincipalId(): Promise<Map<string, ZtaRemediationPackageSummary[]>>;
-};
-
 export type EntraCollectionQueryServiceOptions = {
   entra: LocalEntraReportRuntime;
-  zeroTrustAssessmentQueries: EntraZeroTrustAssessmentQueries;
   disabledEvidenceStore: Pick<DisabledOwnerEvidenceStore, "readKeys">;
   exportService: ExportService;
 };
 
 export class EntraCollectionQueryService {
   private readonly entra: LocalEntraReportRuntime;
-  private readonly zeroTrustAssessmentQueries: EntraZeroTrustAssessmentQueries;
   private readonly disabledEvidenceStore: Pick<DisabledOwnerEvidenceStore, "readKeys">;
   private readonly exportService: ExportService;
 
   constructor(options: EntraCollectionQueryServiceOptions) {
     this.entra = options.entra;
-    this.zeroTrustAssessmentQueries = options.zeroTrustAssessmentQueries;
     this.disabledEvidenceStore = options.disabledEvidenceStore;
     this.exportService = options.exportService;
   }
@@ -114,6 +102,7 @@ export class EntraCollectionQueryService {
         roleAssignments: [],
         oauthPermissionsCount: 0,
         appRolesPermissionCount: 0,
+        entraPermissionCount: 0,
         entraPermissionRisk: "none",
         rbacRoleAssignmentCount: 0,
         rbacRoleLevel: "none",
@@ -148,9 +137,7 @@ export class EntraCollectionQueryService {
 
   async readManagedIdentityRows(options: LocalReportCollectionQueryOptions = {}): Promise<Record<string, unknown>[]> {
     const ownershipPageOptions = getPrincipalSourceReadOptions(options);
-    const managedIdentities = await this.enrichWithZtaRemediationSummaries(
-      await this.entra.readManagedIdentities(ownershipPageOptions)
-    );
+    const managedIdentities = await this.entra.readManagedIdentities(ownershipPageOptions);
 
     return applyActiveOwnerProjectionToPrincipalRows(
       managedIdentities,
@@ -166,9 +153,7 @@ export class EntraCollectionQueryService {
 
   async readServicePrincipalRows(options: LocalReportCollectionQueryOptions = {}): Promise<Record<string, unknown>[]> {
     const ownershipPageOptions = getPrincipalSourceReadOptions(options);
-    const servicePrincipals = await this.enrichWithZtaRemediationSummaries(
-      await this.entra.readServicePrincipals(ownershipPageOptions)
-    );
+    const servicePrincipals = await this.entra.readServicePrincipals(ownershipPageOptions);
 
     return applyActiveOwnerProjectionToPrincipalRows(
       servicePrincipals,
@@ -189,25 +174,10 @@ export class EntraCollectionQueryService {
       return null;
     }
 
-    const [enrichedServicePrincipal] = await this.enrichWithZtaRemediationSummaries([servicePrincipal]);
-
     return applyActiveOwnerProjectionToPrincipalRows(
-      [enrichedServicePrincipal],
+      [servicePrincipal],
       await this.disabledEvidenceStore.readKeys()
     )[0] ?? null;
-  }
-
-  private async enrichWithZtaRemediationSummaries<Row extends ServicePrincipal | ManagedIdentity>(rows: Row[]): Promise<Row[]> {
-    const [summariesByPrincipalId, packagesByPrincipalId] = await Promise.all([
-      this.zeroTrustAssessmentQueries.readRemediationSummaries(),
-      this.zeroTrustAssessmentQueries.readRemediationPackageSummariesByPrincipalId()
-    ]);
-
-    return rows.map((row) => ({
-      ...row,
-      ...(summariesByPrincipalId.get(row.id.toLowerCase()) ?? {}),
-      RemediationPackages: packagesByPrincipalId.get(row.id.toLowerCase()) ?? []
-    }));
   }
 }
 

@@ -1,5 +1,6 @@
 import type { DuckDBConnection, DuckDBValue } from "@duckdb/node-api";
 
+import type { PermissionRiskLevel } from "../../../../../core/risk/types";
 import type { LocalReportCollectionFilter } from "../../../../../core/runtime/collections";
 import type { PageOptions } from "../../../../../core/runtime/pagination";
 import type { EntraServicePrincipal } from "../../../inputTransferObject/generated/EntraSnapshot";
@@ -7,6 +8,19 @@ import type { EntraServicePrincipal } from "../../../inputTransferObject/generat
 export type EntraServicePrincipalRowsQueryOptions = PageOptions & {
   filters?: LocalReportCollectionFilter[];
   principalKind?: "servicePrincipal" | "managedIdentity";
+};
+
+export type EntraServicePrincipalRuntimeRow = EntraServicePrincipal & {
+  permissionRisk: PermissionRiskLevel;
+  rbacRoleAssignmentCount: number;
+  rbacRoleLevel: PermissionRiskLevel;
+  oauthPermissionsCount: number;
+  appRolesPermissionCount: number;
+  entraPermissionCount: number;
+  entraPermissionRisk: PermissionRiskLevel;
+  managedIdentityHomeSubscriptionId?: string;
+  managedIdentityHomeResourceGroup?: string;
+  managedIdentityHomeResourceId?: string;
 };
 
 export async function insertEntraServicePrincipalRows(
@@ -62,30 +76,12 @@ export async function insertEntraServicePrincipalRows(
 export async function readEntraServicePrincipalRows(
   connection: DuckDBConnection,
   options: EntraServicePrincipalRowsQueryOptions = {}
-): Promise<EntraServicePrincipal[]> {
+): Promise<EntraServicePrincipalRuntimeRow[]> {
   const pageSql = getServicePrincipalRowsPageSql(options);
   const query = buildServicePrincipalRowsQuery(options);
   const rows = await readRows<EntraServicePrincipalRow>(
     connection,
-    `select
-      id,
-      app_id,
-      display_name,
-      app_display_name,
-      service_principal_type,
-      publisher_name,
-      account_enabled,
-      app_owner_organization_id,
-      homepage,
-      login_url,
-      reply_urls,
-      service_principal_names,
-      tags,
-      app_roles,
-      service_principal_owners,
-      application_owners,
-      metadata
-    from entra_service_principals
+    `${servicePrincipalRowsSql}
     ${query.whereSql}
     order by ordinal
     ${pageSql.sql}`,
@@ -106,7 +102,9 @@ export async function countEntraServicePrincipalRows(
   const rows = await readRows<{ count: number | string }>(
     connection,
     `select count(*) as count
-    from entra_service_principals
+    from (
+      ${servicePrincipalRowsSql}
+    ) principal_rows
     ${query.whereSql}`,
     query.params
   );
@@ -129,28 +127,10 @@ export function getRuntimeServicePrincipalFilters(
 export async function readEntraServicePrincipalRowById(
   connection: DuckDBConnection,
   principalId: string
-): Promise<EntraServicePrincipal | null> {
+): Promise<EntraServicePrincipalRuntimeRow | null> {
   const rows = await readRows<EntraServicePrincipalRow>(
     connection,
-    `select
-      id,
-      app_id,
-      display_name,
-      app_display_name,
-      service_principal_type,
-      publisher_name,
-      account_enabled,
-      app_owner_organization_id,
-      homepage,
-      login_url,
-      reply_urls,
-      service_principal_names,
-      tags,
-      app_roles,
-      service_principal_owners,
-      application_owners,
-      metadata
-    from entra_service_principals
+    `${servicePrincipalRowsSql}
     where id = lower(trim($principalId))
     limit 1`,
     { principalId }
@@ -177,9 +157,19 @@ type EntraServicePrincipalRow = {
   service_principal_owners: string;
   application_owners: string;
   metadata: string | null;
+  permissionRisk: PermissionRiskLevel | null;
+  rbacRoleAssignmentCount: number | string | null;
+  rbacRoleLevel: PermissionRiskLevel | null;
+  oauthPermissionsCount: number | string | null;
+  appRolesPermissionCount: number | string | null;
+  entraPermissionCount: number | string | null;
+  entraPermissionRisk: PermissionRiskLevel | null;
+  managedIdentityHomeSubscriptionId: string | null;
+  managedIdentityHomeResourceGroup: string | null;
+  managedIdentityHomeResourceId: string | null;
 };
 
-function mapServicePrincipalRow(row: EntraServicePrincipalRow): EntraServicePrincipal {
+function mapServicePrincipalRow(row: EntraServicePrincipalRow): EntraServicePrincipalRuntimeRow {
   return {
     id: row.id,
     appId: row.app_id,
@@ -197,9 +187,74 @@ function mapServicePrincipalRow(row: EntraServicePrincipalRow): EntraServicePrin
     appRoles: parseJsonArray(row.app_roles),
     servicePrincipalOwners: parseJsonArray(row.service_principal_owners),
     applicationOwners: parseJsonArray(row.application_owners),
-    metadata: row.metadata ? parseJsonObject(row.metadata) : null
+    metadata: row.metadata ? parseJsonObject(row.metadata) : null,
+    permissionRisk: row.permissionRisk ?? "none",
+    rbacRoleAssignmentCount: readNumber(row.rbacRoleAssignmentCount),
+    rbacRoleLevel: row.rbacRoleLevel ?? "none",
+    oauthPermissionsCount: readNumber(row.oauthPermissionsCount),
+    appRolesPermissionCount: readNumber(row.appRolesPermissionCount),
+    entraPermissionCount: readNumber(row.entraPermissionCount),
+    entraPermissionRisk: row.entraPermissionRisk ?? "none",
+    ...(row.managedIdentityHomeSubscriptionId
+      ? { managedIdentityHomeSubscriptionId: row.managedIdentityHomeSubscriptionId }
+      : {}),
+    ...(row.managedIdentityHomeResourceGroup
+      ? { managedIdentityHomeResourceGroup: row.managedIdentityHomeResourceGroup }
+      : {}),
+    ...(row.managedIdentityHomeResourceId
+      ? { managedIdentityHomeResourceId: row.managedIdentityHomeResourceId }
+      : {})
   };
 }
+
+const servicePrincipalRowsSql = `
+  with latest_run as (
+    select run_id
+    from azure_runtime_enrichment_runs
+    where status = 'completed'
+    order by completed_at desc
+    limit 1
+  )
+  select
+    sp.ordinal,
+    sp.id,
+    sp.app_id,
+    sp.display_name,
+    sp.app_display_name,
+    sp.service_principal_type,
+    sp.publisher_name,
+    sp.account_enabled,
+    sp.app_owner_organization_id,
+    sp.homepage,
+    sp.login_url,
+    sp.reply_urls,
+    sp.service_principal_names,
+    sp.tags,
+    sp.app_roles,
+    sp.service_principal_owners,
+    sp.application_owners,
+    sp.metadata,
+    coalesce(access_risk.risk_level, 'none') as "permissionRisk",
+    coalesce(access_risk.assignment_count, 0) as "rbacRoleAssignmentCount",
+    coalesce(access_risk.risk_level, 'none') as "rbacRoleLevel",
+    coalesce(permission_summary.oauth_permissions_count, 0) as "oauthPermissionsCount",
+    coalesce(permission_summary.app_roles_permission_count, 0) as "appRolesPermissionCount",
+    coalesce(permission_summary.entra_permission_count, 0) as "entraPermissionCount",
+    coalesce(permission_summary.entra_permission_risk, 'none') as "entraPermissionRisk",
+    home_context.subscription_id as "managedIdentityHomeSubscriptionId",
+    home_context.resource_group as "managedIdentityHomeResourceGroup",
+    home_context.resource_id as "managedIdentityHomeResourceId"
+  from entra_service_principals sp
+  left join latest_run on true
+  left join azure_identity_access_risk_enrichment access_risk
+    on access_risk.run_id = latest_run.run_id
+    and lower(trim(access_risk.principal_id)) = lower(trim(sp.id))
+  left join entra_principal_permission_summary permission_summary
+    on permission_summary.principal_id = lower(trim(sp.id))
+  left join azure_managed_identity_home_context home_context
+    on home_context.principal_id = lower(trim(sp.id))
+    or home_context.client_id = lower(trim(sp.app_id))
+`;
 
 async function readRows<Row extends Record<string, unknown>>(
   connection: DuckDBConnection,
@@ -216,6 +271,19 @@ function parseJsonArray<T>(value: string | null | undefined): T[] {
 
 function parseJsonObject(value: string | null | undefined): Record<string, unknown> {
   return value ? JSON.parse(value) : {};
+}
+
+function readNumber(value: number | string | null | undefined): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
 }
 
 function normalizeImportedTags(tags: readonly string[] | null | undefined): string[] {
@@ -300,5 +368,12 @@ const duckDbServicePrincipalFilterColumns: Record<string, string> = {
   loginUrl: "coalesce(login_url, '')",
   replyUrls: "coalesce(cast(reply_urls as varchar), '')",
   servicePrincipalNames: "coalesce(cast(service_principal_names as varchar), '')",
-  tags: "coalesce(cast(tags as varchar), '')"
+  tags: "coalesce(cast(tags as varchar), '')",
+  rbacRoleAssignmentCount: "cast(coalesce(\"rbacRoleAssignmentCount\", 0) as varchar)",
+  rbacRoleLevel: "coalesce(\"rbacRoleLevel\", 'none')",
+  entraPermissionRisk: "coalesce(\"entraPermissionRisk\", 'none')",
+  oauthPermissionsCount: "cast(coalesce(\"oauthPermissionsCount\", 0) as varchar)",
+  appRolesPermissionCount: "cast(coalesce(\"appRolesPermissionCount\", 0) as varchar)",
+  entraPermissionCount: "cast(coalesce(\"entraPermissionCount\", 0) as varchar)",
+  managedIdentityHomeResourceGroup: "coalesce(\"managedIdentityHomeResourceGroup\", '')"
 };

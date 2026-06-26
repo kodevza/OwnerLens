@@ -10,10 +10,11 @@ import type {
 } from "../../inputTransferObject/generated/EntraSnapshot";
 import { buildTags } from "../../../../core/azure/tags";
 
-function mapEntraServicePrincipalToCore(
-  servicePrincipal: EntraServicePrincipal
-): CoreEntraServicePrincipal {
+function mapEntraServicePrincipalToCore<T extends EntraServicePrincipal>(
+  servicePrincipal: T
+): CoreEntraServicePrincipal & Omit<T, keyof CoreEntraServicePrincipal> {
   return {
+    ...servicePrincipal,
     id: servicePrincipal.id,
     appId: servicePrincipal.appId,
     displayName: servicePrincipal.displayName,
@@ -31,12 +32,12 @@ function mapEntraServicePrincipalToCore(
     servicePrincipalOwners: servicePrincipal.servicePrincipalOwners?.map(mapEntraOwnerToCore),
     applicationOwners: servicePrincipal.applicationOwners?.map(mapEntraOwnerToCore),
     metadata: servicePrincipal.metadata ? { ...servicePrincipal.metadata } : servicePrincipal.metadata
-  };
+  } as CoreEntraServicePrincipal & Omit<T, keyof CoreEntraServicePrincipal>;
 }
 
-export function mapEntraServicePrincipalsToCore(
-  servicePrincipals: EntraServicePrincipal[]
-): CoreEntraServicePrincipal[] {
+export function mapEntraServicePrincipalsToCore<T extends EntraServicePrincipal>(
+  servicePrincipals: T[]
+): Array<CoreEntraServicePrincipal & Omit<T, keyof CoreEntraServicePrincipal>> {
   return servicePrincipals.map(mapEntraServicePrincipalToCore);
 }
 

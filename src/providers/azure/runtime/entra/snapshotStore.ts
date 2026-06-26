@@ -6,6 +6,7 @@ import { insertEntraApplicationRows, readEntraApplicationRows } from "./domain/a
 import { insertEntraAppRoleAssignmentRows, readEntraAppRoleAssignmentRows } from "./domain/appRoleAssignmentsTable";
 import { insertEntraGroupMemberRows, readEntraGroupMemberRows } from "./domain/groupMembersTable";
 import { insertEntraOAuth2PermissionGrantRows, readEntraOAuth2PermissionGrantRows } from "./domain/oauth2PermissionGrantsTable";
+import { rebuildEntraPrincipalPermissionSummary } from "./domain/principalPermissionSummaryTable";
 import { insertEntraServicePrincipalRows, readEntraServicePrincipalRows } from "./domain/servicePrincipalsTable";
 import { importEntraSnapshotMetadata } from "./domain/snapshotMetadataTable";
 import type { NormalizedEntraSnapshot } from "./normalizeEntraSnapshot";
@@ -34,6 +35,7 @@ export async function importEntraSnapshotToDuckDb(
     await insertEntraOAuth2PermissionGrantRows(connection, oauth2PermissionGrants);
     await insertEntraAppRoleAssignmentRows(connection, appRoleAssignments);
     await insertEntraGroupMemberRows(connection, groupMembers);
+    await rebuildEntraPrincipalPermissionSummary(connection);
 
     await connection.run("commit");
   } catch (error) {

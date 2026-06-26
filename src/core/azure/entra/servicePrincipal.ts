@@ -13,6 +13,7 @@ export type AzureIdentityRuntimeEnrichment = {
 export type EntraPrincipalPermissionSummary = {
   oauthPermissionsCount: number;
   appRolesPermissionCount: number;
+  entraPermissionCount: number;
   entraPermissionRisk: PermissionRiskLevel;
 };
 
@@ -45,7 +46,7 @@ export type ServicePrincipal = EntraServicePrincipal & AzureIdentityRuntimeEnric
   ownerCandidates?: OwnerCandidate[];
   potentialOwners?: string[];
   ownerConfidence?: OwnerConfidence;
-} & EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & ZtaRemediationSummary;
+} & EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<ZtaRemediationSummary>;
 
 export function isServicePrincipal(servicePrincipal: EntraServicePrincipal): servicePrincipal is ServicePrincipal {
   return servicePrincipal.servicePrincipalType !== "ManagedIdentity";
