@@ -237,18 +237,10 @@ function getOwnerCandidateKey(owner: string, type: OwnerType): string {
 }
 
 function inferOwnerType(owner: string, source: string): OwnerType {
-  const tagName = getOwnerTagSourceName(source);
+  const tagType = getOwnerTagSourceType(source);
 
-  if (tagName === "ownerGroup") {
-    return "ownerGroup";
-  }
-
-  if (tagName === "ownerUser") {
-    return "ownerUser";
-  }
-
-  if (tagName) {
-    return "ownerTag";
+  if (tagType) {
+    return tagType;
   }
 
   if (owner.includes("@")) {
@@ -258,14 +250,14 @@ function inferOwnerType(owner: string, source: string): OwnerType {
   return "unknown";
 }
 
-function getOwnerTagSourceName(source: string): string | null {
+function getOwnerTagSourceType(source: string): OwnerType | null {
   const tagName = source.match(/^tag\.(.+)$/)?.[1];
 
   if (!tagName) {
     return null;
   }
 
-  return appConfig.azure.ownership.ownerTags.some((tag) => tag.name === tagName) ? tagName : null;
+  return appConfig.azure.ownership.ownerTags.find((tag) => tag.name === tagName)?.type ?? null;
 }
 
 function inferOwnerCandidateSource(source: string): OwnerCandidateSource {

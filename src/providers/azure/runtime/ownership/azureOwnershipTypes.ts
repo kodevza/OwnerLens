@@ -4,7 +4,7 @@ import type {
   AzureSubscription
 } from "../../../../core/azure/resources";
 import type { OwnerResolver } from "../../../../core/ownership/resolveOwner";
-import type { OwnerResolution } from "../../../../core/ownership/types";
+import type { OwnerResolution, OwnerType } from "../../../../core/ownership/types";
 import type { AzureSnapshot } from "../../inputTransferObject/generated/AzureSnapshot";
 import type { EntraServicePrincipal, EntraSnapshot } from "../../inputTransferObject/generated/EntraSnapshot";
 
@@ -40,6 +40,8 @@ export type AzureReportConfig = {
 
 export type ActivityLogIndex = Map<string, AzureActivityLog[]>;
 
-type AzureOwnerTagConfig = Pick<OwnerResolution, "confidence">;
+type AzureOwnerTagConfig = Pick<OwnerResolution, "confidence"> & {
+  type: OwnerType;
+};
 
 export type AzureOwnerTagConfigMap = Record<string, AzureOwnerTagConfig>;

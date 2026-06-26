@@ -57,12 +57,10 @@ function readEntraPrincipalTagOwnerCandidates(row: EntraPrincipalDirectOwnerSour
   const candidates: OwnerCandidate[] = [];
 
   for (const tag of readConfiguredEntraPrincipalOwnerTags(row.tags)) {
-    const ownerType = inferTagOwnerType(tag.name, tag.value);
-
     candidates.push({
-      key: getServicePrincipalTagOwnerCandidateKey(ownerType, tag.value),
+      key: getServicePrincipalTagOwnerCandidateKey(tag.type, tag.value),
       displayName: tag.value,
-      type: ownerType,
+      type: tag.type,
       confidence: tag.confidence,
       source: "tag",
       rank: 0,
@@ -81,9 +79,14 @@ function readEntraPrincipalTagOwnerCandidates(row: EntraPrincipalDirectOwnerSour
 
 function readConfiguredEntraPrincipalOwnerTags(
   tags: EntraPrincipalDirectOwnerSource["tags"]
-): Array<{ name: string; value: string; confidence: Exclude<OwnerCandidate["confidence"], "none"> }> {
+): Array<{ name: string; value: string; confidence: Exclude<OwnerCandidate["confidence"], "none">; type: OwnerType }> {
   const tagEntries = readEntraPrincipalTagEntries(tags);
-  const ownerTags: Array<{ name: string; value: string; confidence: Exclude<OwnerCandidate["confidence"], "none"> }> = [];
+  const ownerTags: Array<{
+    name: string;
+    value: string;
+    confidence: Exclude<OwnerCandidate["confidence"], "none">;
+    type: OwnerType;
+  }> = [];
 
   for (const tagConfig of appConfig.azure.ownership.ownerTags) {
     const entry = tagEntries.find((candidate) => normalizeKey(candidate.name) === normalizeKey(tagConfig.name));
@@ -93,7 +96,8 @@ function readConfiguredEntraPrincipalOwnerTags(
       ownerTags.push({
         name: tagConfig.name,
         value,
-        confidence: tagConfig.confidence
+        confidence: tagConfig.confidence,
+        type: tagConfig.type
       });
     }
   }
@@ -146,18 +150,6 @@ function findServicePrincipalTagSeparatorIndex(tag: string): number {
 
 function getServicePrincipalTagOwnerCandidateKey(ownerType: OwnerType, owner: string): string {
   return `${ownerType}:${owner.trim().toLowerCase()}`;
-}
-
-function inferTagOwnerType(tagName: string, owner: string): OwnerType {
-  if (normalizeKey(tagName) === "ownergroup") {
-    return "ownerGroup";
-  }
-
-  if (normalizeKey(tagName) === "owneruser" || owner.includes("@")) {
-    return "ownerUser";
-  }
-
-  return "ownerTag";
 }
 
 function mapEntraOwnersToOwnerCandidates(

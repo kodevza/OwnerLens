@@ -1,4 +1,5 @@
 import type { ManagedIdentity } from "../../core/azure/entra/managedIdentity";
+import type { AppConfig } from "../../core/config";
 import type { ServicePrincipal } from "../../core/azure/entra/servicePrincipal";
 import type {
   EntraAppRoleAssignment,
@@ -95,6 +96,15 @@ export async function readAzureInventoryStats({ signal }: { signal: AbortSignal 
   }
 
   return readJsonResponse<AzureInventoryStats>(response, "/api/data/runtime/stats", "Inventory stats read failed");
+}
+
+export async function readAppConfig({ signal }: { signal: AbortSignal }): Promise<AppConfig> {
+  const response = await runtimeFetch("/api/data/runtime/config", { signal });
+  if (!response.ok) {
+    throw new Error(await formatRuntimeApiFailure(response, "Runtime config read failed"));
+  }
+
+  return readJsonResponse<AppConfig>(response, "/api/data/runtime/config", "Runtime config read failed");
 }
 
 export type CsvExportSelection = {

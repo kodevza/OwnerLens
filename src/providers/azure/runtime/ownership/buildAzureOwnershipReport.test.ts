@@ -7,10 +7,12 @@ test("resolves owners from configurable tag names", () => {
   const report = buildAzureOwnershipReport(resourceSnapshot(), entraSnapshot(), {
     tags: {
       businessOwner: {
-        confidence: "high"
+        confidence: "high",
+        type: "ownerGroup"
       },
       technicalOwner: {
-        confidence: "medium"
+        confidence: "medium",
+        type: "ownerUser"
       }
     },
     ownerTargets: [

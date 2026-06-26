@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import type { ZtaRelatedObject } from "../../core/azure/ztaReport";
-import { appConfig } from "../../core/config";
 import type { RemediationPackage } from "../../core/runtime/remediation";
 import type { ColumnFilters, SortRule } from "../../core/collectionControls";
 import { ClosableTab } from "../../report/components/ClosableTab";
@@ -20,6 +19,7 @@ import type {
   EntraPermissionsPrincipalSelection,
   OwnershipEvidenceSelection
 } from "./identity/ServicePrincipalFieldRenderers";
+import { useAppConfig } from "./AppConfigContext";
 import { useAzureViewNavigation } from "./useAzureViewNavigation";
 import { ZtaComponent } from "./remediation/ZtaComponent";
 
@@ -37,11 +37,6 @@ const viewValues: BaseAzureView[] = [
   "resourceGroups",
   "zeroTrustAssessment"
 ];
-
-const zeroTrustAssessmentEnabled = appConfig.features.zeroTrustAssessment;
-const baseEnabledViewValues = zeroTrustAssessmentEnabled
-  ? viewValues
-  : viewValues.filter((view) => view !== "zeroTrustAssessment");
 
 type PersistentTableView = "servicePrincipals" | "managedIdentities" | "resourceGroups";
 
@@ -84,6 +79,11 @@ type PrincipalDetailsTab = {
 };
 
 export function AzureComponent() {
+  const config = useAppConfig();
+  const zeroTrustAssessmentEnabled = config.features.zeroTrustAssessment;
+  const baseEnabledViewValues = zeroTrustAssessmentEnabled
+    ? viewValues
+    : viewValues.filter((view) => view !== "zeroTrustAssessment");
   const [azureRbacTabs, setAzureRbacTabs] = useState<AzureRbacTab[]>([]);
   const [entraPermissionsTabs, setEntraPermissionsTabs] = useState<EntraPermissionsTab[]>([]);
   const [ownershipEvidenceTabs, setOwnershipEvidenceTabs] = useState<OwnershipEvidenceTab[]>([]);

@@ -3428,7 +3428,7 @@ test("applies disabled resource group owner evidence when reading managed identi
           evidence: "ownerGroup=platform-team"
         },
         {
-          ownerCandidateKey: "ownerTag:fallback@example.test",
+          ownerCandidateKey: "ownerUser:fallback@example.test",
           ownerDisplayName: "fallback@example.test",
           confidence: "medium",
           evidence: "owner=fallback@example.test"
@@ -3459,7 +3459,7 @@ test("applies disabled resource group owner evidence when reading managed identi
     ).resolves.toMatchObject({
       evidence: [
         {
-          ownerCandidateKey: "ownerTag:fallback@example.test",
+          ownerCandidateKey: "ownerUser:fallback@example.test",
           ownerDisplayName: "fallback@example.test",
           confidence: "medium",
           evidence: "owner=fallback@example.test"

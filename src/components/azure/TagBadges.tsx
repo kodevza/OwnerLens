@@ -1,15 +1,15 @@
 import type { Tags } from "../../core/azure/tags";
 import { getTagEntries } from "../../core/azure/tags";
-import { appConfig } from "../../core/config";
 import { formatValue } from "../../lib/utils";
 import { Badge } from "../../report/components/ui/badge";
 import type { BadgeProps } from "../../report/components/ui/badge";
-
-const ownerTagNames = new Set(appConfig.azure.ownership.ownerTags.map((tag) => tag.name.toLowerCase()));
+import { useAppConfig } from "./AppConfigContext";
 
 type TagBadgeValue = string[] | Tags | null | undefined;
 
 export function TagBadges({ tags }: { tags: TagBadgeValue }) {
+  const config = useAppConfig();
+  const ownerTagNames = new Set(config.azure.ownership.ownerTags.map((tag) => tag.name.toLowerCase()));
   const visibleTags = normalizeTags(tags);
 
   if (visibleTags.length === 0) {
@@ -19,7 +19,7 @@ export function TagBadges({ tags }: { tags: TagBadgeValue }) {
   return (
     <div className="flex max-w-96 flex-wrap gap-1">
       {visibleTags.map((tag) => (
-        <Badge key={tag} className="max-w-full font-medium" title={tag} variant={getTagBadgeVariant(tag)}>
+        <Badge key={tag} className="max-w-full font-medium" title={tag} variant={getTagBadgeVariant(tag, ownerTagNames)}>
           <span className="truncate">{tag}</span>
         </Badge>
       ))}
@@ -47,7 +47,7 @@ function formatTag(key: string, value: string): string {
   return tagValue.length > 0 ? `${tagName}:${tagValue}` : tagName;
 }
 
-function getTagBadgeVariant(tag: string): BadgeProps["variant"] {
+function getTagBadgeVariant(tag: string, ownerTagNames: ReadonlySet<string>): BadgeProps["variant"] {
   return ownerTagNames.has(getTagName(tag).toLowerCase()) ? "high" : "none";
 }
 

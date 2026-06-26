@@ -1,7 +1,7 @@
 import type { AzureSnapshot } from "../../inputTransferObject/generated/AzureSnapshot";
 import type { EntraSnapshot } from "../../inputTransferObject/generated/EntraSnapshot";
 import type { OwnerReport, OwnerReportRow } from "./azureOwnerReportTypes";
-import { azureOwnershipConfig } from "./azureOwnershipConfig";
+import { getAzureOwnershipConfig } from "./azureOwnershipConfig";
 import { buildActivityIndex } from "./resolveAzureOwner";
 import { buildServicePrincipalIndex } from "./azureActivityOwnershipEvidence";
 import type { AzureReportConfig, AzureScopeOwnershipTarget } from "./azureOwnershipTypes";
@@ -9,7 +9,7 @@ import type { AzureReportConfig, AzureScopeOwnershipTarget } from "./azureOwners
 export function buildAzureOwnershipReport(
   resourceSnapshot: AzureSnapshot,
   entraSnapshot: EntraSnapshot,
-  config: AzureReportConfig = azureOwnershipConfig
+  config: AzureReportConfig = getAzureOwnershipConfig()
 ): OwnerReport {
   const context = {
     resourceSnapshot,

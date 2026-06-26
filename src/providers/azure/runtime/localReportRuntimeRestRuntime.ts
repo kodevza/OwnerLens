@@ -10,6 +10,7 @@ import type {
 
 export type LocalReportRuntimeRestRuntime = {
   listSnapshots(): Promise<unknown> | unknown;
+  readAppConfig(): Promise<unknown> | unknown;
   readInventoryStats(): Promise<unknown> | unknown;
   queryEntraServicePrincipals(options: LocalReportCollectionQueryOptions): Promise<unknown> | unknown;
   exportEntraServicePrincipalsCsv(options: LocalReportCollectionQueryOptions): Promise<unknown> | unknown;
