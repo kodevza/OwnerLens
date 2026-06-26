@@ -31,19 +31,7 @@ function resourceGroupRow(input: {
 
 test("generates a resource group owner tag PowerShell script from filtered selected rows", async () => {
   const azureResourcesQueries = {
-    readResourceGroupOwnershipRows: jest.fn().mockResolvedValue([
-      resourceGroupRow({
-        subscriptionId: "sub-1",
-        resourceGroup: "rg-api",
-        owner: "alice@example.test",
-        confidence: "high"
-      }),
-      resourceGroupRow({
-        subscriptionId: "sub-1",
-        resourceGroup: "rg-low",
-        owner: "bob@example.test",
-        confidence: "low"
-      }),
+    queryResourceGroupOwnershipExportRows: jest.fn().mockResolvedValue([
       resourceGroupRow({
         subscriptionId: "sub-2",
         resourceGroup: "rg-web",
@@ -76,11 +64,16 @@ test("generates a resource group owner tag PowerShell script from filtered selec
     targetIds: ["sub-2:rg-web"],
     body: expect.stringContaining("Set-AzResourceGroup -Name $target.ResourceGroupName -Tag $tags")
   });
+  expect(azureResourcesQueries.queryResourceGroupOwnershipExportRows).toHaveBeenCalledWith({
+    filters: [{ column: "confidence", values: ["high"] }],
+    selectedRowKeys: ["sub-2:rg-web"],
+    sortRules: [{ columnId: "resourceGroup", direction: "asc" }]
+  });
 });
 
 test("generates the ownerGroup PowerShell template", async () => {
   const azureResourcesQueries = {
-    readResourceGroupOwnershipRows: jest.fn().mockResolvedValue([
+    queryResourceGroupOwnershipExportRows: jest.fn().mockResolvedValue([
       resourceGroupRow({
         subscriptionId: "sub-1",
         resourceGroup: "rg-api",
@@ -110,7 +103,7 @@ test("generates the ownerGroup PowerShell template", async () => {
 
 test("escapes generated PowerShell single-quoted values", async () => {
   const azureResourcesQueries = {
-    readResourceGroupOwnershipRows: jest.fn().mockResolvedValue([
+    queryResourceGroupOwnershipExportRows: jest.fn().mockResolvedValue([
       resourceGroupRow({
         subscriptionId: "sub-1",
         resourceGroup: "rg-prod's",
@@ -135,24 +128,20 @@ test("escapes generated PowerShell single-quoted values", async () => {
 });
 
 test("generates a service principal owner tag PowerShell script from selected principals", async () => {
+  const entraQueries = {
+    queryServicePrincipalExportRows: jest.fn().mockResolvedValue([
+      servicePrincipalRow({
+        id: "sp-2",
+        displayName: "Worker's app",
+        potentialOwners: ["bob@example.test"]
+      })
+    ]),
+    queryManagedIdentityExportRows: jest.fn().mockResolvedValue([])
+  } as unknown as EntraCollectionQueryService;
   const service = new PowershellScriptService({
     appRoot: process.cwd(),
     azureResourcesQueries: emptyAzureResourcesQueries(),
-    entraQueries: {
-      readServicePrincipalRows: jest.fn().mockResolvedValue([
-        servicePrincipalRow({
-          id: "sp-1",
-          displayName: "API app",
-          potentialOwners: ["alice@example.test"]
-        }),
-        servicePrincipalRow({
-          id: "sp-2",
-          displayName: "Worker's app",
-          potentialOwners: ["bob@example.test"]
-        })
-      ]),
-      readManagedIdentityRows: jest.fn().mockResolvedValue([])
-    } as unknown as EntraCollectionQueryService
+    entraQueries
   });
 
   await expect(
@@ -171,6 +160,9 @@ test("generates a service principal owner tag PowerShell script from selected pr
     targetIds: ["sp-2"],
     body: expect.stringContaining("Update-MgServicePrincipal -ServicePrincipalId $target.ServicePrincipalId -Tags $tags")
   });
+  expect(entraQueries.queryServicePrincipalExportRows).toHaveBeenCalledWith({
+    selectedRowKeys: ["sp-2"]
+  });
 });
 
 test("generates a managed identity owner tag script using the service principal template target", async () => {
@@ -178,8 +170,8 @@ test("generates a managed identity owner tag script using the service principal 
     appRoot: process.cwd(),
     azureResourcesQueries: emptyAzureResourcesQueries(),
     entraQueries: {
-      readServicePrincipalRows: jest.fn().mockResolvedValue([]),
-      readManagedIdentityRows: jest.fn().mockResolvedValue([
+      queryServicePrincipalExportRows: jest.fn().mockResolvedValue([]),
+      queryManagedIdentityExportRows: jest.fn().mockResolvedValue([
         managedIdentityRow({
           id: "mi-1",
           displayName: "Managed identity",
@@ -217,14 +209,14 @@ test("rejects a resource group template for service principal collections", asyn
 
 function emptyAzureResourcesQueries(): AzureResourcesCollectionQueryService {
   return {
-    readResourceGroupOwnershipRows: jest.fn().mockResolvedValue([])
+    queryResourceGroupOwnershipExportRows: jest.fn().mockResolvedValue([])
   } as unknown as AzureResourcesCollectionQueryService;
 }
 
 function emptyEntraQueries(): EntraCollectionQueryService {
   return {
-    readServicePrincipalRows: jest.fn().mockResolvedValue([]),
-    readManagedIdentityRows: jest.fn().mockResolvedValue([])
+    queryServicePrincipalExportRows: jest.fn().mockResolvedValue([]),
+    queryManagedIdentityExportRows: jest.fn().mockResolvedValue([])
   } as unknown as EntraCollectionQueryService;
 }
 

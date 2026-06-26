@@ -221,6 +221,7 @@ export function ServicePrincipalComponent({
         loadPage={readServicePrincipals}
         loadingMessage="Loading service principals..."
         minWidthClassName="min-w-[2380px]"
+        mode="remote"
         onFiltersChange={onFiltersChange}
         onPageChange={onPageChange}
         onSortRulesChange={onSortRulesChange}

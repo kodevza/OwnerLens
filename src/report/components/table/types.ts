@@ -19,6 +19,7 @@ export type GenericTableProps<TRow> = {
   fieldRenderers?: ReportColumnRenderers<TRow>;
   getRowKey: (row: TRow) => string;
   minWidthClassName: string;
+  mode?: "local";
   onFiltersChange?: (filters: ColumnFilters) => void;
   onPageChange?: (page: number) => void;
   onSortRulesChange?: (sortRules: SortRule[]) => void;
@@ -39,7 +40,15 @@ export type GenericTablePage<TRow> = {
 
 export type GenericRemoteTableProps<TRow> = Omit<
   GenericTableProps<TRow>,
-  "filterOptions" | "filters" | "onFiltersChange" | "onPageChange" | "page" | "rows" | "sortRules" | "totalCount"
+  | "filterOptions"
+  | "filters"
+  | "mode"
+  | "onFiltersChange"
+  | "onPageChange"
+  | "page"
+  | "rows"
+  | "sortRules"
+  | "totalCount"
 > & {
   initialFilters?: ColumnFilters;
   initialPage?: number;
@@ -51,6 +60,7 @@ export type GenericRemoteTableProps<TRow> = Omit<
     sortRules: SortRule[];
   }) => Promise<GenericTablePage<TRow>>;
   loadingMessage: string;
+  mode?: "remote";
   onFiltersChange?: (filters: ColumnFilters) => void;
   onPageChange?: (page: number) => void;
   onRuntimeControlsChange?: (controls: { filters: ColumnFilters; sortRules: SortRule[] }) => void;

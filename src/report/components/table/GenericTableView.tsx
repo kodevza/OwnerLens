@@ -11,6 +11,7 @@ import {
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "../ui/table";
 import {
   applyReportTableControls,
+  applyColumnFilterOpen,
   ReportTableHead,
   useReportTableControls
 } from "../reportTableControls";
@@ -26,7 +27,48 @@ type ColumnWidthState = {
   widths: Record<string, number>;
 };
 
-export function GenericTableView<TRow>({
+type GenericTableViewProps<TRow> = Omit<GenericTableProps<TRow>, "mode"> & {
+  mode?: "local" | "remote";
+  rows: TRow[];
+};
+
+type RenderGenericTableViewProps<TRow> = Pick<
+  GenericTableProps<TRow>,
+  | "columnHelp"
+  | "columnWidthsStorageKey"
+  | "emptyMessage"
+  | "fields"
+  | "fieldRenderers"
+  | "getRowKey"
+  | "minWidthClassName"
+  | "onPageChange"
+  | "page"
+  | "pageSize"
+  | "selectionColumn"
+  | "totalCount"
+> & {
+  controlledRows: TRow[];
+  filterOptions: NonNullable<GenericTableProps<TRow>["filterOptions"]>;
+  filters: NonNullable<GenericTableProps<TRow>["filters"]>;
+  onFilterChange: (columnId: string, value: string) => void;
+  onFilterOpenChange: (columnId: string, isOpen: boolean) => void;
+  onObjectFieldFilterChange: (columnId: string, conditions: Array<{ fieldId: string; value: string }>) => void;
+  onSortToggle: (columnId: string) => void;
+  onValueFilterToggle: (columnId: string, value: string, checked: boolean) => void;
+  onValuesFilterChange: (columnId: string, values: string[]) => void;
+  openFilterColumnId: string | null;
+  sortRules: NonNullable<GenericTableProps<TRow>["sortRules"]>;
+};
+
+export function GenericTableView<TRow>(props: GenericTableViewProps<TRow>) {
+  if (props.mode === "remote") {
+    return <RemoteGenericTableView {...props} />;
+  }
+
+  return <LocalGenericTableView {...props} />;
+}
+
+function LocalGenericTableView<TRow>({
   columnHelp,
   columnWidthsStorageKey,
   emptyMessage,
@@ -45,20 +87,7 @@ export function GenericTableView<TRow>({
   selectionColumn,
   sortRules: controlledSortRules,
   totalCount
-}: GenericTableProps<TRow> & { rows: TRow[] }) {
-  const [columnWidthState, setColumnWidthState] = useState<ColumnWidthState>(() => ({
-    storageKey: columnWidthsStorageKey,
-    widths: readStoredColumnWidths(columnWidthsStorageKey)
-  }));
-  const resizeStateRef = useRef<{
-    columnId: string;
-    startX: number;
-    startWidth: number;
-  } | null>(null);
-  const columns = useMemo(
-    () => buildCollectionColumns(fields, { columnHelp, renderers: fieldRenderers }),
-    [columnHelp, fields, fieldRenderers]
-  );
+}: GenericTableViewProps<TRow>) {
   const localControls = useReportTableControls(rows, fields);
   const filters = controlledFilters ?? localControls.filters;
   const sortRules = controlledSortRules ?? localControls.sortRules;
@@ -100,6 +129,139 @@ export function GenericTableView<TRow>({
   const filterOptions = resolveColumnFilterOptions(fields, controlledFilterOptions ?? tableControls.filterOptions);
   const openFilterColumnId = localControls.openFilterColumnId;
   const setColumnFilterOpen = localControls.setColumnFilterOpen;
+
+  return (
+    <RenderGenericTableView
+      columnHelp={columnHelp}
+      columnWidthsStorageKey={columnWidthsStorageKey}
+      controlledRows={controlledRows}
+      emptyMessage={emptyMessage}
+      fields={fields}
+      fieldRenderers={fieldRenderers}
+      filterOptions={filterOptions}
+      filters={filters}
+      getRowKey={getRowKey}
+      minWidthClassName={minWidthClassName}
+      openFilterColumnId={openFilterColumnId}
+      page={page}
+      pageSize={pageSize}
+      selectionColumn={selectionColumn}
+      sortRules={sortRules}
+      totalCount={totalCount}
+      onFilterChange={setColumnFilter}
+      onFilterOpenChange={setColumnFilterOpen}
+      onObjectFieldFilterChange={setColumnObjectFieldFilter}
+      onPageChange={onPageChange}
+      onSortToggle={toggleColumnSort}
+      onValueFilterToggle={toggleColumnValueFilter}
+      onValuesFilterChange={setColumnValuesFilter}
+    />
+  );
+}
+
+function RemoteGenericTableView<TRow>({
+  columnHelp,
+  columnWidthsStorageKey,
+  emptyMessage,
+  fields,
+  filterOptions: controlledFilterOptions,
+  filters = {},
+  fieldRenderers,
+  getRowKey,
+  minWidthClassName,
+  onFiltersChange,
+  onPageChange,
+  onSortRulesChange,
+  page,
+  pageSize,
+  rows,
+  selectionColumn,
+  sortRules = [],
+  totalCount
+}: GenericTableViewProps<TRow>) {
+  const [openFilterColumnId, setOpenFilterColumnId] = useState<string | null>(null);
+  const filterOptions = resolveColumnFilterOptions(fields, controlledFilterOptions ?? {});
+  const setColumnFilterOpen = (columnId: string, isOpen: boolean) => {
+    setOpenFilterColumnId((currentColumnId) => applyColumnFilterOpen(currentColumnId, columnId, isOpen));
+  };
+
+  return (
+    <RenderGenericTableView
+      columnHelp={columnHelp}
+      columnWidthsStorageKey={columnWidthsStorageKey}
+      controlledRows={rows}
+      emptyMessage={emptyMessage}
+      fields={fields}
+      fieldRenderers={fieldRenderers}
+      filterOptions={filterOptions}
+      filters={filters}
+      getRowKey={getRowKey}
+      minWidthClassName={minWidthClassName}
+      openFilterColumnId={openFilterColumnId}
+      page={page}
+      pageSize={pageSize}
+      selectionColumn={selectionColumn}
+      sortRules={sortRules}
+      totalCount={totalCount}
+      onFilterChange={(columnId, value) => {
+        onFiltersChange?.(applyColumnTextFilter(filters, columnId, value));
+      }}
+      onFilterOpenChange={setColumnFilterOpen}
+      onObjectFieldFilterChange={(columnId, conditions) => {
+        onFiltersChange?.(applyColumnObjectFieldFilter(filters, columnId, conditions));
+      }}
+      onPageChange={onPageChange}
+      onSortToggle={(columnId) => {
+        onSortRulesChange?.(toggleSortRule(sortRules, columnId));
+      }}
+      onValueFilterToggle={(columnId, value, checked) => {
+        onFiltersChange?.(applyColumnFilterValueToggle(filters, columnId, value, checked));
+      }}
+      onValuesFilterChange={(columnId, values) => {
+        onFiltersChange?.(applyColumnValuesFilter(filters, columnId, values));
+      }}
+    />
+  );
+}
+
+function RenderGenericTableView<TRow>({
+  columnHelp,
+  columnWidthsStorageKey,
+  controlledRows,
+  emptyMessage,
+  fields,
+  fieldRenderers,
+  filterOptions,
+  filters,
+  getRowKey,
+  minWidthClassName,
+  onFilterChange,
+  onFilterOpenChange,
+  onObjectFieldFilterChange,
+  onPageChange,
+  onSortToggle,
+  onValueFilterToggle,
+  onValuesFilterChange,
+  openFilterColumnId,
+  page,
+  pageSize,
+  selectionColumn,
+  sortRules,
+  totalCount
+}: RenderGenericTableViewProps<TRow>) {
+  const [columnWidthState, setColumnWidthState] = useState<ColumnWidthState>(() => ({
+    storageKey: columnWidthsStorageKey,
+    widths: readStoredColumnWidths(columnWidthsStorageKey)
+  }));
+  const resizeStateRef = useRef<{
+    columnId: string;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+  const columns = useMemo(
+    () => buildCollectionColumns(fields, { columnHelp, renderers: fieldRenderers }),
+    [columnHelp, fields, fieldRenderers]
+  );
   const resolvedPage = page ?? 1;
   const resolvedPageSize = pageSize ?? controlledRows.length;
   const resolvedTotalCount = totalCount ?? controlledRows.length;
@@ -191,13 +353,13 @@ export function GenericTableView<TRow>({
               openFilterColumnId={openFilterColumnId}
               sortRules={sortRules}
               columnWidths={columnWidths}
-              onFilterChange={setColumnFilter}
-              onFilterOpenChange={setColumnFilterOpen}
-              onObjectFieldFilterChange={setColumnObjectFieldFilter}
+              onFilterChange={onFilterChange}
+              onFilterOpenChange={onFilterOpenChange}
+              onObjectFieldFilterChange={onObjectFieldFilterChange}
               onResizeStart={startColumnResize}
-              onValueFilterToggle={toggleColumnValueFilter}
-              onValuesFilterChange={setColumnValuesFilter}
-              onSortToggle={toggleColumnSort}
+              onValueFilterToggle={onValueFilterToggle}
+              onValuesFilterChange={onValuesFilterChange}
+              onSortToggle={onSortToggle}
             />
           </TableRow>
         </TableHeader>

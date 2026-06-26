@@ -129,6 +129,28 @@ test("persists resized table columns by storage key", () => {
   act(() => nextRender.root.unmount());
 });
 
+test("does not apply local filters in remote mode", () => {
+  const { container, root } = renderComponent(
+    <GenericTableView
+      emptyMessage="No rows"
+      fields={fields}
+      filters={{ name: { type: "text", value: "Alpha" } }}
+      getRowKey={(row) => row.id}
+      minWidthClassName="min-w-[240px]"
+      mode="remote"
+      rows={[
+        { id: "1", name: "Alpha" },
+        { id: "2", name: "Beta" }
+      ]}
+    />
+  );
+
+  expect(container.textContent).toContain("Alpha");
+  expect(container.textContent).toContain("Beta");
+
+  act(() => root.unmount());
+});
+
 function renderComponent(component: React.ReactNode): { container: HTMLElement; root: Root } {
   const container = document.createElement("div");
   document.body.append(container);

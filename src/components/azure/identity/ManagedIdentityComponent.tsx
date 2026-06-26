@@ -207,6 +207,7 @@ export function ManagedIdentityComponent({
         loadPage={readManagedIdentities}
         loadingMessage="Loading managed identities..."
         minWidthClassName="min-w-[2140px]"
+        mode="remote"
         onFiltersChange={onFiltersChange}
         onPageChange={onPageChange}
         onSortRulesChange={onSortRulesChange}
