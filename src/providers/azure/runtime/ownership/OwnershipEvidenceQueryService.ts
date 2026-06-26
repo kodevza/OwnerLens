@@ -9,6 +9,7 @@ import type {
   OwnerCandidate,
   OwnerCandidateSource,
   OwnerEvidence,
+  OwnershipEvidenceItem,
   OwnerType,
   OwnershipEvidenceResponse,
   OwnershipEvidenceTargetKind
@@ -92,11 +93,14 @@ export class OwnershipEvidenceQueryService {
         id: row.id,
         displayName: row.displayName
       },
-      evidence: flattenCandidateEvidence(rankOwnerCandidates(
-        azureRbac
-          ? await this.readServicePrincipalOwnerCandidates(row)
-          : await this.readDirectServicePrincipalOwnerCandidates(row)
-      ))
+      evidence: withOwnershipEvidenceStatusKeys(
+        flattenCandidateEvidence(rankOwnerCandidates(
+          azureRbac
+            ? await this.readServicePrincipalOwnerCandidates(row)
+            : await this.readDirectServicePrincipalOwnerCandidates(row)
+        )),
+        azureRbac ? row.id : undefined
+      )
     };
   }
 
@@ -181,9 +185,9 @@ export class OwnershipEvidenceQueryService {
           id: row.id,
           displayName: row.displayName
         },
-        evidence: flattenCandidateEvidence(rankOwnerCandidates(
+        evidence: withOwnershipEvidenceStatusKeys(flattenCandidateEvidence(rankOwnerCandidates(
           directOwnerCandidates
-        ))
+        )))
       };
     }
 
@@ -262,9 +266,9 @@ export class OwnershipEvidenceQueryService {
         subscriptionName: targetRow.subscriptionName,
         resourceGroup: targetRow.resourceGroup
       },
-      evidence: flattenCandidateEvidence(rankOwnerCandidates(
+      evidence: withOwnershipEvidenceStatusKeys(flattenCandidateEvidence(rankOwnerCandidates(
         ownerCandidates
-      ))
+      )))
     };
   }
 
@@ -288,6 +292,41 @@ export class OwnershipEvidenceQueryService {
       };
     });
   }
+}
+
+function withOwnershipEvidenceStatusKeys(
+  evidenceItems: OwnershipEvidenceItem[],
+  principalId?: string
+): OwnershipEvidenceItem[] {
+  return evidenceItems.map((item) => ({
+    ...item,
+    statusKey: getOwnershipEvidenceStatusKey(item, principalId)
+  }));
+}
+
+function getOwnershipEvidenceStatusKey(item: OwnershipEvidenceItem, principalId?: string): string | null {
+  if (item.path === "direct") {
+    return item.key;
+  }
+
+  const scopedKey = principalId ? getPrincipalScopedOwnershipEvidenceStatusKey(item, principalId) : null;
+  return scopedKey ?? item.key;
+}
+
+function getPrincipalScopedOwnershipEvidenceStatusKey(item: OwnershipEvidenceItem, principalId: string): string | null {
+  const scope = item.relatedScopes.find((candidateScope) => candidateScope.subscriptionId && candidateScope.resourceGroup);
+  if (!scope?.subscriptionId || !scope.resourceGroup) {
+    return null;
+  }
+
+  return [
+    "resourceGroup",
+    scope.subscriptionId,
+    scope.resourceGroup,
+    "principal",
+    principalId,
+    item.ownerCandidateKey
+  ].join(":");
 }
 
 function getResourceGroupOwnershipLookupLimit(options: PageOptions): number {

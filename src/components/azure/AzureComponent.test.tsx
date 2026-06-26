@@ -1114,6 +1114,7 @@ test("opens selectable ownership evidence table from a service principal owner b
         evidence: [
           {
             key: "owner-1:alice@example.test:2026-06-05T00:00:00.000Z",
+            statusKey: "resourceGroup:sub-1:rg-app:principal:sp-object-id:ownerUser:alice@example.test",
             ownerCandidateKey: "ownerUser:alice@example.test",
             ownerDisplayName: "alice@example.test",
             ownerType: "ownerUser",
@@ -1327,6 +1328,7 @@ test("reloads ownership evidence after deactivating an indirect ownerGroup candi
           ? [
               {
                 key: "ownerGroup:platform-team:ownerGroup=platform-team:",
+                statusKey: "resourceGroup:sub-1:rg-mi:principal:mi-object-id:ownerGroup:platform-team",
                 ownerCandidateKey: "ownerGroup:platform-team",
                 ownerDisplayName: "platform-team",
                 ownerType: "ownerGroup",
@@ -1350,6 +1352,7 @@ test("reloads ownership evidence after deactivating an indirect ownerGroup candi
           : [
               {
                 key: "ownerTag:fallback@example.test:owner=fallback@example.test:",
+                statusKey: "resourceGroup:sub-1:rg-mi:principal:mi-object-id:ownerTag:fallback@example.test",
                 ownerCandidateKey: "ownerTag:fallback@example.test",
                 ownerDisplayName: "fallback@example.test",
                 ownerType: "ownerTag",
@@ -1473,6 +1476,7 @@ test("falls back to Azure RBAC ownership evidence when the default principal evi
           evidence: [
             {
               key: "rbac-owner:alice@example.test:2026-06-05T00:00:00.000Z",
+              statusKey: "resourceGroup:sub-1:rg-app:principal:sp-object-id:ownerUser:alice@example.test",
               ownerCandidateKey: "ownerUser:alice@example.test",
               ownerDisplayName: "alice@example.test",
               ownerType: "ownerUser",
@@ -1568,6 +1572,7 @@ test("sets resource group owner candidate status to inactive from the evidence t
         evidence: [
           {
             key: "ownerUser:alice@example.test:alice@example.test:2026-06-05T00:00:00.000Z",
+            statusKey: "resourceGroup:sub-1:rg-app:ownerUser:alice@example.test",
             ownerCandidateKey: "ownerUser:alice@example.test",
             ownerDisplayName: "alice@example.test",
             ownerType: "ownerUser",
@@ -2695,6 +2700,7 @@ function ownershipEvidenceResponse(owner: { candidateKey?: string; displayName: 
     evidence: [
       {
         key: `owner-1:${owner.displayName}:2026-06-05T00:00:00.000Z`,
+        statusKey: `owner-1:${owner.displayName}:2026-06-05T00:00:00.000Z`,
         ownerCandidateKey: owner.candidateKey ?? "owner-1",
         ownerDisplayName: owner.displayName,
         ownerType: owner.type,

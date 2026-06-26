@@ -57,6 +57,7 @@ export type OwnershipEvidenceTargetKind = "servicePrincipal" | "managedIdentity"
 
 export type OwnershipEvidenceItem = {
   key: string;
+  statusKey: string | null;
   ownerCandidateKey: string;
   ownerDisplayName: string;
   ownerType: OwnerType;
