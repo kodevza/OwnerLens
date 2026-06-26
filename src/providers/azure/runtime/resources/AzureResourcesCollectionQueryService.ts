@@ -67,28 +67,43 @@ export class AzureResourcesCollectionQueryService {
   async queryResourceGroupOwnership(
     options: LocalReportCollectionQueryOptions
   ): Promise<LocalReportPaginatedCollection<"azureResources.resourceGroupOwnership">> {
-    return buildPaginatedCollection(
-      "azureResources.resourceGroupOwnership",
-      await this.readResourceGroupOwnershipRows(options),
-      options
-    );
+    const page = options.page ?? 1;
+    const pageSize = options.pageSize ?? 50;
+    const [rows, count] = await Promise.all([
+      this.azureResources.queryAzureResourceGroupOwnershipCollectionRows({
+        page,
+        pageSize,
+        filters: options.filters,
+        sortRules: options.sortRules
+      }),
+      this.azureResources.countAzureResourceGroupOwnershipCollectionRows({
+        filters: options.filters
+      })
+    ]);
+
+    return {
+      collectionId: "azureResources.resourceGroupOwnership",
+      columns: buildCollectionColumns(rows as unknown as Record<string, unknown>[]),
+      rows,
+      page,
+      pageSize,
+      count
+    };
   }
 
   async exportResourceGroupOwnershipCsv(
     options: LocalReportCollectionQueryOptions
   ): Promise<RuntimeCollectionCsvExport<"azureResources.resourceGroupOwnership">> {
-    const collection = await this.queryResourceGroupOwnership({
-      ...options,
-      page: 1,
-      pageSize: csvExportPageSize
+    const rows = await this.azureResources.queryAzureResourceGroupOwnershipCollectionRows({
+      filters: options.filters,
+      sortRules: options.sortRules,
+      selectedRowKeys: options.selectedRowKeys
     });
 
     return this.exportService.exportAzureResourceGroupOwnershipCsv(
-      collection.rows as unknown as Record<string, unknown>[],
-      {
-        selectedRowKeys: options.selectedRowKeys
-      },
-      collection.columns
+      rows as unknown as Record<string, unknown>[],
+      {},
+      buildCollectionColumns(rows as unknown as Record<string, unknown>[])
     );
   }
 
@@ -259,6 +274,18 @@ function getResourceGroupOwnershipLookupLimit(options: PageOptions): number {
   }
 
   return Math.max(1, Math.trunc(options.page) * Math.trunc(options.pageSize));
+}
+
+function buildCollectionColumns(rows: Record<string, unknown>[]): string[] {
+  const columns = new Set<string>();
+
+  for (const row of rows) {
+    for (const column of Object.keys(row)) {
+      columns.add(column);
+    }
+  }
+
+  return [...columns];
 }
 
 function getResourceGroupsFromOwnershipRows(rows: AzureResourceGroupOwnershipSqlRow[]): AzureResourceGroup[] {

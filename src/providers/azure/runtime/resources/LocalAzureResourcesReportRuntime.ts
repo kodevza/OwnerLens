@@ -9,6 +9,7 @@ import type {
   AzureResource,
   AzureResourceGroup,
   AzureRoleAssignment,
+  ResourceGroupOwnershipRow,
   AzureSubscription,
   AzureUserAssignedManagedIdentity
 } from "../../../../core/azure/resources";
@@ -30,6 +31,7 @@ import {
 } from "./snapshotStore";
 import {
   readAzureActivityLogRows,
+  countAzureResourceGroupOwnershipCollectionRows,
   readAzurePrincipalResourceGroupOwnerCandidateViewRows,
   readAzureResourceGroupOwnershipCollectionSqlRows,
   readAzureResourceGroupOwnerCandidateViewRows,
@@ -39,6 +41,8 @@ import {
   readAzureRoleAssignmentRows,
   readAzureSubscriptionRows,
   readAzureUserAssignedManagedIdentityRows,
+  queryAzureResourceGroupOwnershipCollectionRows,
+  type AzureResourceGroupOwnershipCollectionQueryOptions,
   type AzurePrincipalResourceGroupOwnerCandidateViewRow,
   type AzureResourceGroupOwnerCandidateViewRow,
   type AzureResourceGroupOwnershipSqlRow
@@ -163,6 +167,20 @@ export class LocalAzureResourcesReportRuntime {
   async readAzureResourceGroupOwnershipCollectionSqlRows(limit = 20): Promise<AzureResourceGroupOwnershipSqlRow[]> {
     this.assertImported();
     return readAzureResourceGroupOwnershipCollectionSqlRows(this.getConnection(), limit);
+  }
+
+  async queryAzureResourceGroupOwnershipCollectionRows(
+    options: AzureResourceGroupOwnershipCollectionQueryOptions = {}
+  ): Promise<ResourceGroupOwnershipRow[]> {
+    this.assertImported();
+    return queryAzureResourceGroupOwnershipCollectionRows(this.getConnection(), options);
+  }
+
+  async countAzureResourceGroupOwnershipCollectionRows(
+    options: Pick<AzureResourceGroupOwnershipCollectionQueryOptions, "filters" | "selectedRowKeys"> = {}
+  ): Promise<number> {
+    this.assertImported();
+    return countAzureResourceGroupOwnershipCollectionRows(this.getConnection(), options);
   }
 
   private assertImported(): void {
