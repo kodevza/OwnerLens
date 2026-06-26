@@ -19,7 +19,10 @@ import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
 import type { PageOptions } from "../../../../core/runtime/pagination";
 import { projectServicePrincipalOwners } from "./principalOwnerProjection";
 import type { EntraCollectionQueryService } from "../entra/EntraCollectionQueryService";
-import type { AzureResourceGroupOwnershipSqlRow } from "../resources/tables";
+import type {
+  AzureResourceGroupOwnerCandidateViewRow,
+  AzureResourceGroupOwnershipSqlRow
+} from "../resources/tables";
 import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
 import {
   flattenCandidateEvidence,
@@ -123,7 +126,8 @@ export class OwnershipEvidenceQueryService {
   }
 
   private async readDisabledOwnerEvidenceKeys(): Promise<ReadonlySet<string>> {
-    return this.disabledEvidenceStore?.readKeys() ?? new Set<string>();
+    const keys = await this.disabledEvidenceStore?.readKeys();
+    return new Set([...(keys ?? [])].map(normalizeKey));
   }
 
   private async readServicePrincipalOwnerCandidates(row: ServicePrincipal): Promise<OwnerCandidate[]> {
@@ -228,11 +232,10 @@ export class OwnershipEvidenceQueryService {
   private async readResourceGroupEvidence(
     request: ResourceGroupOwnershipEvidenceRequest
   ): Promise<OwnershipEvidenceResponse> {
-    const ownerRows = await this.azureResources.readAzureResourceGroupOwnershipSqlRows(
+    const ownerRows = await this.azureResources.readAzureResourceGroupOwnerCandidateViewRows(
       {
-        subscriptionIds: [request.subscriptionId],
-        resourceGroups: [request.resourceGroup],
-        principalIds: request.principalIds
+        subscriptionId: request.subscriptionId,
+        resourceGroup: request.resourceGroup
       },
       getResourceGroupOwnershipLookupLimit(request)
     );
@@ -243,13 +246,17 @@ export class OwnershipEvidenceQueryService {
     }
 
     const ownerCandidates = await this.applyStoredResourceGroupDisabledEvidence(
-      ownerRows.flatMap(mapResourceGroupOwnershipSqlRowToOwnerCandidate)
+      ownerRows.flatMap((row, index) => mapResourceGroupOwnerCandidateViewRowToOwnerCandidate(
+        row,
+        index,
+        request.principalIds
+      ))
     );
 
     return {
       target: {
         kind: "resourceGroup",
-        id: targetRow.targetKey,
+        id: `resourceGroup:${targetRow.subscriptionId.trim().toLowerCase()}:${targetRow.resourceGroup.trim().toLowerCase()}`,
         displayName: targetRow.resourceGroup,
         subscriptionId: targetRow.subscriptionId,
         subscriptionName: targetRow.subscriptionName,
@@ -296,7 +303,7 @@ function isDirectOwnerEvidenceDisabled(
   evidence: OwnerEvidence,
   disabledKeys: ReadonlySet<string>
 ): boolean {
-  return disabledKeys.has(getDirectOwnerEvidenceKey(candidate, evidence));
+  return disabledKeys.has(normalizeKey(getDirectOwnerEvidenceKey(candidate, evidence)));
 }
 
 function getDirectOwnerEvidenceKey(candidate: Pick<OwnerCandidate, "key">, evidence: OwnerEvidence): string {
@@ -319,7 +326,7 @@ function isResourceGroupOwnerCandidateDisabled(
       candidate.key
     ].join(":");
 
-    if (disabledKeys.has(resourceGroupKey)) {
+    if (disabledKeys.has(normalizeKey(resourceGroupKey))) {
       return true;
     }
 
@@ -327,15 +334,83 @@ function isResourceGroupOwnerCandidateDisabled(
       return false;
     }
 
-    return disabledKeys.has([
+    return disabledKeys.has(normalizeKey([
       "resourceGroup",
       scope.subscriptionId,
       scope.resourceGroup,
       "principal",
       scope.principalId,
       candidate.key
-    ].join(":"));
+    ].join(":")));
   });
+}
+
+function mapResourceGroupOwnerCandidateViewRowToOwnerCandidate(
+  row: AzureResourceGroupOwnerCandidateViewRow,
+  index: number,
+  principalIds: string[] | undefined
+): OwnerCandidate[] {
+  return readPrincipalScopes(principalIds).map((principalId) => ({
+    key: getResourceGroupOwnerCandidateKey(row.ownerCandidate, row.ownerType, row.owner),
+    displayName: row.owner,
+    type: row.ownerType,
+    confidence: row.confidence,
+    source: inferResourceGroupOwnerCandidateSource(row.source),
+    rank: index + 1,
+    evidence: [
+      {
+        user: row.evidenceValue,
+        date: row.evidenceDate,
+        key: getScopedResourceGroupEvidenceKey(row, principalId)
+      }
+    ],
+    relatedScopes: [
+      buildResourceGroupRelatedScope(row, principalId)
+    ]
+  }));
+}
+
+function buildResourceGroupRelatedScope(
+  row: Pick<AzureResourceGroupOwnerCandidateViewRow, "subscriptionId" | "subscriptionName" | "resourceGroup">,
+  principalId: string | undefined
+): NonNullable<OwnerCandidate["relatedScopes"]>[number] {
+  const scope: NonNullable<OwnerCandidate["relatedScopes"]>[number] = {
+    subscriptionId: row.subscriptionId,
+    subscriptionName: row.subscriptionName,
+    resourceGroup: row.resourceGroup
+  };
+
+  if (principalId) {
+    scope.principalId = principalId;
+  }
+
+  return scope;
+}
+
+function readPrincipalScopes(principalIds: string[] | undefined): Array<string | undefined> {
+  const normalizedPrincipalIds = [
+    ...new Set((principalIds ?? []).map((principalId) => principalId.trim().toLowerCase()).filter(Boolean))
+  ];
+
+  return normalizedPrincipalIds.length > 0 ? normalizedPrincipalIds : [undefined];
+}
+
+function getScopedResourceGroupEvidenceKey(
+  row: Pick<AzureResourceGroupOwnerCandidateViewRow, "subscriptionId" | "resourceGroup" | "ownerCandidate" | "evidenceKey">,
+  principalId: string | undefined
+): string {
+  if (!principalId) {
+    return row.evidenceKey;
+  }
+
+  return [
+    "resourceGroup",
+    row.subscriptionId.trim().toLowerCase(),
+    row.resourceGroup.trim().toLowerCase(),
+    "principal",
+    principalId,
+    row.ownerCandidate
+  ].join(":");
 }
 
 function mapResourceGroupOwnershipSqlRowToOwnerCandidate(
@@ -348,7 +423,7 @@ function mapResourceGroupOwnershipSqlRowToOwnerCandidate(
     return [];
   }
 
-  const ownerType = inferResourceGroupOwnerType(owner, row.source, row.ownerCandidate);
+  const ownerType = row.ownerType ?? inferResourceGroupOwnerType(owner, row.source, row.ownerCandidate);
 
   return [
     {
@@ -358,7 +433,10 @@ function mapResourceGroupOwnershipSqlRowToOwnerCandidate(
       confidence: row.confidence,
       source: inferResourceGroupOwnerCandidateSource(row.source),
       rank: index + 1,
-      evidence: row.evidence,
+      evidence: row.evidence.map((evidence) => ({
+        ...evidence,
+        key: evidence.key ?? row.evidenceKey ?? undefined
+      })),
       relatedScopes: [
         {
           subscriptionId: row.subscriptionId,

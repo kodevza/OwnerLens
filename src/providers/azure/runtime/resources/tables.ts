@@ -8,8 +8,7 @@ import type {
   AzureSubscription as CoreAzureSubscription,
   AzureUserAssignedManagedIdentity as CoreAzureUserAssignedManagedIdentity
 } from "../../../../core/azure/resources";
-import { appConfig } from "../../../../core/config";
-import type { OwnerConfidence, OwnerEvidence } from "../../../../core/ownership/types";
+import type { OwnerConfidence, OwnerEvidence, OwnerType } from "../../../../core/ownership/types";
 import type {
   AzureActivityLog as AzureActivityLogInput,
   AzureResource as AzureResourceInput,
@@ -24,11 +23,28 @@ export type AzureResourceGroupOwnershipSqlRow = CoreAzureResourceGroup & {
   kind: "resourceGroup";
   owner: string | null;
   ownerCandidate: string | null;
+  ownerType: OwnerType | null;
   ownerDisplayName: string | null;
+  evidenceKey: string | null;
   principalId: string | null;
   confidence: OwnerConfidence;
   source: string;
   evidence: OwnerEvidence[];
+};
+
+export type AzureResourceGroupOwnerCandidateViewRow = {
+  subscriptionId: string;
+  subscriptionName: string;
+  resourceGroup: string;
+  owner: string;
+  ownerType: OwnerType;
+  ownerCandidate: string;
+  evidenceKey: string;
+  confidence: Exclude<OwnerConfidence, "none">;
+  source: string;
+  evidenceValue: string;
+  evidenceDate: string | null;
+  priority: number;
 };
 
 export type AzureResourceGroupOwnershipSqlTarget =
@@ -251,6 +267,48 @@ export async function readAzureResourceGroupOwnershipCollectionSqlRows(
   return readAzureResourceGroupOwnershipRows(connection, { limit });
 }
 
+export async function readAzureResourceGroupOwnerCandidateViewRows(
+  connection: DuckDBConnection,
+  target: { subscriptionId: string; resourceGroup: string },
+  limit: number
+): Promise<AzureResourceGroupOwnerCandidateViewRow[]> {
+  return (await readRows<AzureResourceGroupOwnerCandidateRow>(
+    connection,
+    `
+      select
+        subscription_id,
+        subscription_name,
+        resource_group,
+        owner,
+        owner_type,
+        owner_candidate,
+        evidence_key,
+        confidence,
+        source,
+        evidence_value,
+        evidence_date,
+        priority
+      from azure_resource_group_owner_candidates
+      where lower(trim(subscription_id)) = lower(trim($subscriptionId))
+        and lower(trim(resource_group)) = lower(trim($resourceGroup))
+      order by
+        case confidence
+          when 'high' then 3
+          when 'medium' then 2
+          when 'low' then 1
+          else 0
+        end desc,
+        priority
+      limit $limit
+    `,
+    {
+      subscriptionId: target.subscriptionId,
+      resourceGroup: target.resourceGroup,
+      limit: Math.max(1, Math.trunc(limit))
+    }
+  )).map(mapAzureResourceGroupOwnerCandidateRow);
+}
+
 async function readAzureResourceGroupOwnershipRows(
   connection: DuckDBConnection,
   options: {
@@ -287,89 +345,43 @@ async function readAzureResourceGroupOwnershipRows(
         select principal_id
         from target_principal_ids
       ),
-      owner_tags(name, confidence, owner_type, priority) as (
-        values ${getOwnerTagSqlValues()}
-      ),
-      tag_candidates as (
+      scoped_candidates as (
         select
-          rg.subscription_id,
-          rg.resource_group,
-          lower(trim(json_extract_string(tag_entry.value, '$'))) as owner,
-          tag.owner_type || ':' || lower(trim(json_extract_string(tag_entry.value, '$'))) as owner_candidate,
-          tag.confidence,
-          'tag.' || tag.name as source,
-          tag.name || '=' || json_extract_string(tag_entry.value, '$') as evidence_value,
-          null as evidence_date,
-          tag.priority
-        from target_resource_groups rg
-        join owner_tags tag on true
-        join json_each(coalesce(rg.tags, '{}'::json)) tag_entry
-          on lower(tag_entry.key) = lower(tag.name)
-        where trim(json_extract_string(tag_entry.value, '$')) <> ''
-      ),
-      owner_activity as (
-        select
-          rg.subscription_id as target_subscription_id,
-          rg.subscription_name as target_subscription_name,
-          rg.resource_group as target_resource_group,
-          log.*,
-          lower(trim(log.caller)) as normalized_caller
-        from azure_activity_logs log
+          candidate.subscription_id,
+          candidate.resource_group,
+          principal_scope.principal_id,
+          candidate.owner,
+          candidate.owner_type,
+          candidate.owner_candidate,
+          candidate.evidence_key,
+          candidate.confidence,
+          candidate.source,
+          candidate.evidence_value,
+          candidate.evidence_date,
+          candidate.priority
+        from azure_resource_group_owner_candidates candidate
         join target_resource_groups rg
-          on lower(trim(log.subscription_id)) = lower(trim(rg.subscription_id))
-          and lower(trim(coalesce(log.resource_group_name, regexp_extract(log.authorization_scope, '/resourceGroups/([^/]+)', 1)))) =
-            lower(trim(rg.resource_group))
-        where log.category = 'Administrative'
-          and log.status = 'Succeeded'
-          and trim(coalesce(log.caller, '')) <> ''
-          and (
-            contains(lower(coalesce(log.authorization_action, '') || ' ' || coalesce(log.operation_name_value, '')), '/write')
-            or contains(lower(coalesce(log.authorization_action, '') || ' ' || coalesce(log.operation_name_value, '')), '/action')
-          )
+          on lower(trim(candidate.subscription_id)) = lower(trim(rg.subscription_id))
+          and lower(trim(candidate.resource_group)) = lower(trim(rg.resource_group))
+        cross join target_principal_scope principal_scope
       ),
-      latest_activity_by_caller as (
+      candidate_records as (
         select
           *,
-          row_number() over (
-            partition by target_subscription_id, target_resource_group, normalized_caller
-            order by event_timestamp desc
-          ) as caller_rank
-        from owner_activity
-      ),
-      ranked_activity as (
-        select
-          *,
-          row_number() over (
-            partition by target_subscription_id, target_resource_group
-            order by event_timestamp desc
-          ) as target_rank
-        from latest_activity_by_caller
-        where caller_rank = 1
-      ),
-      activity_candidates as (
-        select
-          latest_log.target_subscription_id as subscription_id,
-          latest_log.target_resource_group as resource_group,
-          coalesce(
-            latest_principal.display_name || ' (' || latest_log.normalized_caller || ')',
-            latest_log.normalized_caller
-          ) as owner,
           case
-            when lower(coalesce(latest_log.caller_identity_type, '')) = 'app' then 'application'
-            when latest_principal.id is not null then 'application'
-            when contains(latest_log.normalized_caller, '@') then 'ownerUser'
-            else 'unknown'
-          end ||
-            ':' || lower(trim(latest_log.normalized_caller)) as owner_candidate,
-          'low' as confidence,
-          'activity.lastModifier' as source,
-          coalesce(latest_log.resource_id, latest_log.normalized_caller, '-') as evidence_value,
-          latest_log.event_timestamp as evidence_date,
-          1000 + latest_log.target_rank as priority
-        from ranked_activity latest_log
-        left join entra_service_principals latest_principal
-          on latest_log.normalized_caller = lower(latest_principal.id)
-          or latest_log.normalized_caller = lower(latest_principal.app_id)
+            when principal_id is null then evidence_key
+            else concat(
+              'resourceGroup:',
+              lower(trim(subscription_id)),
+              ':',
+              lower(trim(resource_group)),
+              ':principal:',
+              lower(trim(principal_id)),
+              ':',
+              owner_candidate
+            )
+          end as scoped_evidence_key
+        from scoped_candidates
       ),
       owner_candidates as (
         select
@@ -378,97 +390,37 @@ async function readAzureResourceGroupOwnershipRows(
             select 1
             from disabled_owner_evidence_keys disabled
             where disabled.provider = 'azure'
-              and (
-                lower(trim(disabled.owner_key)) = lower(trim(concat(
-                  'resourceGroup:',
-                  candidate.subscription_id,
-                  ':',
-                  candidate.resource_group,
-                  ':',
-                  candidate.owner_candidate
-                )))
-                or (
-                  candidate.principal_id is not null
-                  and lower(trim(disabled.owner_key)) = lower(trim(concat(
-                    'resourceGroup:',
-                    candidate.subscription_id,
-                    ':',
-                    candidate.resource_group,
-                    ':principal:',
-                    candidate.principal_id,
-                    ':',
-                    candidate.owner_candidate
-                  )))
-                )
-              )
+              and lower(trim(disabled.owner_key)) = lower(trim(candidate.scoped_evidence_key))
           ) as disabled,
           case
             when exists(
               select 1
               from disabled_owner_evidence_keys disabled
               where disabled.provider = 'azure'
-                and (
-                  lower(trim(disabled.owner_key)) = lower(trim(concat(
-                    'resourceGroup:',
-                    candidate.subscription_id,
-                    ':',
-                    candidate.resource_group,
-                    ':',
-                    candidate.owner_candidate
-                  )))
-                  or (
-                    candidate.principal_id is not null
-                    and lower(trim(disabled.owner_key)) = lower(trim(concat(
-                      'resourceGroup:',
-                      candidate.subscription_id,
-                      ':',
-                      candidate.resource_group,
-                      ':principal:',
-                      candidate.principal_id,
-                      ':',
-                      candidate.owner_candidate
-                    )))
-                  )
-                )
+                and lower(trim(disabled.owner_key)) = lower(trim(candidate.scoped_evidence_key))
             ) then to_json([
-              struct_pack(user := candidate.evidence_value, date := candidate.evidence_date, disabled := true)
+              struct_pack(user := candidate.evidence_value, date := candidate.evidence_date, key := candidate.scoped_evidence_key, disabled := true)
             ])
             else to_json([
-              struct_pack(user := candidate.evidence_value, date := candidate.evidence_date)
+              struct_pack(user := candidate.evidence_value, date := candidate.evidence_date, key := candidate.scoped_evidence_key)
             ])
           end as evidence
-        from (
-          select
-            subscription_id,
-            resource_group,
-            principal_scope.principal_id,
-            owner,
-            owner_candidate,
-            confidence,
-            source,
-            evidence_value,
-            evidence_date,
-            priority
-          from tag_candidates
-          cross join target_principal_scope principal_scope
-          union all
-          select
-            subscription_id,
-            resource_group,
-            principal_scope.principal_id,
-            owner,
-            owner_candidate,
-            confidence,
-            source,
-            evidence_value,
-            evidence_date,
-            priority
-          from activity_candidates
-          cross join target_principal_scope principal_scope
-        ) candidate
+        from candidate_records candidate
       ),
       selected_owners as (
-        select subscription_id, resource_group, principal_id, owner, owner_candidate, confidence, source, evidence, priority, disabled
+        select
+          subscription_id,
+          resource_group,
+          principal_id,
+          owner,
+          owner_type,
+          owner_candidate,
+          scoped_evidence_key as evidence_key,
+          confidence,
+          source,
+          evidence,
+          priority,
+          disabled
         from (
           select
             owner_candidates.*,
@@ -497,7 +449,9 @@ async function readAzureResourceGroupOwnershipRows(
         'resourceGroup:' || lower(rg.subscription_id) || ':' || lower(rg.resource_group) as target_key,
         case when owner.disabled then null else owner.owner end as owner,
         owner.owner_candidate,
+        owner.owner_type,
         owner.owner as owner_display_name,
+        owner.evidence_key,
         owner.principal_id,
         case when owner.disabled then 'none' else coalesce(owner.confidence, 'none') end as confidence,
         coalesce(owner.source, 'none') as source,
@@ -643,11 +597,28 @@ type AzureResourceGroupOwnershipRow = AzureResourceGroupRow & {
   target_key: string;
   owner: string | null;
   owner_candidate: string | null;
+  owner_type: OwnerType | null;
   owner_display_name: string | null;
+  evidence_key: string | null;
   principal_id: string | null;
   confidence: OwnerConfidence;
   source: string;
   evidence: string;
+};
+
+type AzureResourceGroupOwnerCandidateRow = {
+  subscription_id: string;
+  subscription_name: string;
+  resource_group: string;
+  owner: string;
+  owner_type: OwnerType;
+  owner_candidate: string;
+  evidence_key: string;
+  confidence: Exclude<OwnerConfidence, "none">;
+  source: string;
+  evidence_value: string;
+  evidence_date: string | null;
+  priority: number;
 };
 
 type AzureResourceRow = {
@@ -758,11 +729,32 @@ function mapAzureResourceGroupOwnershipRow(
     kind: "resourceGroup",
     owner: row.owner,
     ownerCandidate: row.owner_candidate,
+    ownerType: row.owner_type,
     ownerDisplayName: row.owner_display_name,
+    evidenceKey: row.evidence_key,
     principalId: row.principal_id,
     confidence: row.confidence,
     source: row.source,
     evidence: parseJsonArray<OwnerEvidence>(row.evidence)
+  };
+}
+
+function mapAzureResourceGroupOwnerCandidateRow(
+  row: AzureResourceGroupOwnerCandidateRow
+): AzureResourceGroupOwnerCandidateViewRow {
+  return {
+    subscriptionId: row.subscription_id,
+    subscriptionName: row.subscription_name,
+    resourceGroup: row.resource_group,
+    owner: row.owner,
+    ownerType: row.owner_type,
+    ownerCandidate: row.owner_candidate,
+    evidenceKey: row.evidence_key,
+    confidence: row.confidence,
+    source: row.source,
+    evidenceValue: row.evidence_value,
+    evidenceDate: row.evidence_date,
+    priority: readInteger(row.priority)
   };
 }
 
@@ -832,14 +824,10 @@ function parseJsonValue(value: string | null | undefined): unknown {
   return value ? JSON.parse(value) : null;
 }
 
-function getOwnerTagSqlValues(): string {
-  return appConfig.azure.ownership.ownerTags
-    .map((tag, index) =>
-      `('${escapeSqlString(tag.name)}', '${escapeSqlString(tag.confidence)}', '${escapeSqlString(tag.type)}', ${index + 1})`
-    )
-    .join(", ");
-}
+function readInteger(value: unknown): number {
+  if (typeof value === "number") {
+    return Math.trunc(value);
+  }
 
-function escapeSqlString(value: string): string {
-  return value.replaceAll("'", "''");
+  return Math.trunc(Number(value));
 }

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { LocalReportRuntime } from "./LocalReportRuntime";
+import { createLocalReportRuntime } from "./localReportRuntimeFactory";
 import { defineLocalReportRuntimeRestEndpoints } from "./localReportRuntimeRestEndpoints";
 import type { AzureSnapshot } from "../inputTransferObject/generated/AzureSnapshot";
 import type { EntraSnapshot } from "../inputTransferObject/generated/EntraSnapshot";
@@ -13,6 +14,7 @@ import {
 import { readAzureIdentityEnrichmentStatus } from "./enrichment/azureIdentityEnrichment";
 import type { SnapshotImportStatus } from "../../../core/runtime/snapshotImportRegistry";
 import { RemediationPackageStore } from "../../../core/runtime/RemediationPackageStore";
+import { defaultAppConfig, setAppConfig } from "../../../core/config";
 import {
   insertEntraServicePrincipalRows,
   readEntraServicePrincipalRowById,
@@ -2829,7 +2831,7 @@ test("reads resource group ownership evidence through the SQL projection", async
       evidence: [
         expect.objectContaining({
           ownerDisplayName: "alice@example.test",
-          confidence: "none",
+          confidence: "low",
           evidence: "/subscriptions/sub-1/resourceGroups/rg-activity/providers/Microsoft.Web/sites/app-a",
           date: "2026-06-05T10:00:00.000Z",
           disabled: true
@@ -2946,7 +2948,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
           confidence: "low",
           source: "activity.lastModifier",
           evidence: [
-            { user: "alice@example.test", date: "2026-06-05T10:00:00.000Z" }
+            expect.objectContaining({ user: "alice@example.test", date: "2026-06-05T10:00:00.000Z" })
           ]
         })
       ]
@@ -2972,7 +2974,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
           confidence: "low",
           source: "activity.lastModifier",
           evidence: [
-            { user: "bob@example.test", date: "2026-06-04T10:00:00.000Z" }
+            expect.objectContaining({ user: "bob@example.test", date: "2026-06-04T10:00:00.000Z" })
           ]
         })
       ]
@@ -2998,7 +3000,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
             owner: "bob@example.test",
             confidence: "low",
             evidence: [
-              { user: "bob@example.test", date: "2026-06-04T10:00:00.000Z" }
+              expect.objectContaining({ user: "bob@example.test", date: "2026-06-04T10:00:00.000Z" })
             ]
           })
         ]
@@ -3023,7 +3025,7 @@ test("persists disabled owner evidence keys in DuckDB across runtime restarts", 
             owner: "alice@example.test",
             confidence: "low",
             evidence: [
-              { user: "alice@example.test", date: "2026-06-05T10:00:00.000Z" }
+              expect.objectContaining({ user: "alice@example.test", date: "2026-06-05T10:00:00.000Z" })
             ]
           })
         ]
@@ -3467,7 +3469,7 @@ test("applies disabled resource group owner evidence when reading managed identi
         {
           ownerCandidateKey: "ownerGroup:platform-team",
           ownerDisplayName: "platform-team",
-          confidence: "none",
+          confidence: "high",
           evidence: "ownerGroup=platform-team",
           disabled: true
         }
@@ -3698,6 +3700,93 @@ test("materializes Azure identity enrichment runs and exposes the latest run in 
 
     expect(result[0]).toEqual({ run_count: "2" });
   });
+});
+
+test("seeds owner tag config from data config on runtime startup", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "ownerlens-runtime-"));
+  const databasePath = path.join(dataDir, "runtime.duckdb");
+  const runtimeConfig = {
+    features: {
+      zeroTrustAssessment: false
+    },
+    azure: {
+      ownership: {
+        ownerTags: [
+          {
+            name: "businessOwner",
+            confidence: "high",
+            type: "ownerUser"
+          },
+          {
+            name: "supportTeam",
+            confidence: "medium",
+            type: "ownerGroup"
+          }
+        ]
+      }
+    }
+  };
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot(),
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-app",
+        location: "westeurope",
+        tags: {
+          ownerGroup: "legacy-team",
+          businessOwner: "alice@example.test",
+          supportTeam: "platform-team"
+        }
+      }
+    ]
+  };
+
+  try {
+    await writeFile(path.join(dataDir, "config.json"), JSON.stringify(runtimeConfig), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+
+    const runtime = createLocalReportRuntime(dataDir, process.cwd());
+    try {
+      await runtime.initialize();
+    } finally {
+      await runtime.close();
+    }
+
+    const rows = await withDuckDb(async ({ connection }) => {
+      const reader = await connection.runAndReadAll(`
+        select owner, owner_type, owner_candidate, confidence, source, priority
+        from azure_resource_group_owner_candidates
+        where subscription_id = 'sub-1' and resource_group = 'rg-app'
+        order by priority
+      `);
+
+      return reader.getRowObjectsJson();
+    }, { databasePath });
+
+    expect(rows).toEqual([
+      {
+        owner: "alice@example.test",
+        owner_type: "ownerUser",
+        owner_candidate: "ownerUser:alice@example.test",
+        confidence: "high",
+        source: "tag.businessOwner",
+        priority: "1"
+      },
+      {
+        owner: "platform-team",
+        owner_type: "ownerGroup",
+        owner_candidate: "ownerGroup:platform-team",
+        confidence: "medium",
+        source: "tag.supportTeam",
+        priority: "2"
+      }
+    ]);
+  } finally {
+    setAppConfig(defaultAppConfig);
+    await rm(dataDir, { force: true, recursive: true });
+  }
 });
 
 function servicePrincipal(

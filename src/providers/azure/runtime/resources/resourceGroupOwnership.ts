@@ -19,9 +19,15 @@ import type { PermissionRiskLevel } from "../../../../core/risk/types";
 import type { OwnerReportRow } from "../ownership/azureOwnerReportTypes";
 import { evaluateAzureRoleAssignmentRisk } from "../enrichment/evaluateAzureRoleAssignmentRisk";
 
+type ResourceGroupOwnershipOwnerRow = OwnerReportRow & Partial<{
+  evidenceKey: string | null;
+  ownerCandidate: string | null;
+  ownerType: OwnerType | null;
+}>;
+
 export function buildResourceGroupOwnershipRows(
   resourceGroups: AzureResourceGroup[],
-  ownerRows: OwnerReportRow[],
+  ownerRows: ResourceGroupOwnershipOwnerRow[],
   roleAssignments: AzureRoleAssignment[] = [],
   servicePrincipals: EntraServicePrincipal[] = []
 ): ResourceGroupOwnershipRow[] {
@@ -113,23 +119,27 @@ const permissionRiskRank: Record<PermissionRiskLevel, number> = {
 
 function buildResourceGroupOwnerCandidates(
   group: AzureResourceGroup,
-  ownerRow: OwnerReportRow
+  ownerRow: ResourceGroupOwnershipOwnerRow
 ): OwnerCandidate[] {
   const owner = ownerRow.owner?.trim();
 
   if (!owner) {
     return [];
   }
+  const ownerType = ownerRow.ownerType ?? inferOwnerType(owner, ownerRow.source);
 
   return rankOwnerCandidates([
     {
-      key: getOwnerCandidateKey(owner, inferOwnerType(owner, ownerRow.source)),
+      key: getOwnerCandidateKey(owner, ownerType, ownerRow.ownerCandidate),
       displayName: owner,
-      type: inferOwnerType(owner, ownerRow.source),
+      type: ownerType,
       confidence: ownerRow.confidence,
       source: inferOwnerCandidateSource(ownerRow.source),
       rank: 0,
-      evidence: [...ownerRow.evidence],
+      evidence: ownerRow.evidence.map((entry) => ({
+        ...entry,
+        key: entry.key ?? ownerRow.evidenceKey ?? undefined
+      })),
       relatedScopes: [
         {
           subscriptionId: group.subscriptionId,
@@ -193,8 +203,10 @@ export function applyResourceGroupOwnerDisabledEvidence(
   });
 }
 
-function buildResourceGroupOwnerIndex(ownerRows: OwnerReportRow[]): Map<string, OwnerReportRow> {
-  const index = new Map<string, OwnerReportRow>();
+function buildResourceGroupOwnerIndex(
+  ownerRows: ResourceGroupOwnershipOwnerRow[]
+): Map<string, ResourceGroupOwnershipOwnerRow> {
+  const index = new Map<string, ResourceGroupOwnershipOwnerRow>();
 
   for (const row of ownerRows) {
     if (row.kind === "resourceGroup" && row.resourceGroup) {
@@ -207,7 +219,10 @@ function buildResourceGroupOwnerIndex(ownerRows: OwnerReportRow[]): Map<string, 
   return index;
 }
 
-function getPreferredOwnerRow(existing: OwnerReportRow, next: OwnerReportRow): OwnerReportRow {
+function getPreferredOwnerRow(
+  existing: ResourceGroupOwnershipOwnerRow,
+  next: ResourceGroupOwnershipOwnerRow
+): ResourceGroupOwnershipOwnerRow {
   const existingActiveEvidenceRank = getActiveEvidenceRank(existing);
   const nextActiveEvidenceRank = getActiveEvidenceRank(next);
 
@@ -232,7 +247,11 @@ function getResourceGroupTargetKey(subscriptionId: string, resourceGroup: string
   return ["resourceGroup", subscriptionId.toLowerCase(), resourceGroup.toLowerCase()].join(":");
 }
 
-function getOwnerCandidateKey(owner: string, type: OwnerType): string {
+function getOwnerCandidateKey(owner: string, type: OwnerType, ownerCandidate?: string | null): string {
+  if (ownerCandidate?.trim()) {
+    return ownerCandidate.trim();
+  }
+
   return `${type}:${owner.trim().toLowerCase()}`;
 }
 
