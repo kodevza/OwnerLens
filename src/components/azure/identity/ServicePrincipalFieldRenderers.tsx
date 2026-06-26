@@ -15,7 +15,7 @@ import type { OwnershipEvidenceTarget } from "../api";
 import { EntraLinkBadge, buildEntraEnterpriseApplicationPortalUrl } from "./EntraLinkBadge";
 import { ZtaRemediationBadge } from "../ZtaRemediationBadge";
 
-type EntraPrincipalSummaryRow = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & ZtaRemediationSummary & {
+type EntraPrincipalSummaryRow = EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<EntraPrincipalOwnerSummary> & Partial<ZtaRemediationSummary> & {
   accountEnabled?: boolean;
   appId?: string;
   displayName: string;

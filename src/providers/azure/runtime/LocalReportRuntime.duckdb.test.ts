@@ -1100,6 +1100,7 @@ test("enriches remediation package tasks with Azure principal summaries", async 
           displayName: "Example app",
           oauthPermissionsCount: 0,
           appRolesPermissionCount: 0,
+          entraPermissionCount: 0,
           entraPermissionRisk: "none",
           rbacRoleAssignmentCount: 0,
           rbacRoleLevel: "none",
@@ -2353,7 +2354,7 @@ test("skips unchanged Zero Trust Assessment report without appending duplicate r
   });
 });
 
-test("enriches Entra runtime collections with latest ZTA remediation summaries", async () => {
+test("does not enrich Entra runtime collections with ZTA remediation summaries", async () => {
   const entraSnapshot: EntraSnapshot = {
     meta: {
       provider: "entra",
@@ -2441,40 +2442,40 @@ test("enriches Entra runtime collections with latest ZTA remediation summaries",
 
     expect(queriedServicePrincipals).toMatchObject({
       collectionId: "entra.servicePrincipals",
-      columns: expect.arrayContaining(["ztaRemediationCountAll", "ztaRemediationFailedCount", "ztaMaxRisk"]),
       rows: [
         expect.objectContaining({
-          id: "sp-1",
-          ztaRemediationCountAll: 2,
-          ztaRemediationFailedCount: 1,
-          ztaMaxRisk: "high",
-          RemediationPackages: [
-            expect.objectContaining({
-              id: remediationPackage.id,
-              taskCount: remediationPackage.taskCount
-            })
-          ]
+          id: "sp-1"
         })
       ]
     });
+    expect(queriedServicePrincipals.columns).not.toEqual(expect.arrayContaining([
+      "ztaRemediationCountAll",
+      "ztaRemediationFailedCount",
+      "ztaMaxRisk",
+      "RemediationPackages"
+    ]));
+    expect(queriedServicePrincipals.rows[0]).not.toHaveProperty("ztaRemediationCountAll");
+    expect(queriedServicePrincipals.rows[0]).not.toHaveProperty("ztaRemediationFailedCount");
+    expect(queriedServicePrincipals.rows[0]).not.toHaveProperty("ztaMaxRisk");
+    expect(queriedServicePrincipals.rows[0]).not.toHaveProperty("RemediationPackages");
     expect(queriedManagedIdentities).toMatchObject({
       collectionId: "entra.managedIdentities",
-      columns: expect.arrayContaining(["ztaRemediationCountAll", "ztaRemediationFailedCount", "ztaMaxRisk"]),
       rows: [
         expect.objectContaining({
-          id: "principal-uami-1",
-          ztaRemediationCountAll: 2,
-          ztaRemediationFailedCount: 1,
-          ztaMaxRisk: "medium",
-          RemediationPackages: [
-            expect.objectContaining({
-              id: remediationPackage.id,
-              taskCount: remediationPackage.taskCount
-            })
-          ]
+          id: "principal-uami-1"
         })
       ]
     });
+    expect(queriedManagedIdentities.columns).not.toEqual(expect.arrayContaining([
+      "ztaRemediationCountAll",
+      "ztaRemediationFailedCount",
+      "ztaMaxRisk",
+      "RemediationPackages"
+    ]));
+    expect(queriedManagedIdentities.rows[0]).not.toHaveProperty("ztaRemediationCountAll");
+    expect(queriedManagedIdentities.rows[0]).not.toHaveProperty("ztaRemediationFailedCount");
+    expect(queriedManagedIdentities.rows[0]).not.toHaveProperty("ztaMaxRisk");
+    expect(queriedManagedIdentities.rows[0]).not.toHaveProperty("RemediationPackages");
     expect(servicePrincipalsCsv).toMatchObject({
       collectionId: "entra.servicePrincipals",
       fileName: "ownerlens-service-principals.csv",
@@ -2483,20 +2484,20 @@ test("enriches Entra runtime collections with latest ZTA remediation summaries",
     });
     expect(servicePrincipalsCsv.columns).not.toContain("owners");
     expect(servicePrincipalsCsv.columns).not.toContain("appOwners");
-    expect(servicePrincipalsCsv.body).toContain("ztaRemediationCountAll");
+    expect(servicePrincipalsCsv.body).not.toContain("ztaRemediationCountAll");
+    expect(servicePrincipalsCsv.body).not.toContain("RemediationPackages");
     expect(servicePrincipalsCsv.body).toContain("sp-1");
-    expect(servicePrincipalsCsv.body).toContain(remediationPackage.id);
     expect(managedIdentitiesCsv).toMatchObject({
       collectionId: "entra.managedIdentities",
       fileName: "ownerlens-managed-identities.csv",
       count: 1
     });
     expect(managedIdentitiesCsv.body).toContain("principal-uami-1");
-    expect(managedIdentitiesCsv.body).toContain(remediationPackage.id);
+    expect(managedIdentitiesCsv.body).not.toContain(remediationPackage.id);
   });
 });
 
-test("enriches service principals with ZTA remediations related to application object ids", async () => {
+test("keeps service principal list separate from ZTA remediations related to application object ids", async () => {
   const entraSnapshot: EntraSnapshot = {
     meta: {
       provider: "entra",
@@ -2540,7 +2541,7 @@ test("enriches service principals with ZTA remediations related to application o
     await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
     await writeFile(path.join(dataDir, "zta-report.json"), JSON.stringify(report), "utf8");
     await runtime.initialize();
-    const remediationPackage = await runtime.createZeroTrustAssessmentRemediationPackage({
+    await runtime.createZeroTrustAssessmentRemediationPackage({
       filters: {},
       selectedRowKeys: ["app-object-failed", "app-object-and-sp-deduped"]
     });
@@ -2554,26 +2555,19 @@ test("enriches service principals with ZTA remediations related to application o
       collectionId: "entra.servicePrincipals",
       rows: [
         expect.objectContaining({
-          id: "sp-1",
-          ztaRemediationCountAll: 2,
-          ztaRemediationFailedCount: 1,
-          ztaMaxRisk: "high",
-          RemediationPackages: [
-            expect.objectContaining({
-              id: remediationPackage.id,
-              taskCount: remediationPackage.taskCount
-            })
-          ]
+          id: "sp-1"
         }),
         expect.objectContaining({
-          id: "sp-2",
-          ztaRemediationCountAll: 0,
-          ztaRemediationFailedCount: 0,
-          ztaMaxRisk: "none",
-          RemediationPackages: []
+          id: "sp-2"
         })
       ]
     });
+    for (const row of queriedServicePrincipals.rows) {
+      expect(row).not.toHaveProperty("ztaRemediationCountAll");
+      expect(row).not.toHaveProperty("ztaRemediationFailedCount");
+      expect(row).not.toHaveProperty("ztaMaxRisk");
+      expect(row).not.toHaveProperty("RemediationPackages");
+    }
   });
 });
 
@@ -3559,6 +3553,271 @@ test("does not type a managed identity owner from disabled direct and principal-
   });
 });
 
+test("infers managed identity owner candidates from one RBAC resource group context", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 1
+    },
+    servicePrincipals: [servicePrincipal("mi-1", "client-mi-1", "Identity app", "ManagedIdentity")]
+  };
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      roleAssignmentCount: 1
+    },
+    resourceGroups: [resourceGroupWithOwner("rg-app", "app-owner@example.test")],
+    roleAssignments: [roleAssignmentForResourceGroup("mi-1", "Contributor", "rg-app")]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await runtime.initialize();
+
+    const managedIdentities = await runtime.queryEntraManagedIdentities({ page: 1, pageSize: 10 });
+
+    expect(managedIdentities.rows).toEqual([
+      expect.objectContaining({
+        id: "mi-1",
+        potentialOwners: ["app-owner@example.test"],
+        ownerConfidence: "high",
+        ownerCandidates: [
+          expect.objectContaining({
+            displayName: "app-owner@example.test",
+            source: "resourceGroupOwner",
+            relatedScopes: [
+              expect.objectContaining({
+                resourceGroup: "rg-app",
+                roleDefinitionName: "Contributor"
+              })
+            ]
+          })
+        ]
+      })
+    ]);
+  });
+});
+
+test("prefers managed identity home resource group over matching RBAC resource group target", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 1
+    },
+    servicePrincipals: [servicePrincipal("mi-1", "client-mi-1", "Identity app", "ManagedIdentity")]
+  };
+  const identityResourceId = "/subscriptions/sub-1/resourceGroups/rg-home/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-a";
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      userAssignedManagedIdentityCount: 1,
+      roleAssignmentCount: 1
+    },
+    resourceGroups: [resourceGroupWithOwner("rg-home", "home-owner@example.test")],
+    userAssignedManagedIdentities: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceId: identityResourceId,
+        name: "uami-a",
+        resourceGroup: "rg-home",
+        location: "westeurope",
+        clientId: "client-mi-1",
+        principalId: "mi-1",
+        tenantId: "tenant-1",
+        tags: null
+      }
+    ],
+    roleAssignments: [roleAssignmentForResourceGroup("mi-1", "Contributor", "rg-home")]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await runtime.initialize();
+
+    const managedIdentities = await runtime.queryEntraManagedIdentities({ page: 1, pageSize: 10 });
+
+    expect(managedIdentities.rows).toEqual([
+      expect.objectContaining({
+        id: "mi-1",
+        managedIdentityHomeSubscriptionId: "sub-1",
+        managedIdentityHomeResourceGroup: "rg-home",
+        managedIdentityHomeResourceId: identityResourceId,
+        potentialOwners: ["home-owner@example.test"],
+        ownerCandidates: [
+          expect.objectContaining({
+            displayName: "home-owner@example.test",
+            relatedScopes: [
+              expect.objectContaining({
+                resourceGroup: "rg-home",
+                scope: identityResourceId,
+                roleDefinitionName: null
+              })
+            ]
+          })
+        ]
+      })
+    ]);
+  });
+});
+
+test("infers managed identity owner candidates from multiple RBAC resource group contexts", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 1
+    },
+    servicePrincipals: [servicePrincipal("mi-1", "client-mi-1", "Identity app", "ManagedIdentity")]
+  };
+  const resourceGroups = [
+    resourceGroupWithOwner("rg-app", "app-owner@example.test"),
+    resourceGroupWithOwner("rg-data", "data-owner@example.test"),
+    resourceGroupWithOwner("rg-platform", "platform-owner@example.test")
+  ];
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      resourceGroupCount: resourceGroups.length,
+      roleAssignmentCount: resourceGroups.length
+    },
+    resourceGroups,
+    roleAssignments: resourceGroups.map((group) =>
+      roleAssignmentForResourceGroup("mi-1", "Reader", group.resourceGroup)
+    )
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await runtime.initialize();
+
+    const managedIdentities = await runtime.queryEntraManagedIdentities({ page: 1, pageSize: 10 });
+    const identity = managedIdentities.rows[0];
+
+    expect(identity?.potentialOwners).toEqual([
+      "app-owner@example.test",
+      "data-owner@example.test",
+      "platform-owner@example.test"
+    ]);
+    expect(identity?.ownerCandidates).toHaveLength(3);
+    const ownerCandidates = identity?.ownerCandidates as Array<{ relatedScopes: Array<{ resourceGroup?: string }> }>;
+    expect(ownerCandidates.flatMap((candidate) =>
+      candidate.relatedScopes.map((scope) => scope.resourceGroup)
+    )).toEqual(["rg-app", "rg-data", "rg-platform"]);
+  });
+});
+
+test("does not infer managed identity owner candidates from subscription-scoped RBAC", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 1
+    },
+    servicePrincipals: [
+      servicePrincipal("mi-1", "client-mi-1", "Identity app", {
+        servicePrincipalType: "ManagedIdentity",
+        servicePrincipalOwners: [{ id: "owner-direct-1", displayName: "direct-owner@example.test" }]
+      })
+    ]
+  };
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      roleAssignmentCount: 1
+    },
+    resourceGroups: [resourceGroupWithOwner("rg-app", "app-owner@example.test")],
+    roleAssignments: [
+      roleAssignment("mi-1", "Contributor", "/subscriptions/sub-1", "Subscription")
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await runtime.initialize();
+
+    const managedIdentities = await runtime.queryEntraManagedIdentities({ page: 1, pageSize: 10 });
+
+    expect(managedIdentities.rows).toEqual([
+      expect.objectContaining({
+        id: "mi-1",
+        potentialOwners: ["direct-owner@example.test"],
+        ownerCandidates: [
+          expect.objectContaining({
+            key: "entraServicePrincipalOwner:unknown:owner-direct-1"
+          })
+        ]
+      })
+    ]);
+  });
+});
+
+test("keeps managed identity RBAC resource group owner candidates isolated by principal", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 2
+    },
+    servicePrincipals: [
+      servicePrincipal("mi-a", "client-mi-a", "Identity A", "ManagedIdentity"),
+      servicePrincipal("mi-b", "client-mi-b", "Identity B", "ManagedIdentity")
+    ]
+  };
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      resourceGroupCount: 2,
+      roleAssignmentCount: 2
+    },
+    resourceGroups: [
+      resourceGroupWithOwner("rg-a", "owner-a@example.test"),
+      resourceGroupWithOwner("rg-b", "owner-b@example.test")
+    ],
+    roleAssignments: [
+      roleAssignmentForResourceGroup("mi-a", "Contributor", "rg-a"),
+      roleAssignmentForResourceGroup("mi-b", "Contributor", "rg-b")
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await runtime.initialize();
+
+    const managedIdentities = await runtime.queryEntraManagedIdentities({ page: 1, pageSize: 10 });
+    const byId = new Map(managedIdentities.rows.map((identity) => [identity.id, identity]));
+
+    expect(byId.get("mi-a")).toMatchObject({
+      potentialOwners: ["owner-a@example.test"],
+      ownerCandidates: [
+        expect.objectContaining({
+          relatedScopes: [expect.objectContaining({ resourceGroup: "rg-a" })]
+        })
+      ]
+    });
+    expect(byId.get("mi-b")).toMatchObject({
+      potentialOwners: ["owner-b@example.test"],
+      ownerCandidates: [
+        expect.objectContaining({
+          relatedScopes: [expect.objectContaining({ resourceGroup: "rg-b" })]
+        })
+      ]
+    });
+  });
+});
+
 test("persists disabled direct service principal owner evidence keys in DuckDB", async () => {
   const directOwnerKey = "entraServicePrincipalOwner:ownerUser:owner-sp-1:alice@example.test:";
   const entraSnapshot: EntraSnapshot = {
@@ -3652,7 +3911,8 @@ test("applies disabled resource group owner evidence when reading managed identi
     ...minimalAzureSnapshot([]),
     meta: {
       ...minimalAzureSnapshot([]).meta,
-      userAssignedManagedIdentityCount: 1
+      userAssignedManagedIdentityCount: 1,
+      roleAssignmentCount: 1
     },
     resourceGroups: [
       {
@@ -3679,6 +3939,9 @@ test("applies disabled resource group owner evidence when reading managed identi
         tenantId: "tenant-1",
         tags: null
       }
+    ],
+    roleAssignments: [
+      roleAssignmentForResourceGroup("principal-uami-1", "Contributor", "rg-app")
     ]
   };
 
@@ -4225,5 +4488,35 @@ function roleAssignment(
     canDelegate: false,
     condition: null,
     conditionVersion: null
+  };
+}
+
+function roleAssignmentForResourceGroup(
+  principalId: string,
+  roleDefinitionName: string,
+  resourceGroup: string
+): NonNullable<AzureSnapshot["roleAssignments"]>[number] {
+  return {
+    ...roleAssignment(
+      principalId,
+      roleDefinitionName,
+      `/subscriptions/sub-1/resourceGroups/${resourceGroup}`,
+      "ResourceGroup"
+    ),
+    roleAssignmentId: `${principalId}-${roleDefinitionName}-${resourceGroup}`,
+    scopeResourceGroup: resourceGroup
+  };
+}
+
+function resourceGroupWithOwner(
+  resourceGroup: string,
+  owner: string
+): NonNullable<AzureSnapshot["resourceGroups"]>[number] {
+  return {
+    subscriptionId: "sub-1",
+    subscriptionName: "Subscription One",
+    resourceGroup,
+    location: "westeurope",
+    tags: { ownerGroup: owner }
   };
 }

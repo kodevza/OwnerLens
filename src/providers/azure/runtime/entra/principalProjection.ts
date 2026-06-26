@@ -3,36 +3,36 @@ import type {
   ManagedIdentityPermissionRiskSummary
 } from "../../../../core/azure/identityEnrichment";
 import type { AzureRoleAssignment } from "../../../../core/azure/resources";
-import type { ZtaRemediationSummary } from "../../../../core/azure/ztaReport";
 import { isManagedIdentity, type ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
 import {
   isServicePrincipal,
   type AzureIdentityRuntimeEnrichment,
-  type EntraPrincipalPermissionSummary,
   type EntraPrincipalRbacSummary,
   type ServicePrincipal
 } from "../../../../core/azure/entra/servicePrincipal";
 import type { EntraServicePrincipal } from "../../../../core/azure/entra/types";
+import type { PermissionRiskLevel } from "../../../../core/risk/types";
+import type { EntraServicePrincipalRuntimeRow } from "./domain/servicePrincipalsTable";
+
+type EntraServicePrincipalProjectionRow = EntraServicePrincipal & Omit<
+  EntraServicePrincipalRuntimeRow,
+  keyof EntraServicePrincipal
+>;
 
 export function toServicePrincipals(
-  servicePrincipals: EntraServicePrincipal[],
-  enrichment?: LatestAzureIdentityEnrichment,
-  permissionsByPrincipalId: Map<string, EntraPrincipalPermissionSummary> = new Map(),
-  ztaSummariesByPrincipalId: Map<string, ZtaRemediationSummary> = new Map()
+  servicePrincipals: EntraServicePrincipalProjectionRow[],
+  enrichment?: LatestAzureIdentityEnrichment
 ): ServicePrincipal[] {
   return servicePrincipals.filter(isServicePrincipal).map((servicePrincipal) => ({
     ...servicePrincipal,
     ...getAzureIdentityRuntimeEnrichment(servicePrincipal, enrichment),
-    ...getEntraPrincipalPermissionSummary(servicePrincipal, permissionsByPrincipalId),
-    ...getZtaRemediationSummary(servicePrincipal, ztaSummariesByPrincipalId)
+    ...getEntraPrincipalPermissionSummary(servicePrincipal)
   }));
 }
 
 export function toManagedIdentities(
-  servicePrincipals: EntraServicePrincipal[],
-  enrichment?: LatestAzureIdentityEnrichment,
-  permissionsByPrincipalId: Map<string, EntraPrincipalPermissionSummary> = new Map(),
-  ztaSummariesByPrincipalId: Map<string, ZtaRemediationSummary> = new Map()
+  servicePrincipals: EntraServicePrincipalProjectionRow[],
+  enrichment?: LatestAzureIdentityEnrichment
 ): ManagedIdentity[] {
   return servicePrincipals.filter(isManagedIdentity).map((servicePrincipal) => {
     const assignmentEnrichment = enrichment?.managedIdentityAssignmentsByServicePrincipalId.get(
@@ -42,47 +42,32 @@ export function toManagedIdentities(
     return {
       ...servicePrincipal,
       ...getAzureIdentityRuntimeEnrichment(servicePrincipal, enrichment),
-      ...getEntraPrincipalPermissionSummary(servicePrincipal, permissionsByPrincipalId),
-      ...getZtaRemediationSummary(servicePrincipal, ztaSummariesByPrincipalId),
-      resourceGroup: assignmentEnrichment?.assignedResourceGroups[0],
+      ...getEntraPrincipalPermissionSummary(servicePrincipal),
+      resourceGroup: servicePrincipal.managedIdentityHomeResourceGroup,
       managedIdentityAssignments: assignmentEnrichment?.managedIdentityAssignments ?? [],
       assignedResourceGroups: assignmentEnrichment?.assignedResourceGroups ?? []
     };
   });
 }
 
-function getZtaRemediationSummary(
-  servicePrincipal: EntraServicePrincipal,
-  ztaSummariesByPrincipalId: Map<string, ZtaRemediationSummary>
-): ZtaRemediationSummary {
-  return ztaSummariesByPrincipalId.get(servicePrincipal.id.toLowerCase()) ?? createEmptyZtaRemediationSummary();
-}
-
 function getEntraPrincipalPermissionSummary(
-  servicePrincipal: EntraServicePrincipal,
-  permissionsByPrincipalId: Map<string, EntraPrincipalPermissionSummary>
-): EntraPrincipalPermissionSummary {
-  return permissionsByPrincipalId.get(servicePrincipal.id.toLowerCase()) ?? createEmptyPermissionSummary();
-}
-
-function createEmptyPermissionSummary(): EntraPrincipalPermissionSummary {
+  servicePrincipal: EntraServicePrincipalProjectionRow
+): {
+  oauthPermissionsCount: number;
+  appRolesPermissionCount: number;
+  entraPermissionCount: number;
+  entraPermissionRisk: PermissionRiskLevel;
+} {
   return {
-    oauthPermissionsCount: 0,
-    appRolesPermissionCount: 0,
-    entraPermissionRisk: "none"
-  };
-}
-
-function createEmptyZtaRemediationSummary(): ZtaRemediationSummary {
-  return {
-    ztaRemediationCountAll: 0,
-    ztaRemediationFailedCount: 0,
-    ztaMaxRisk: "none"
+    oauthPermissionsCount: servicePrincipal.oauthPermissionsCount ?? 0,
+    appRolesPermissionCount: servicePrincipal.appRolesPermissionCount ?? 0,
+    entraPermissionCount: servicePrincipal.entraPermissionCount ?? 0,
+    entraPermissionRisk: servicePrincipal.entraPermissionRisk ?? "none"
   };
 }
 
 function getAzureIdentityRuntimeEnrichment(
-  servicePrincipal: EntraServicePrincipal,
+  servicePrincipal: EntraServicePrincipalProjectionRow,
   enrichment?: LatestAzureIdentityEnrichment
 ): AzureIdentityRuntimeEnrichment {
   const roleAssignments =
@@ -91,9 +76,9 @@ function getAzureIdentityRuntimeEnrichment(
     enrichment?.accessRiskByPrincipalId.get(servicePrincipal.id.toLowerCase()) ?? createRiskSummary(servicePrincipal.id);
 
   return {
-    permissionRisk: permissionRisk.riskLevel,
+    permissionRisk: servicePrincipal.permissionRisk ?? permissionRisk.riskLevel,
     roleAssignments,
-    ...createRbacSummary(permissionRisk, roleAssignments)
+    ...createRbacSummary(servicePrincipal, roleAssignments)
   };
 }
 
@@ -109,12 +94,12 @@ function createRiskSummary(principalId: string): ManagedIdentityPermissionRiskSu
 }
 
 function createRbacSummary(
-  permissionRisk: ManagedIdentityPermissionRiskSummary,
+  servicePrincipal: EntraServicePrincipalProjectionRow,
   roleAssignments: AzureRoleAssignment[]
 ): EntraPrincipalRbacSummary {
   return {
-    rbacRoleAssignmentCount: roleAssignments.length,
-    rbacRoleLevel: permissionRisk.riskLevel,
+    rbacRoleAssignmentCount: servicePrincipal.rbacRoleAssignmentCount ?? 0,
+    rbacRoleLevel: servicePrincipal.rbacRoleLevel ?? "none",
     rbacSubscriptionCount: countRbacSubscriptions(roleAssignments)
   };
 }

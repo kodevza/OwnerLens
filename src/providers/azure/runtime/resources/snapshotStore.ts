@@ -2,6 +2,7 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 
 import type { LocalSnapshotData } from "../../../../core/runtime/localSnapshotFiles";
 import type { AzureSnapshot } from "../../inputTransferObject/generated/AzureSnapshot";
+import { rebuildAzureManagedIdentityHomeContext } from "./managedIdentityHomeContextTable";
 import type { NormalizedAzureSnapshot } from "./normalizeAzureSnapshot";
 import { importAzureResourcesSnapshotMetadata } from "./snapshotMetadataTable";
 import {
@@ -33,6 +34,7 @@ export async function importAzureResourcesSnapshotToDuckDb(
     await connection.run("delete from azure_resource_groups");
     await connection.run("delete from azure_resources");
     await connection.run("delete from azure_user_assigned_managed_identities");
+    await connection.run("delete from azure_managed_identity_home_context");
     await connection.run("delete from azure_role_assignments");
     await connection.run("delete from azure_activity_logs");
 
@@ -50,6 +52,7 @@ export async function importAzureResourcesSnapshotToDuckDb(
     await insertAzureResourceGroupRows(connection, resourceGroups);
     await insertAzureResourceRows(connection, resources);
     await insertAzureUserAssignedManagedIdentityRows(connection, userAssignedManagedIdentities);
+    await rebuildAzureManagedIdentityHomeContext(connection);
     await insertAzureRoleAssignmentRows(connection, roleAssignments);
     await insertAzureActivityLogRows(connection, activityLogs);
 

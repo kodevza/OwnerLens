@@ -11,12 +11,15 @@ import type { EntraServicePrincipal } from "./types";
 export type ManagedIdentity = EntraServicePrincipal & AzureIdentityRuntimeEnrichment & {
   servicePrincipalType: "ManagedIdentity";
   resourceGroup?: string;
+  managedIdentityHomeSubscriptionId?: string;
+  managedIdentityHomeResourceGroup?: string;
+  managedIdentityHomeResourceId?: string;
   managedIdentityAssignments: AzureManagedIdentityResourceAssignment[];
   assignedResourceGroups: string[];
   ownerCandidates?: OwnerCandidate[];
   potentialOwners?: string[];
   ownerConfidence?: OwnerConfidence;
-} & EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & ZtaRemediationSummary;
+} & EntraPrincipalPermissionSummary & EntraPrincipalRbacSummary & Partial<ZtaRemediationSummary>;
 
 export function isManagedIdentity(servicePrincipal: EntraServicePrincipal): servicePrincipal is ManagedIdentity {
   return servicePrincipal.servicePrincipalType === "ManagedIdentity";
