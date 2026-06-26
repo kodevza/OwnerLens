@@ -7,7 +7,7 @@ import { Card } from "../../../report/components/ui/card";
 import { EntraUserGroupsDropdown } from "./EntraUserGroupsDropdown";
 import { readOwnershipEvidence, updateEvidenceStatus, type EvidenceStatus, type OwnershipEvidenceTarget } from "../api";
 import { ownershipEvidenceFields } from "./ownershipEvidenceFields";
-import { buildOwnershipEvidenceFieldRenderers, getOwnerCandidateStatusKey } from "./OwnershipEvidenceRenderers";
+import { buildOwnershipEvidenceFieldRenderers } from "./OwnershipEvidenceRenderers";
 import type { AzureRbacPrincipalSelection } from "./ServicePrincipalFieldRenderers";
 
 type LoadState =
@@ -115,7 +115,7 @@ export function OwnershipEvidenceComponent({
 
   const handleStatusChange = useCallback(
     async (evidence: OwnershipEvidenceItem, status: EvidenceStatus) => {
-      const statusKey = getOwnerCandidateStatusKey(target, evidence);
+      const statusKey = evidence.statusKey;
       if (!statusKey) {
         return;
       }
@@ -124,7 +124,7 @@ export function OwnershipEvidenceComponent({
 
       try {
         await updateEvidenceStatus({ key: statusKey, status });
-        setLoadState((current) => markEvidenceStatus(current, target, statusKey, status));
+        setLoadState((current) => markEvidenceStatus(current, statusKey, status));
         try {
           await loadOwnershipEvidence(new AbortController().signal, { showLoading: false });
         } catch {
@@ -143,7 +143,7 @@ export function OwnershipEvidenceComponent({
         });
       }
     },
-    [loadOwnershipEvidence, target]
+    [loadOwnershipEvidence]
   );
 
   const handleUserGroupsClick = useCallback(
@@ -182,10 +182,9 @@ export function OwnershipEvidenceComponent({
           : undefined,
         onUserGroupsClick: handleUserGroupsClick,
         onStatusChange: handleStatusChange,
-        target,
         updatingEvidenceKeys
       }),
-    [handleStatusChange, handleUserGroupsClick, onAzureRbacClick, onOwnershipEvidenceClick, target, updatingEvidenceKeys]
+    [handleStatusChange, handleUserGroupsClick, onAzureRbacClick, onOwnershipEvidenceClick, updatingEvidenceKeys]
   );
 
   if (loadState.status === "loading") {
@@ -228,7 +227,6 @@ export function OwnershipEvidenceComponent({
 
 function markEvidenceStatus(
   current: LoadState,
-  target: OwnershipEvidenceTarget,
   statusKey: string,
   status: EvidenceStatus
 ): LoadState {
@@ -241,7 +239,7 @@ function markEvidenceStatus(
     response: {
       ...current.response,
       evidence: current.response.evidence.map((item) =>
-        getOwnerCandidateStatusKey(target, item) === statusKey
+        item.statusKey === statusKey
           ? { ...item, disabled: status === "inactive" }
           : item
       )

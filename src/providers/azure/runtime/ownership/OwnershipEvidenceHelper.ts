@@ -31,6 +31,7 @@ export function flattenCandidateEvidence(candidates: OwnerCandidate[]): Ownershi
     candidate.evidence.map((evidence) => {
       const item: OwnershipEvidenceItem = {
         key: evidence.key ?? getOwnershipEvidenceItemKey(candidate, evidence),
+        statusKey: null,
         ownerCandidateKey: candidate.key,
         ownerDisplayName: candidate.displayName,
         ownerType: candidate.type,

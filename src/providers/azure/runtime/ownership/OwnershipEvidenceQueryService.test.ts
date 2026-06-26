@@ -50,6 +50,7 @@ test("returns indirect cost center tag evidence for a service principal with Azu
     evidence: [
       {
         key: "ownerTag:cc-1001:costcenter=cc-1001:",
+        statusKey: "resourceGroup:sub-1:rg-api:principal:sp-rbac:ownerTag:cc-1001",
         ownerCandidateKey: "ownerTag:cc-1001",
         ownerDisplayName: "cc-1001",
         ownerType: "ownerTag",
@@ -119,6 +120,7 @@ test("returns indirect activity log owner evidence for a service principal with 
     evidence: [
       {
         key: "ownerUser:alice@example.test:alice@example.test:2026-06-05T10:00:00.000Z",
+        statusKey: "resourceGroup:sub-1:rg-api:principal:sp-rbac:ownerUser:alice@example.test",
         ownerCandidateKey: "ownerUser:alice@example.test",
         ownerDisplayName: "alice@example.test",
         ownerType: "ownerUser",
@@ -220,6 +222,7 @@ test("returns the app caller as indirect activity log owner evidence for a servi
     evidence: [
       {
         key: `application:${callerObjectId}:${callerObjectId}:2026-06-13T14:19:58.4125071Z`,
+        statusKey: `resourceGroup:${subscriptionId}:${resourceGroup}:principal:sp-rbac:application:${callerObjectId}`,
         ownerCandidateKey: `application:${callerObjectId}`,
         ownerDisplayName: callerObjectId,
         ownerType: "application",
@@ -305,6 +308,7 @@ test("returns direct service principal, application, and tag owner evidence for 
     evidence: [
       {
         key: "entraApplicationOwner:ownerGroup:app-owner-1:app-owner@example.test:",
+        statusKey: "entraApplicationOwner:ownerGroup:app-owner-1:app-owner@example.test:",
         ownerCandidateKey: "entraApplicationOwner:ownerGroup:app-owner-1",
         ownerDisplayName: "app-owner@example.test",
         ownerType: "ownerGroup",
@@ -319,6 +323,7 @@ test("returns direct service principal, application, and tag owner evidence for 
       },
       {
         key: "entraServicePrincipalOwner:ownerUser:sp-owner-1:sp-owner@example.test:",
+        statusKey: "entraServicePrincipalOwner:ownerUser:sp-owner-1:sp-owner@example.test:",
         ownerCandidateKey: "entraServicePrincipalOwner:ownerUser:sp-owner-1",
         ownerDisplayName: "sp-owner@example.test",
         ownerType: "ownerUser",
@@ -333,6 +338,7 @@ test("returns direct service principal, application, and tag owner evidence for 
       },
       {
         key: "ownerUser:platform-team:owner=platform-team:",
+        statusKey: "ownerUser:platform-team:owner=platform-team:",
         ownerCandidateKey: "ownerUser:platform-team",
         ownerDisplayName: "platform-team",
         ownerType: "ownerUser",
@@ -623,6 +629,7 @@ test("returns resource group evidence for a managed identity with a resolved res
         evidence: "ownerGroup=identity-platform",
         date: null,
         key: "resourceGroup:sub-1:rg-mi:principal:mi-principal-id:ownerGroup:identity-platform",
+        statusKey: "resourceGroup:sub-1:rg-mi:principal:mi-principal-id:ownerGroup:identity-platform",
         relatedScopes: [
           {
             subscriptionId: "sub-1",
@@ -813,6 +820,7 @@ test("returns direct service principal owner and tag evidence for a managed iden
     evidence: [
       {
         key: "entraServicePrincipalOwner:ownerUser:sp-owner-1:mi-owner@example.test:",
+        statusKey: "entraServicePrincipalOwner:ownerUser:sp-owner-1:mi-owner@example.test:",
         ownerCandidateKey: "entraServicePrincipalOwner:ownerUser:sp-owner-1",
         ownerDisplayName: "mi-owner@example.test",
         ownerType: "ownerUser",
@@ -827,6 +835,7 @@ test("returns direct service principal owner and tag evidence for a managed iden
       },
       {
         key: "ownerUser:identity-platform:owner=identity-platform:",
+        statusKey: "ownerUser:identity-platform:owner=identity-platform:",
         ownerCandidateKey: "ownerUser:identity-platform",
         ownerDisplayName: "identity-platform",
         ownerType: "ownerUser",
@@ -1080,6 +1089,7 @@ test("returns direct resource group cost center tag evidence", async () => {
         evidence: "costCenter=CC-1001",
         date: null,
         key: "resourceGroup:sub-1:rg-api:ownerTag:cc-1001",
+        statusKey: "resourceGroup:sub-1:rg-api:ownerTag:cc-1001",
         relatedScopes: [
           {
             subscriptionId: "sub-1",

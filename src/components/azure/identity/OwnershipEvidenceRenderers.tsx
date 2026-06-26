@@ -20,14 +20,12 @@ export function buildOwnershipEvidenceFieldRenderers({
   onApplicationRbacClick,
   onUserGroupsClick,
   onStatusChange,
-  target,
   updatingEvidenceKeys
 }: {
   onApplicationEvidenceClick?: (evidence: OwnershipEvidenceItem, target: OwnershipEvidenceTarget) => void;
   onApplicationRbacClick?: (evidence: OwnershipEvidenceItem, target: OwnershipEvidenceTarget) => void;
   onUserGroupsClick: (evidence: OwnershipEvidenceItem, event: MouseEvent<HTMLButtonElement>) => void;
   onStatusChange: (evidence: OwnershipEvidenceItem, status: EvidenceStatus) => void;
-  target: OwnershipEvidenceTarget;
   updatingEvidenceKeys: ReadonlySet<string>;
 }): ReportColumnRenderers<OwnershipEvidenceItem> {
   return {
@@ -120,7 +118,7 @@ export function buildOwnershipEvidenceFieldRenderers({
       </div>
     ),
     status: (evidence) => {
-      const statusKey = getOwnerCandidateStatusKey(target, evidence);
+      const statusKey = evidence.statusKey;
       const isUpdating = statusKey ? updatingEvidenceKeys.has(statusKey) : false;
       const nextStatus: EvidenceStatus = evidence.disabled ? "active" : "inactive";
       const nextStatusLabel = evidence.disabled ? "Active" : "Inactive";
@@ -173,36 +171,4 @@ function getApplicationEvidenceTarget(evidence: OwnershipEvidenceItem): Ownershi
     kind: "servicePrincipal",
     principalId
   };
-}
-
-export function getOwnerCandidateStatusKey(
-  target: OwnershipEvidenceTarget,
-  evidence: OwnershipEvidenceItem
-): string | null {
-  if (target.kind === "resourceGroup") {
-    return [
-      "resourceGroup",
-      target.subscriptionId,
-      target.resourceGroup,
-      evidence.ownerCandidateKey
-    ].join(":");
-  }
-
-  if (evidence.path === "direct") {
-    return evidence.key;
-  }
-
-  const scope = evidence.relatedScopes.find((candidateScope) => candidateScope.subscriptionId && candidateScope.resourceGroup);
-  if (!scope?.subscriptionId || !scope.resourceGroup) {
-    return null;
-  }
-
-  return [
-    "resourceGroup",
-    scope.subscriptionId,
-    scope.resourceGroup,
-    "principal",
-    target.principalId,
-    evidence.ownerCandidateKey
-  ].join(":");
 }

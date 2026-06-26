@@ -152,8 +152,7 @@ export const collectionResponseSchema = (collectionId: string, rowSchema: Runtim
 });
 
 export const runtimeRowSchema: RuntimeRestJsonSchema = {
-  type: "object",
-  additionalProperties: true
+  type: "object"
 };
 
 export const powershellScriptResponseSchema: RuntimeRestJsonSchema = {
@@ -393,8 +392,7 @@ export const ownerCandidateStatusResponseSchema: RuntimeRestJsonSchema = {
 };
 
 export const entraPermissionsResponseSchema: RuntimeRestJsonSchema = {
-  type: "object",
-  additionalProperties: true
+  type: "object"
 };
 
 export const entraUserGroupsResponseSchema: RuntimeRestJsonSchema = {
@@ -420,18 +418,18 @@ export const entraUserGroupsResponseSchema: RuntimeRestJsonSchema = {
 
 export const ownershipEvidenceResponseSchema: RuntimeRestJsonSchema = {
   type: "object",
-  additionalProperties: true,
   required: ["target", "evidence"],
   properties: {
     target: {
-      type: "object",
-      additionalProperties: true
+      type: "object"
     },
     evidence: {
       type: "array",
       items: {
         type: "object",
-        additionalProperties: true
+        properties: {
+          statusKey: { type: ["string", "null"] }
+        }
       }
     },
     page: { type: "integer" },
@@ -448,7 +446,6 @@ function querySchema(
   return {
     type: "object",
     required,
-    additionalProperties: true,
     properties,
     patternProperties
   };

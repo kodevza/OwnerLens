@@ -562,8 +562,7 @@
                     "rows": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "additionalProperties": true
+                        "type": "object"
                       }
                     },
                     "page": {
@@ -838,8 +837,7 @@
                     "rows": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "additionalProperties": true
+                        "type": "object"
                       }
                     },
                     "page": {
@@ -1047,8 +1045,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "type": "object"
                 }
               }
             }
@@ -1529,8 +1526,7 @@
                     "rows": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "additionalProperties": true
+                        "type": "object"
                       }
                     },
                     "page": {
@@ -1800,8 +1796,7 @@
                     "rows": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "additionalProperties": true
+                        "type": "object"
                       }
                     },
                     "page": {
@@ -2071,8 +2066,7 @@
                     "rows": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "additionalProperties": true
+                        "type": "object"
                       }
                     },
                     "page": {
@@ -2347,8 +2341,7 @@
                     "rows": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "additionalProperties": true
+                        "type": "object"
                       }
                     },
                     "page": {
@@ -2618,8 +2611,7 @@
                     "rows": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "additionalProperties": true
+                        "type": "object"
                       }
                     },
                     "page": {
@@ -2903,8 +2895,7 @@
                     "rows": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "additionalProperties": true
+                        "type": "object"
                       }
                     },
                     "page": {
@@ -3171,21 +3162,26 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true,
                   "required": [
                     "target",
                     "evidence"
                   ],
                   "properties": {
                     "target": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "type": "object"
                     },
                     "evidence": {
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "additionalProperties": true
+                        "properties": {
+                          "statusKey": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        }
                       }
                     },
                     "page": {
@@ -3684,8 +3680,7 @@
                         "rows": {
                           "type": "array",
                           "items": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "type": "object"
                           }
                         },
                         "page": {
@@ -5167,8 +5162,7 @@
                     "rows": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "additionalProperties": true
+                        "type": "object"
                       }
                     },
                     "page": {
