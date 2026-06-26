@@ -1,13 +1,8 @@
-import { RuntimeHttpError } from "../../../../core/runtime/localSnapshotFiles";
 import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
 import type {
   EntraPrincipalAzureRemediationSummary,
   ServicePrincipal
 } from "../../../../core/azure/entra/servicePrincipal";
-import type {
-  AzureUserAssignedManagedIdentity,
-  ResourceGroupOwnershipRow
-} from "../../../../core/azure/resources";
 import type {
   ZtaRemediationPackageSummary,
   ZtaRemediationSummary
@@ -20,16 +15,9 @@ import {
 } from "../../../../core/runtime/collections";
 import type { RuntimeCollectionCsvExport } from "../../../../core/runtime/collectionExport";
 import type { DisabledOwnerEvidenceStore } from "../../../../core/runtime/DisabledOwnerEvidenceStore";
-import type { AzureResourcesCollectionQueryService } from "../resources/AzureResourcesCollectionQueryService";
-import type { LocalAzureResourcesReportRuntime } from "../resources/LocalAzureResourcesReportRuntime";
 import type { ExportService } from "../ExportService";
 import type { LocalEntraReportRuntime } from "./LocalEntraReportRuntime";
 import { getRuntimeServicePrincipalFilters } from "./domain/servicePrincipalsTable";
-import {
-  projectManagedIdentityOwners,
-  projectServicePrincipalOwners
-} from "../ownership/principalOwnerProjection";
-import { readEntraPrincipalDirectOwnerCandidates } from "../ownership/OwnershipEvidenceHelper";
 import { maxOwnerConfidence } from "../../../../core/ownership/ownerCandidateRanking";
 import type { OwnerCandidate, OwnerConfidence } from "../../../../core/ownership/types";
 
@@ -40,8 +28,6 @@ export type EntraZeroTrustAssessmentQueries = {
 
 export type EntraCollectionQueryServiceOptions = {
   entra: LocalEntraReportRuntime;
-  azureResources: LocalAzureResourcesReportRuntime;
-  azureResourcesQueries: AzureResourcesCollectionQueryService;
   zeroTrustAssessmentQueries: EntraZeroTrustAssessmentQueries;
   disabledEvidenceStore: Pick<DisabledOwnerEvidenceStore, "readKeys">;
   exportService: ExportService;
@@ -49,16 +35,12 @@ export type EntraCollectionQueryServiceOptions = {
 
 export class EntraCollectionQueryService {
   private readonly entra: LocalEntraReportRuntime;
-  private readonly azureResources: LocalAzureResourcesReportRuntime;
-  private readonly azureResourcesQueries: AzureResourcesCollectionQueryService;
   private readonly zeroTrustAssessmentQueries: EntraZeroTrustAssessmentQueries;
   private readonly disabledEvidenceStore: Pick<DisabledOwnerEvidenceStore, "readKeys">;
   private readonly exportService: ExportService;
 
   constructor(options: EntraCollectionQueryServiceOptions) {
     this.entra = options.entra;
-    this.azureResources = options.azureResources;
-    this.azureResourcesQueries = options.azureResourcesQueries;
     this.zeroTrustAssessmentQueries = options.zeroTrustAssessmentQueries;
     this.disabledEvidenceStore = options.disabledEvidenceStore;
     this.exportService = options.exportService;
@@ -71,7 +53,7 @@ export class EntraCollectionQueryService {
     const collection = buildPaginatedCollection(
       "entra.servicePrincipals",
       rows,
-      getRuntimePrincipalCollectionOptions(options)
+      getRuntimePrincipalCollectionOptions(options, rows.length)
     );
 
     return withDuckDbCount(collection, await this.countServicePrincipalRows(options), options);
@@ -93,7 +75,7 @@ export class EntraCollectionQueryService {
     const collection = buildPaginatedCollection(
       "entra.managedIdentities",
       rows,
-      getRuntimePrincipalCollectionOptions(options)
+      getRuntimePrincipalCollectionOptions(options, rows.length)
     );
 
     return withDuckDbCount(collection, await this.countManagedIdentityRows(options), options);
@@ -129,13 +111,13 @@ export class EntraCollectionQueryService {
       summaries.set(normalizedPrincipalId, {
         id: servicePrincipal.id,
         displayName: servicePrincipal.displayName,
-        roleAssignments: servicePrincipal.roleAssignments,
-        oauthPermissionsCount: servicePrincipal.oauthPermissionsCount,
-        appRolesPermissionCount: servicePrincipal.appRolesPermissionCount,
-        entraPermissionRisk: servicePrincipal.entraPermissionRisk,
-        rbacRoleAssignmentCount: servicePrincipal.rbacRoleAssignmentCount,
-        rbacRoleLevel: servicePrincipal.rbacRoleLevel,
-        rbacSubscriptionCount: servicePrincipal.rbacSubscriptionCount,
+        roleAssignments: [],
+        oauthPermissionsCount: 0,
+        appRolesPermissionCount: 0,
+        entraPermissionRisk: "none",
+        rbacRoleAssignmentCount: 0,
+        rbacRoleLevel: "none",
+        rbacSubscriptionCount: 0,
         potentialOwners: servicePrincipal.potentialOwners ?? [],
         ownerConfidence: servicePrincipal.ownerConfidence ?? "none"
       });
@@ -170,25 +152,10 @@ export class EntraCollectionQueryService {
       await this.entra.readManagedIdentities(ownershipPageOptions)
     );
 
-    try {
-      const [resourceGroupOwnershipRows, userAssignedManagedIdentities] = await Promise.all([
-        this.azureResourcesQueries.readResourceGroupOwnershipRows(ownershipPageOptions),
-        this.azureResources.readAzureUserAssignedManagedIdentities()
-      ]);
-
-      return enrichManagedIdentitiesWithResourceGroupOwners(
-        managedIdentities,
-        resourceGroupOwnershipRows,
-        userAssignedManagedIdentities,
-        await this.disabledEvidenceStore.readKeys()
-      ) as unknown as Record<string, unknown>[];
-    } catch (error) {
-      if (error instanceof RuntimeHttpError && error.statusCode === 404) {
-        return managedIdentities as unknown as Record<string, unknown>[];
-      }
-
-      throw error;
-    }
+    return applyActiveOwnerProjectionToPrincipalRows(
+      managedIdentities,
+      await this.disabledEvidenceStore.readKeys()
+    ) as unknown as Record<string, unknown>[];
   }
 
   async countManagedIdentityRows(options: LocalReportCollectionQueryOptions = {}): Promise<number> {
@@ -203,19 +170,10 @@ export class EntraCollectionQueryService {
       await this.entra.readServicePrincipals(ownershipPageOptions)
     );
 
-    try {
-      return enrichServicePrincipalsWithResourceGroupOwners(
-        servicePrincipals,
-        await this.azureResourcesQueries.readResourceGroupOwnershipRows(ownershipPageOptions),
-        await this.disabledEvidenceStore.readKeys()
-      ) as unknown as Record<string, unknown>[];
-    } catch (error) {
-      if (error instanceof RuntimeHttpError && error.statusCode === 404) {
-        return servicePrincipals as unknown as Record<string, unknown>[];
-      }
-
-      throw error;
-    }
+    return applyActiveOwnerProjectionToPrincipalRows(
+      servicePrincipals,
+      await this.disabledEvidenceStore.readKeys()
+    ) as unknown as Record<string, unknown>[];
   }
 
   async countServicePrincipalRows(options: LocalReportCollectionQueryOptions = {}): Promise<number> {
@@ -233,19 +191,10 @@ export class EntraCollectionQueryService {
 
     const [enrichedServicePrincipal] = await this.enrichWithZtaRemediationSummaries([servicePrincipal]);
 
-    try {
-      return enrichServicePrincipalsWithResourceGroupOwners(
-        [enrichedServicePrincipal],
-        await this.azureResourcesQueries.readResourceGroupOwnershipRows(),
-        await this.disabledEvidenceStore.readKeys()
-      )[0] ?? null;
-    } catch (error) {
-      if (error instanceof RuntimeHttpError && error.statusCode === 404) {
-        return enrichedServicePrincipal;
-      }
-
-      throw error;
-    }
+    return applyActiveOwnerProjectionToPrincipalRows(
+      [enrichedServicePrincipal],
+      await this.disabledEvidenceStore.readKeys()
+    )[0] ?? null;
   }
 
   private async enrichWithZtaRemediationSummaries<Row extends ServicePrincipal | ManagedIdentity>(rows: Row[]): Promise<Row[]> {
@@ -263,8 +212,18 @@ export class EntraCollectionQueryService {
 }
 
 function getRuntimePrincipalCollectionOptions(
-  options: LocalReportCollectionQueryOptions
+  options: LocalReportCollectionQueryOptions,
+  rowCount?: number
 ): LocalReportCollectionQueryOptions {
+  if (rowCount !== undefined && canUseDuckDbLookupLimit(options)) {
+    return {
+      ...options,
+      page: 1,
+      pageSize: Math.max(1, rowCount),
+      filters: getRuntimeServicePrincipalFilters(options.filters ?? [])
+    };
+  }
+
   return {
     ...options,
     filters: getRuntimeServicePrincipalFilters(options.filters ?? [])
@@ -298,6 +257,8 @@ function withDuckDbCount<CollectionId extends string>(
 
   return {
     ...collection,
+    page: options.page ?? collection.page,
+    pageSize: options.pageSize ?? collection.pageSize,
     count: duckDbCount
   };
 }
@@ -309,35 +270,39 @@ function canUseDuckDbLookupLimit(options: LocalReportCollectionQueryOptions): bo
   );
 }
 
-function enrichManagedIdentitiesWithResourceGroupOwners(
-  managedIdentities: ManagedIdentity[],
-  resourceGroupOwnershipRows: ResourceGroupOwnershipRow[],
-  userAssignedManagedIdentities: AzureUserAssignedManagedIdentity[],
+function applyActiveOwnerProjectionToPrincipalRows<Row extends ServicePrincipal | ManagedIdentity>(
+  rows: Row[],
   disabledKeys: ReadonlySet<string>
-): ManagedIdentity[] {
-  return managedIdentities.map((identity) => {
-    const resourceGroupProjection = projectManagedIdentityOwners(
-      identity.id,
-      identity.appId,
-      resourceGroupOwnershipRows,
-      userAssignedManagedIdentities
-    );
-    const directOwnerCandidates = filterActiveDirectOwnerCandidates(
-      readEntraPrincipalDirectOwnerCandidates(identity),
-      disabledKeys
-    );
+): Row[] {
+  return rows.map((row) => {
+    const activeOwnerCandidates = filterActiveOwnerCandidates(row.ownerCandidates ?? [], disabledKeys);
+    const directOwnerCandidates = activeOwnerCandidates.filter((candidate) => candidate.relatedScopes.length === 0);
+    const resourceGroup = "managedIdentityAssignments" in row
+      ? row.resourceGroup ?? readFirstCandidateResourceGroup(activeOwnerCandidates)
+      : undefined;
 
     return {
-      ...identity,
-      ...resourceGroupProjection,
-      ...(directOwnerCandidates.length > 0
-        ? buildDirectOwnerProjection(directOwnerCandidates)
-        : {})
+      ...row,
+      ...(resourceGroup ? { resourceGroup } : {}),
+      ...buildOwnerProjection(
+        directOwnerCandidates.length > 0 ? directOwnerCandidates : activeOwnerCandidates
+      )
     };
   });
 }
 
-function buildDirectOwnerProjection(ownerCandidates: OwnerCandidate[]): {
+function readFirstCandidateResourceGroup(candidates: OwnerCandidate[]): string | undefined {
+  for (const candidate of candidates) {
+    const resourceGroup = candidate.relatedScopes.find((scope) => scope.resourceGroup)?.resourceGroup;
+    if (resourceGroup) {
+      return resourceGroup;
+    }
+  }
+
+  return undefined;
+}
+
+function buildOwnerProjection(ownerCandidates: OwnerCandidate[]): {
   ownerCandidates: OwnerCandidate[];
   potentialOwners: string[];
   ownerConfidence: OwnerConfidence;
@@ -352,32 +317,7 @@ function buildDirectOwnerProjection(ownerCandidates: OwnerCandidate[]): {
   };
 }
 
-function enrichServicePrincipalsWithResourceGroupOwners(
-  servicePrincipals: ServicePrincipal[],
-  resourceGroupOwnershipRows: ResourceGroupOwnershipRow[],
-  disabledKeys: ReadonlySet<string>
-): ServicePrincipal[] {
-  return servicePrincipals.map((servicePrincipal) => {
-    const resourceGroupProjection = projectServicePrincipalOwners(
-      servicePrincipal.roleAssignments,
-      resourceGroupOwnershipRows
-    );
-    const directOwnerCandidates = filterActiveDirectOwnerCandidates(
-      readEntraPrincipalDirectOwnerCandidates(servicePrincipal),
-      disabledKeys
-    );
-
-    return {
-      ...servicePrincipal,
-      ...resourceGroupProjection,
-      ...(directOwnerCandidates.length > 0
-        ? buildDirectOwnerProjection(directOwnerCandidates)
-        : {})
-    };
-  });
-}
-
-function filterActiveDirectOwnerCandidates(
+function filterActiveOwnerCandidates(
   candidates: OwnerCandidate[],
   disabledKeys: ReadonlySet<string>
 ): OwnerCandidate[] {
@@ -385,7 +325,14 @@ function filterActiveDirectOwnerCandidates(
     return candidates;
   }
 
-  return candidates.filter((candidate) => !isDirectOwnerCandidateDisabled(candidate, disabledKeys));
+  return candidates.filter((candidate) => !isOwnerCandidateDisabled(candidate, disabledKeys));
+}
+
+function isOwnerCandidateDisabled(candidate: OwnerCandidate, disabledKeys: ReadonlySet<string>): boolean {
+  return (
+    isDirectOwnerCandidateDisabled(candidate, disabledKeys) ||
+    isScopedResourceGroupOwnerCandidateDisabled(candidate, disabledKeys)
+  );
 }
 
 function isDirectOwnerCandidateDisabled(
@@ -397,6 +344,57 @@ function isDirectOwnerCandidateDisabled(
   for (const disabledKey of disabledKeys) {
     const normalizedDisabledKey = normalizeOwnerKey(disabledKey);
     if (normalizedDisabledKey === candidateKey || normalizedDisabledKey.startsWith(`${candidateKey}:`)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isScopedResourceGroupOwnerCandidateDisabled(
+  candidate: OwnerCandidate,
+  disabledKeys: ReadonlySet<string>
+): boolean {
+  for (const scope of candidate.relatedScopes) {
+    if (!scope.subscriptionId || !scope.resourceGroup) {
+      continue;
+    }
+
+    const resourceGroupKey = normalizeOwnerKey([
+      "resourceGroup",
+      scope.subscriptionId,
+      scope.resourceGroup,
+      candidate.key
+    ].join(":"));
+
+    if (hasNormalizedOwnerKey(disabledKeys, resourceGroupKey)) {
+      return true;
+    }
+
+    if (!scope.principalId) {
+      continue;
+    }
+
+    const principalScopedKey = normalizeOwnerKey([
+      "resourceGroup",
+      scope.subscriptionId,
+      scope.resourceGroup,
+      "principal",
+      scope.principalId,
+      candidate.key
+    ].join(":"));
+
+    if (hasNormalizedOwnerKey(disabledKeys, principalScopedKey)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function hasNormalizedOwnerKey(disabledKeys: ReadonlySet<string>, key: string): boolean {
+  for (const disabledKey of disabledKeys) {
+    if (normalizeOwnerKey(disabledKey) === key) {
       return true;
     }
   }

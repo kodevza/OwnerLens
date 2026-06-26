@@ -63,7 +63,7 @@ export async function readEntraServicePrincipalRows(
   connection: DuckDBConnection,
   options: EntraServicePrincipalRowsQueryOptions = {}
 ): Promise<EntraServicePrincipal[]> {
-  const lookupLimit = getServicePrincipalRowsLookupLimit(options);
+  const pageSql = getServicePrincipalRowsPageSql(options);
   const query = buildServicePrincipalRowsQuery(options);
   const rows = await readRows<EntraServicePrincipalRow>(
     connection,
@@ -88,10 +88,10 @@ export async function readEntraServicePrincipalRows(
     from entra_service_principals
     ${query.whereSql}
     order by ordinal
-    ${lookupLimit === null ? "" : "limit $limit"}`,
+    ${pageSql.sql}`,
     {
       ...query.params,
-      ...(lookupLimit === null ? {} : { limit: lookupLimit })
+      ...pageSql.params
     }
   );
 
@@ -222,12 +222,27 @@ function normalizeImportedTags(tags: readonly string[] | null | undefined): stri
   return (tags ?? []).map((tag) => tag.replaceAll("=", ":"));
 }
 
-function getServicePrincipalRowsLookupLimit(options: PageOptions): number | null {
+function getServicePrincipalRowsPageSql(options: PageOptions): {
+  sql: string;
+  params: Record<string, DuckDBValue>;
+} {
   if (options.page === undefined || options.pageSize === undefined) {
-    return null;
+    return {
+      sql: "",
+      params: {}
+    };
   }
 
-  return Math.max(1, Math.trunc(options.page) * Math.trunc(options.pageSize));
+  const page = Math.max(1, Math.trunc(options.page));
+  const pageSize = Math.max(1, Math.trunc(options.pageSize));
+
+  return {
+    sql: "limit $limit offset $offset",
+    params: {
+      limit: pageSize,
+      offset: (page - 1) * pageSize
+    }
+  };
 }
 
 function buildServicePrincipalRowsQuery(options: EntraServicePrincipalRowsQueryOptions): {

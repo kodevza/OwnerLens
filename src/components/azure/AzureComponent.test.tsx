@@ -1208,7 +1208,7 @@ test("opens selectable ownership evidence table from a service principal owner b
   expect(evidenceRequest).toBeDefined();
 
   const url = new URL(evidenceRequest ?? "", window.location.origin);
-  expect(url.searchParams.get("azureRbac")).toBe("false");
+  expect(url.searchParams.has("azureRbac")).toBe(false);
   expect(url.searchParams.get("kind")).toBe("servicePrincipal");
   expect(url.searchParams.get("principalId")).toBe("sp-object-id");
 
@@ -1226,19 +1226,6 @@ test("opens selectable ownership evidence table from a service principal owner b
     "resourceGroup:sub-1:rg-app:principal:sp-object-id:ownerUser:alice@example.test"
   );
   expect(statusUrl.searchParams.get("status")).toBe("inactive");
-
-  await clickElementByLabel("Toggle ownership evidence option");
-  await waitFor(() => {
-    expect(evidenceReadCount).toBe(3);
-  });
-
-  const azureRbacEvidenceRequest = fetchMock.mock.calls
-    .map(([input]) => String(input))
-    .filter((requestUrl) => requestUrl.startsWith("/api/data/ownership/evidence"))
-    .at(-1);
-  expect(azureRbacEvidenceRequest).toBeDefined();
-  expect(new URL(azureRbacEvidenceRequest ?? "", window.location.origin).searchParams.get("azureRbac")).toBe("true");
-  await waitForText(container, "Resource group owner");
 
   await clickButton("Close SP: Service principal app ownership evidence tab");
   await waitFor(() => {
@@ -1382,8 +1369,6 @@ test("reloads ownership evidence after deactivating an indirect ownerGroup candi
 
   const { container, root } = renderComponent(
     <OwnershipEvidenceComponent
-      allowAzureRbacFallback={false}
-      azureRbac={true}
       displayName="uami-prod"
       target={{ kind: "managedIdentity", principalId: "mi-object-id" }}
     />
@@ -1460,53 +1445,41 @@ test("keeps inactive status after a successful status update when evidence reloa
   act(() => root.unmount());
 });
 
-test("falls back to Azure RBAC ownership evidence when the default principal evidence is empty", async () => {
+test("reads combined principal ownership evidence without an Azure RBAC toggle", async () => {
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);
 
     if (requestUrl.startsWith("/api/data/ownership/evidence")) {
-      const url = new URL(requestUrl, window.location.origin);
-      if (url.searchParams.get("azureRbac") === "true") {
-        return jsonResponse({
-          target: {
-            kind: "servicePrincipal",
-            id: "sp-object-id",
-            displayName: "Service principal app"
-          },
-          evidence: [
-            {
-              key: "rbac-owner:alice@example.test:2026-06-05T00:00:00.000Z",
-              statusKey: "resourceGroup:sub-1:rg-app:principal:sp-object-id:ownerUser:alice@example.test",
-              ownerCandidateKey: "ownerUser:alice@example.test",
-              ownerDisplayName: "alice@example.test",
-              ownerType: "ownerUser",
-              confidence: "medium",
-              source: "resourceGroupOwner",
-              path: "indirect",
-              discoverySource: "azureRbac",
-              rank: 1,
-              evidence: "Contributor on resource group rg-app",
-              date: "2026-06-05T00:00:00.000Z",
-              relatedScopes: [
-                {
-                  subscriptionId: "sub-1",
-                  subscriptionName: "Platform",
-                  resourceGroup: "rg-app",
-                  principalId: "sp-object-id"
-                }
-              ]
-            }
-          ]
-        });
-      }
-
       return jsonResponse({
         target: {
           kind: "servicePrincipal",
           id: "sp-object-id",
           displayName: "Service principal app"
         },
-        evidence: []
+        evidence: [
+          {
+            key: "resourceGroup:sub-1:rg-app:principal:sp-object-id:ownerUser:alice@example.test",
+            statusKey: "resourceGroup:sub-1:rg-app:principal:sp-object-id:ownerUser:alice@example.test",
+            ownerCandidateKey: "ownerUser:alice@example.test",
+            ownerDisplayName: "alice@example.test",
+            ownerType: "ownerUser",
+            confidence: "medium",
+            source: "resourceGroupOwner",
+            path: "indirect",
+            discoverySource: "tag",
+            rank: 1,
+            evidence: "owner=alice@example.test",
+            date: null,
+            relatedScopes: [
+              {
+                subscriptionId: "sub-1",
+                subscriptionName: "Platform",
+                resourceGroup: "rg-app",
+                principalId: "sp-object-id"
+              }
+            ]
+          }
+        ]
       });
     }
 
@@ -1518,28 +1491,13 @@ test("falls back to Azure RBAC ownership evidence when the default principal evi
 
   await waitForText(container, "Service principal app");
   await clickButton("Open ownership evidence for alice@example.test");
-  await waitForText(container, "Contributor on resource group rg-app");
-  expect(getButton("Toggle ownership evidence option").getAttribute("aria-checked")).toBe("true");
+  await waitForText(container, "owner=alice@example.test");
 
   const evidenceRequests = fetchMock.mock.calls
     .map(([input]) => String(input))
     .filter((requestUrl) => requestUrl.startsWith("/api/data/ownership/evidence"));
-  expect(evidenceRequests).toHaveLength(2);
-  expect(new URL(evidenceRequests[0], window.location.origin).searchParams.get("azureRbac")).toBe("false");
-  expect(new URL(evidenceRequests[1], window.location.origin).searchParams.get("azureRbac")).toBe("true");
-
-  await clickElementByLabel("Toggle ownership evidence option");
-  await waitForText(container, "No ownership evidence was found.");
-  expect(getButton("Toggle ownership evidence option").getAttribute("aria-checked")).toBe("false");
-
-  const directEvidenceRequests = fetchMock.mock.calls
-    .map(([input]) => String(input))
-    .filter((requestUrl) => requestUrl.startsWith("/api/data/ownership/evidence"));
-  expect(directEvidenceRequests.map((requestUrl) => new URL(requestUrl, window.location.origin).searchParams.get("azureRbac"))).toEqual([
-    "false",
-    "true",
-    "false"
-  ]);
+  expect(evidenceRequests).toHaveLength(1);
+  expect(new URL(evidenceRequests[0], window.location.origin).searchParams.has("azureRbac")).toBe(false);
 
   act(() => root.unmount());
 });
@@ -1658,7 +1616,6 @@ test("sets resource group owner candidate status to inactive from the evidence t
   await waitForText(container, "rg-app");
   await clickButton("Open ownership evidence for alice@example.test");
   await waitForText(container, "Activity log");
-  expect(queryButton("Toggle ownership evidence option")).toBeNull();
 
   const evidenceRequest = fetchMock.mock.calls
     .map(([input]) => String(input))
@@ -1666,7 +1623,7 @@ test("sets resource group owner candidate status to inactive from the evidence t
   expect(evidenceRequest).toBeDefined();
 
   const evidenceUrl = new URL(evidenceRequest ?? "", window.location.origin);
-  expect(evidenceUrl.searchParams.get("azureRbac")).toBe("false");
+  expect(evidenceUrl.searchParams.has("azureRbac")).toBe(false);
   expect(evidenceUrl.searchParams.get("kind")).toBe("resourceGroup");
   expect(evidenceUrl.searchParams.get("page")).toBe("1");
   expect(evidenceUrl.searchParams.get("count")).toBe("20");

@@ -9,6 +9,7 @@ import { disableOwnerEvidenceKey } from "../../../../core/runtime/DisabledOwnerE
 import {
   insertAzureActivityLogRows,
   insertAzureResourceGroupRows,
+  readAzurePrincipalResourceGroupOwnerCandidateViewRows,
   readAzureResourceGroupOwnershipSqlRows
 } from "./tables";
 import {
@@ -184,6 +185,121 @@ test("resource group owner candidate view joins tag and activity evidence with e
       source: "activity.lastModifier",
       evidence_value: "/subscriptions/sub-1/resourceGroups/rg-view/providers/Microsoft.Web/sites/app-a",
       evidence_date: "2026-06-05T10:00:00.000Z"
+    })
+  ]);
+});
+
+test("principal resource group owner candidate view scopes candidates to the requested principal and resource groups", async () => {
+  const rows = await withDuckDb(async ({ connection }) => {
+    await insertEntraServicePrincipalRows(connection, [
+      servicePrincipal("sp-1", "app-1", "Owner Lens App", {
+        tags: ["owner=Direct-Tag-Team"],
+        applicationOwners: [
+          {
+            id: "app-owner-1",
+            displayName: "Application Owner",
+            userPrincipalName: "app-owner@example.test",
+            mail: null,
+            ownerType: "User"
+          }
+        ],
+        servicePrincipalOwners: [
+          {
+            id: "sp-owner-1",
+            displayName: "Service Principal Owner",
+            userPrincipalName: "sp-owner@example.test",
+            mail: null,
+            ownerType: "User"
+          }
+        ]
+      })
+    ]);
+    await insertAzureResourceGroupRows(connection, [
+      resourceGroup("rg-high", {
+        ownerGroup: "Platform-Team",
+        owner: "fallback@example.test"
+      }),
+      resourceGroup("rg-medium", {
+        owner: "worker@example.test"
+      }),
+      resourceGroup("rg-unrelated", {
+        ownerGroup: "Unrelated-Team"
+      })
+    ]);
+
+    return readAzurePrincipalResourceGroupOwnerCandidateViewRows(
+      connection,
+      {
+        principalId: "sp-1",
+        subscriptionIds: ["sub-1", "sub-1"],
+        resourceGroups: ["rg-medium", "rg-high"]
+      },
+      10
+    );
+  });
+
+  expect(rows).toEqual([
+    expect.objectContaining({
+      principalId: "sp-1",
+      resourceGroup: "rg-high",
+      owner: "platform-team",
+      ownerCandidate: "ownerGroup:platform-team",
+      source: "resourceGroupOwner",
+      path: "indirect",
+      discoverySource: "tag",
+      confidence: "high",
+      evidenceKey: "resourceGroup:sub-1:rg-high:principal:sp-1:ownerGroup:platform-team"
+    }),
+    expect.objectContaining({
+      principalId: "sp-1",
+      path: "direct",
+      discoverySource: "applicationOwner",
+      resourceGroup: null,
+      owner: "app-owner@example.test",
+      ownerCandidate: "entraApplicationOwner:ownerUser:app-owner-1",
+      source: "entraApplicationOwner",
+      confidence: "high",
+      evidenceKey: "entraApplicationOwner:ownerUser:app-owner-1:app-owner@example.test:"
+    }),
+    expect.objectContaining({
+      principalId: "sp-1",
+      path: "direct",
+      discoverySource: "servicePrincipalOwner",
+      resourceGroup: null,
+      owner: "sp-owner@example.test",
+      ownerCandidate: "entraServicePrincipalOwner:ownerUser:sp-owner-1",
+      source: "entraServicePrincipalOwner",
+      confidence: "high",
+      evidenceKey: "entraServicePrincipalOwner:ownerUser:sp-owner-1:sp-owner@example.test:"
+    }),
+    expect.objectContaining({
+      principalId: "sp-1",
+      path: "direct",
+      discoverySource: "tag",
+      resourceGroup: null,
+      owner: "direct-tag-team",
+      ownerCandidate: "ownerUser:direct-tag-team",
+      source: "tag",
+      confidence: "medium",
+      evidenceKey: "ownerUser:direct-tag-team:owner=Direct-Tag-Team:"
+    }),
+    expect.objectContaining({
+      principalId: "sp-1",
+      path: "indirect",
+      resourceGroup: "rg-high",
+      owner: "fallback@example.test",
+      ownerCandidate: "ownerUser:fallback@example.test",
+      source: "resourceGroupOwner",
+      confidence: "medium"
+    }),
+    expect.objectContaining({
+      principalId: "sp-1",
+      path: "indirect",
+      resourceGroup: "rg-medium",
+      owner: "worker@example.test",
+      ownerCandidate: "ownerUser:worker@example.test",
+      source: "resourceGroupOwner",
+      confidence: "medium"
     })
   ]);
 });
@@ -699,7 +815,8 @@ function activityLog(options: {
 function servicePrincipal(
   id: string,
   appId: string,
-  displayName: string
+  displayName: string,
+  options: Partial<Pick<EntraServicePrincipal, "applicationOwners" | "servicePrincipalOwners" | "tags">> = {}
 ): EntraServicePrincipal {
   return {
     id,
@@ -714,10 +831,10 @@ function servicePrincipal(
     loginUrl: null,
     replyUrls: [],
     servicePrincipalNames: [],
-    tags: [],
+    tags: options.tags ?? [],
     appRoles: [],
-    servicePrincipalOwners: [],
-    applicationOwners: [],
+    servicePrincipalOwners: options.servicePrincipalOwners ?? [],
+    applicationOwners: options.applicationOwners ?? [],
     metadata: null
   };
 }

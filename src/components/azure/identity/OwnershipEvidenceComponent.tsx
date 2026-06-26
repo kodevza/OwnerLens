@@ -30,24 +30,18 @@ type UserGroupsDropdownSelection = {
 };
 
 export function OwnershipEvidenceComponent({
-  allowAzureRbacFallback = true,
-  azureRbac,
   displayName,
   filters,
   onAzureRbacClick,
-  onAzureRbacFallback,
   onFiltersChange,
   onOwnershipEvidenceClick,
   onSortRulesChange,
   sortRules,
   target
 }: {
-  allowAzureRbacFallback?: boolean;
-  azureRbac: boolean;
   displayName: string;
   filters?: ColumnFilters;
   onAzureRbacClick?: (principal: AzureRbacPrincipalSelection) => void;
-  onAzureRbacFallback?: () => void;
   onFiltersChange?: (filters: ColumnFilters) => void;
   onOwnershipEvidenceClick?: (selection: { displayName: string; target: OwnershipEvidenceTarget }) => void;
   onSortRulesChange?: (sortRules: SortRule[]) => void;
@@ -65,29 +59,13 @@ export function OwnershipEvidenceComponent({
       }
 
       const response = await readOwnershipEvidence({
-        azureRbac,
         signal,
         target
       });
 
-      if (!azureRbac && allowAzureRbacFallback && isPrincipalTarget(target) && response.evidence.length === 0) {
-        if (onAzureRbacFallback) {
-          onAzureRbacFallback();
-          return;
-        }
-
-        const azureRbacResponse = await readOwnershipEvidence({
-          azureRbac: true,
-          signal,
-          target
-        });
-        setLoadState({ status: "ready", response: azureRbacResponse });
-        return;
-      }
-
       setLoadState({ status: "ready", response });
     },
-    [allowAzureRbacFallback, azureRbac, onAzureRbacFallback, target]
+    [target]
   );
 
   useEffect(() => {
@@ -245,10 +223,4 @@ function markEvidenceStatus(
       )
     }
   };
-}
-
-function isPrincipalTarget(
-  target: OwnershipEvidenceTarget
-): target is Extract<OwnershipEvidenceTarget, { kind: "servicePrincipal" | "managedIdentity" }> {
-  return target.kind === "servicePrincipal" || target.kind === "managedIdentity";
 }

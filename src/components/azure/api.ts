@@ -352,16 +352,13 @@ export async function readEntraUserGroups({
 }
 
 export async function readOwnershipEvidence({
-  azureRbac,
   signal,
   target
 }: {
-  azureRbac: boolean;
   signal: AbortSignal;
   target: OwnershipEvidenceTarget;
 }): Promise<OwnershipEvidenceResponse> {
   const url = new URL("/api/data/ownership/evidence", window.location.origin);
-  url.searchParams.set("azureRbac", String(azureRbac));
   url.searchParams.set("kind", target.kind);
 
   if (target.kind === "servicePrincipal" || target.kind === "managedIdentity") {

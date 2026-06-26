@@ -358,6 +358,10 @@ test("filters Entra service principals in DuckDB before page lookup limits", asy
       page: 1,
       pageSize: 1
     });
+    const unfilteredSecondPage = await runtime.queryEntraServicePrincipals({
+      page: 2,
+      pageSize: 1
+    });
     const queried = await runtime.queryEntraServicePrincipals({
       filters: [{ column: "displayName", values: ["Target"] }],
       page: 1,
@@ -374,6 +378,15 @@ test("filters Entra service principals in DuckDB before page lookup limits", asy
       rows: [
         expect.objectContaining({
           id: "sp-first"
+        })
+      ]
+    });
+    expect(unfilteredSecondPage).toMatchObject({
+      count: 2,
+      page: 2,
+      rows: [
+        expect.objectContaining({
+          id: "sp-target"
         })
       ]
     });
@@ -1085,15 +1098,15 @@ test("enriches remediation package tasks with Azure principal summaries", async 
         azureEnrichment: {
           id: "sp-1",
           displayName: "Example app",
-          oauthPermissionsCount: 2,
-          appRolesPermissionCount: 1,
-          entraPermissionRisk: "high",
-          rbacRoleAssignmentCount: 1,
-          rbacRoleLevel: "high",
-          rbacSubscriptionCount: 1,
+          oauthPermissionsCount: 0,
+          appRolesPermissionCount: 0,
+          entraPermissionRisk: "none",
+          rbacRoleAssignmentCount: 0,
+          rbacRoleLevel: "none",
+          rbacSubscriptionCount: 0,
           potentialOwners: ["alice@example.test"],
           ownerConfidence: "high",
-          roleAssignments: [expect.objectContaining({ roleDefinitionName: "Owner", scope: "/subscriptions/sub-1/resourceGroups/rg-app" })]
+          roleAssignments: []
         }
       })
     });
@@ -3291,6 +3304,261 @@ test("falls back from disabled direct service principal owner to resource group 
   });
 });
 
+test("falls back from disabled principal-scoped resource group owner to direct owner in service principal collection", async () => {
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      roleAssignmentCount: 1
+    },
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-app",
+        location: "westeurope",
+        tags: { ownerGroup: "platform-team" }
+      }
+    ],
+    roleAssignments: [
+      roleAssignment("sp-app", "Contributor", "/subscriptions/sub-1/resourceGroups/rg-app", "ResourceGroup")
+    ]
+  };
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 1
+    },
+    servicePrincipals: [
+      servicePrincipal("sp-app", "app-app", "Application app", {
+        servicePrincipalType: "Application",
+        servicePrincipalOwners: [
+          {
+            id: "owner-direct-1",
+            displayName: "Direct Owner",
+            userPrincipalName: "direct-owner@example.test",
+            mail: null,
+            ownerType: "User"
+          }
+        ]
+      })
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await runtime.initialize();
+
+    const endpoints = defineLocalReportRuntimeRestEndpoints(runtime);
+    const servicePrincipalsEndpoint = getEndpoint(endpoints, "/api/data/entra/servicePrincipals");
+    const ownerCandidateStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/ownerCandidates/status");
+
+    await ownerCandidateStatusEndpoint.handle({
+      req: {},
+      url: new URL(
+        "http://localhost/api/data/ownership/ownerCandidates/status?key=resourceGroup%3Asub-1%3Arg-app%3Aprincipal%3Asp-app%3AownerGroup%3Aplatform-team&status=inactive"
+      )
+    });
+
+    await expect(
+      servicePrincipalsEndpoint.handle({
+        req: {},
+        url: new URL("http://localhost/api/data/entra/servicePrincipals?page=1&count=10")
+      })
+    ).resolves.toMatchObject({
+      rows: [
+        expect.objectContaining({
+          id: "sp-app",
+          potentialOwners: ["direct-owner@example.test"],
+          ownerConfidence: "high",
+          ownerCandidates: [
+            expect.objectContaining({
+              key: "entraServicePrincipalOwner:ownerUser:owner-direct-1",
+              displayName: "direct-owner@example.test",
+              confidence: "high"
+            })
+          ]
+        })
+      ]
+    });
+  });
+});
+
+test("does not type a service principal owner from disabled direct and principal-scoped resource group evidence", async () => {
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      roleAssignmentCount: 1
+    },
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-app",
+        location: "westeurope",
+        tags: { ownerGroup: "platform-team" }
+      }
+    ],
+    roleAssignments: [
+      roleAssignment("sp-app", "Contributor", "/subscriptions/sub-1/resourceGroups/rg-app", "ResourceGroup")
+    ]
+  };
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 1
+    },
+    servicePrincipals: [
+      servicePrincipal("sp-app", "app-app", "Application app", {
+        servicePrincipalType: "Application",
+        servicePrincipalOwners: [
+          {
+            id: "owner-direct-1",
+            displayName: "Direct Owner",
+            userPrincipalName: "direct-owner@example.test",
+            mail: null,
+            ownerType: "User"
+          }
+        ]
+      })
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await runtime.initialize();
+
+    const endpoints = defineLocalReportRuntimeRestEndpoints(runtime);
+    const servicePrincipalsEndpoint = getEndpoint(endpoints, "/api/data/entra/servicePrincipals");
+    const ownerCandidateStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/ownerCandidates/status");
+
+    for (const key of [
+      "entraServicePrincipalOwner:ownerUser:owner-direct-1",
+      "resourceGroup:sub-1:rg-app:principal:sp-app:ownerGroup:platform-team"
+    ]) {
+      await ownerCandidateStatusEndpoint.handle({
+        req: {},
+        url: new URL(
+          `http://localhost/api/data/ownership/ownerCandidates/status?key=${encodeURIComponent(key)}&status=inactive`
+        )
+      });
+    }
+
+    await expect(
+      servicePrincipalsEndpoint.handle({
+        req: {},
+        url: new URL("http://localhost/api/data/entra/servicePrincipals?page=1&count=10")
+      })
+    ).resolves.toMatchObject({
+      rows: [
+        expect.objectContaining({
+          id: "sp-app",
+          potentialOwners: [],
+          ownerConfidence: "none",
+          ownerCandidates: []
+        })
+      ]
+    });
+  });
+});
+
+test("does not type a managed identity owner from disabled direct and principal-scoped resource group evidence", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 1
+    },
+    servicePrincipals: [
+      servicePrincipal("principal-uami-1", "client-1", "Identity app", {
+        servicePrincipalType: "ManagedIdentity",
+        servicePrincipalOwners: [
+          {
+            id: "owner-direct-1",
+            displayName: "Direct Owner",
+            userPrincipalName: "direct-owner@example.test",
+            mail: null,
+            ownerType: "User"
+          }
+        ]
+      })
+    ]
+  };
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      userAssignedManagedIdentityCount: 1
+    },
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-app",
+        location: "westeurope",
+        tags: { ownerGroup: "platform-team" }
+      }
+    ],
+    userAssignedManagedIdentities: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceId: "/subscriptions/sub-1/resourceGroups/rg-app/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-a",
+        name: "uami-a",
+        resourceGroup: "rg-app",
+        location: "westeurope",
+        clientId: "client-1",
+        principalId: "principal-uami-1",
+        tenantId: "tenant-1",
+        tags: null
+      }
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await runtime.initialize();
+
+    const endpoints = defineLocalReportRuntimeRestEndpoints(runtime);
+    const managedIdentitiesEndpoint = getEndpoint(endpoints, "/api/data/entra/managedIdentities");
+    const ownerCandidateStatusEndpoint = getEndpoint(endpoints, "/api/data/ownership/ownerCandidates/status");
+
+    for (const key of [
+      "entraServicePrincipalOwner:ownerUser:owner-direct-1",
+      "resourceGroup:sub-1:rg-app:principal:principal-uami-1:ownerGroup:platform-team"
+    ]) {
+      await ownerCandidateStatusEndpoint.handle({
+        req: {},
+        url: new URL(
+          `http://localhost/api/data/ownership/ownerCandidates/status?key=${encodeURIComponent(key)}&status=inactive`
+        )
+      });
+    }
+
+    await expect(
+      managedIdentitiesEndpoint.handle({
+        req: {},
+        url: new URL("http://localhost/api/data/entra/managedIdentities?page=1&count=10")
+      })
+    ).resolves.toMatchObject({
+      rows: [
+        expect.objectContaining({
+          id: "principal-uami-1",
+          potentialOwners: [],
+          ownerConfidence: "none",
+          ownerCandidates: []
+        })
+      ]
+    });
+  });
+});
+
 test("persists disabled direct service principal owner evidence keys in DuckDB", async () => {
   const directOwnerKey = "entraServicePrincipalOwner:ownerUser:owner-sp-1:alice@example.test:";
   const entraSnapshot: EntraSnapshot = {
@@ -3420,7 +3688,7 @@ test("applies disabled resource group owner evidence when reading managed identi
     await runtime.initialize();
 
     await expect(
-      runtime.readOwnershipEvidence({ kind: "managedIdentity", principalId: "principal-uami-1", azureRbac: true })
+      runtime.readOwnershipEvidence({ kind: "managedIdentity", principalId: "principal-uami-1" })
     ).resolves.toMatchObject({
       evidence: [
         {
@@ -3457,7 +3725,7 @@ test("applies disabled resource group owner evidence when reading managed identi
     });
 
     await expect(
-      runtime.readOwnershipEvidence({ kind: "managedIdentity", principalId: "principal-uami-1", azureRbac: true })
+      runtime.readOwnershipEvidence({ kind: "managedIdentity", principalId: "principal-uami-1" })
     ).resolves.toMatchObject({
       evidence: [
         {

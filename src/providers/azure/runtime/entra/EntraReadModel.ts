@@ -1,4 +1,4 @@
-import type { DuckDBConnection } from "@duckdb/node-api";
+import type { DuckDBConnection, DuckDBValue } from "@duckdb/node-api";
 
 import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
 import type {
@@ -13,6 +13,20 @@ import type {
 import type { PermissionRiskLevel } from "../../../../core/risk/types";
 import type { LocalReportCollectionFilter } from "../../../../core/runtime/collections";
 import type { PageOptions } from "../../../../core/runtime/pagination";
+import {
+  maxOwnerConfidence,
+  rankOwnerCandidates
+} from "../../../../core/ownership/ownerCandidateRanking";
+import type {
+  OwnerCandidate,
+  OwnerCandidateScope,
+  OwnerCandidateSource,
+  OwnerConfidence,
+  OwnerEvidence,
+  OwnerType,
+  OwnershipEvidenceDiscoverySource,
+  OwnershipEvidencePath
+} from "../../../../core/ownership/types";
 import type {
   EntraOAuth2PermissionGrant as InputEntraOAuth2PermissionGrant,
   EntraServicePrincipal
@@ -71,12 +85,16 @@ export async function readServicePrincipals(
     connection,
     getPrincipalIds(servicePrincipals)
   );
+  const ownerCandidatesByPrincipalId = await readPrincipalOwnerCandidateSummary(
+    connection,
+    getPrincipalIds(servicePrincipals)
+  );
 
-  return toServicePrincipals(
+  return attachPrincipalOwnerSummaries(toServicePrincipals(
     servicePrincipals,
     await readLatestAzureIdentityEnrichment(connection, getPrincipalEnrichmentKeys(servicePrincipals)),
     permissionsByPrincipalId
-  );
+  ), ownerCandidatesByPrincipalId);
 }
 
 export async function countServicePrincipals(
@@ -107,12 +125,16 @@ export async function findServicePrincipalById(
     connection,
     getPrincipalIds(servicePrincipals)
   );
+  const ownerCandidatesByPrincipalId = await readPrincipalOwnerCandidateSummary(
+    connection,
+    getPrincipalIds(servicePrincipals)
+  );
 
-  return toServicePrincipals(
+  return attachPrincipalOwnerSummaries(toServicePrincipals(
     servicePrincipals,
     await readLatestAzureIdentityEnrichment(connection, getPrincipalEnrichmentKeys(servicePrincipals)),
     permissionsByPrincipalId
-  )[0] ?? null;
+  ), ownerCandidatesByPrincipalId)[0] ?? null;
 }
 
 export async function readManagedIdentities(
@@ -130,12 +152,16 @@ export async function readManagedIdentities(
     connection,
     getPrincipalIds(managedIdentityPrincipals)
   );
+  const ownerCandidatesByPrincipalId = await readPrincipalOwnerCandidateSummary(
+    connection,
+    getPrincipalIds(managedIdentityPrincipals)
+  );
 
-  return toManagedIdentities(
+  return attachPrincipalOwnerSummaries(toManagedIdentities(
     managedIdentityPrincipals,
     await readLatestAzureIdentityEnrichment(connection, getPrincipalEnrichmentKeys(managedIdentityPrincipals)),
     permissionsByPrincipalId
-  );
+  ), ownerCandidatesByPrincipalId);
 }
 
 export async function countManagedIdentities(
@@ -228,6 +254,315 @@ function getPrincipalIds(servicePrincipals: Pick<EntraServicePrincipal, "id">[])
   return servicePrincipals.map((servicePrincipal) => servicePrincipal.id);
 }
 
+async function readPrincipalOwnerCandidateSummary(
+  connection: DuckDBConnection,
+  principalIds: string[]
+): Promise<Map<string, OwnerCandidate[]>> {
+  const normalizedPrincipalIds = normalizePrincipalIds(principalIds).map((principalId) => principalId.toLowerCase());
+  if (normalizedPrincipalIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await readRows<PrincipalOwnerCandidateSqlRow>(
+    connection,
+    `
+      with target_principals as (
+        select lower(trim(json_extract_string(value, '$'))) as principal_id
+        from json_each($principalIds::json)
+        where trim(json_extract_string(value, '$')) <> ''
+      ),
+      latest_run as (
+        select run_id
+        from azure_runtime_enrichment_runs
+        where status = 'completed'
+        order by completed_at desc
+        limit 1
+      ),
+      role_assignment_resource_groups as (
+        select distinct
+          lower(trim(role_enrichment.principal_id)) as principal_id,
+          coalesce(
+            nullif(trim(json_extract_string(role_entry.value, '$.scopeSubscriptionId')), ''),
+            nullif(trim(json_extract_string(role_entry.value, '$.subscriptionId')), ''),
+            nullif(regexp_extract(json_extract_string(role_entry.value, '$.scope'), '/subscriptions/([^/]+)', 1), '')
+          ) as subscription_id,
+          coalesce(
+            nullif(trim(json_extract_string(role_entry.value, '$.scopeResourceGroup')), ''),
+            nullif(regexp_extract(json_extract_string(role_entry.value, '$.scope'), '/resourceGroups/([^/]+)', 1), '')
+          ) as resource_group,
+          nullif(trim(json_extract_string(role_entry.value, '$.scope')), '') as scope,
+          nullif(trim(json_extract_string(role_entry.value, '$.roleDefinitionName')), '') as role_definition_name
+        from azure_identity_role_assignment_enrichment role_enrichment
+        join latest_run on role_enrichment.run_id = latest_run.run_id
+        join target_principals target on lower(trim(role_enrichment.principal_id)) = target.principal_id
+        join json_each(role_enrichment.role_assignments) role_entry on true
+      ),
+      managed_identity_resource_groups as (
+        select distinct
+          lower(trim(identity_enrichment.service_principal_id)) as principal_id,
+          nullif(trim(json_extract_string(assignment_entry.value, '$.subscriptionId')), '') as subscription_id,
+          nullif(trim(json_extract_string(assignment_entry.value, '$.assignedResourceGroup')), '') as resource_group,
+          nullif(trim(json_extract_string(assignment_entry.value, '$.assignedResourceId')), '') as scope,
+          null::varchar as role_definition_name
+        from azure_managed_identity_assignment_enrichment identity_enrichment
+        join latest_run on identity_enrichment.run_id = latest_run.run_id
+        join target_principals target on lower(trim(identity_enrichment.service_principal_id)) = target.principal_id
+        join json_each(identity_enrichment.managed_identity_assignments) assignment_entry on true
+      ),
+      user_assigned_identity_resource_groups as (
+        select distinct
+          lower(trim(identity.principal_id)) as principal_id,
+          identity.subscription_id,
+          identity.resource_group,
+          identity.resource_id as scope,
+          null::varchar as role_definition_name
+        from azure_user_assigned_managed_identities identity
+        join target_principals target
+          on lower(trim(identity.principal_id)) = target.principal_id
+          or lower(trim(identity.client_id)) = target.principal_id
+      ),
+      principal_resource_groups as (
+        select *
+        from role_assignment_resource_groups
+        where subscription_id is not null and resource_group is not null
+        union
+        select *
+        from managed_identity_resource_groups
+        where subscription_id is not null and resource_group is not null
+        union
+        select *
+        from user_assigned_identity_resource_groups
+        where subscription_id is not null and resource_group is not null
+      )
+      select *
+      from (
+        select
+          candidate.principal_id,
+          candidate.subscription_id,
+          candidate.subscription_name,
+          candidate.resource_group,
+          candidate.owner,
+          candidate.owner_type,
+          candidate.owner_candidate,
+          candidate.evidence_key,
+          candidate.confidence,
+          candidate.source,
+          candidate.path,
+          candidate.discovery_source,
+          candidate.evidence_value,
+          candidate.evidence_date,
+          candidate.priority,
+          null::varchar as scope,
+          null::varchar as role_definition_name
+        from azure_principal_resource_group_owner_candidates candidate
+        join target_principals target on lower(trim(candidate.principal_id)) = target.principal_id
+        where candidate.path = 'direct'
+        union all
+        select
+          target_scope.principal_id,
+          candidate.subscription_id,
+          candidate.subscription_name,
+          candidate.resource_group,
+          candidate.owner,
+          candidate.owner_type,
+          candidate.owner_candidate,
+          concat(
+            'resourceGroup:',
+            lower(trim(candidate.subscription_id)),
+            ':',
+            lower(trim(candidate.resource_group)),
+            ':principal:',
+            target_scope.principal_id,
+            ':',
+            candidate.owner_candidate
+          ) as evidence_key,
+          candidate.confidence,
+          candidate.source,
+          candidate.path,
+          candidate.discovery_source,
+          candidate.evidence_value,
+          candidate.evidence_date,
+          candidate.priority,
+          target_scope.scope,
+          target_scope.role_definition_name
+        from principal_resource_groups target_scope
+        join azure_principal_resource_group_owner_candidates candidate
+          on candidate.path = 'indirect'
+          and lower(trim(candidate.subscription_id)) = lower(trim(target_scope.subscription_id))
+          and lower(trim(candidate.resource_group)) = lower(trim(target_scope.resource_group))
+      ) owner_rows
+      order by
+        principal_id,
+        case confidence
+          when 'high' then 3
+          when 'medium' then 2
+          when 'low' then 1
+          else 0
+        end desc,
+        case source
+          when 'tag' then 5
+          when 'resourceGroupOwner' then 5
+          when 'entraApplicationOwner' then 4
+          when 'entraServicePrincipalOwner' then 3
+          when 'activity' then 1
+          else 0
+        end desc,
+        priority,
+        lower(trim(coalesce(subscription_id, ''))),
+        lower(trim(coalesce(resource_group, ''))),
+        lower(trim(owner_candidate))
+    `,
+    { principalIds: JSON.stringify(normalizedPrincipalIds) }
+  );
+
+  return buildPrincipalOwnerCandidatesByPrincipalId(rows);
+}
+
+function attachPrincipalOwnerSummaries<Row extends { id: string }>(
+  rows: Row[],
+  ownerCandidatesByPrincipalId: Map<string, OwnerCandidate[]>
+): Row[] {
+  return rows.map((row) => {
+    const ownerCandidates = ownerCandidatesByPrincipalId.get(row.id.toLowerCase()) ?? [];
+
+    if (ownerCandidates.length === 0) {
+      return {
+        ...row,
+        ownerCandidates: [],
+        potentialOwners: [],
+        ownerConfidence: "none" as OwnerConfidence
+      };
+    }
+
+    return {
+      ...row,
+      ownerCandidates,
+      potentialOwners: ownerCandidates.map((candidate) => candidate.displayName),
+      ownerConfidence: ownerCandidates.reduce<OwnerConfidence>(
+        (confidence, candidate) => maxOwnerConfidence(confidence, candidate.confidence),
+        "none"
+      )
+    };
+  });
+}
+
+function buildPrincipalOwnerCandidatesByPrincipalId(
+  rows: PrincipalOwnerCandidateSqlRow[]
+): Map<string, OwnerCandidate[]> {
+  const ownerCandidatesByPrincipalId = new Map<string, Map<string, OwnerCandidate>>();
+
+  for (const row of rows) {
+    const principalId = row.principal_id.toLowerCase();
+    const candidateKey = getPrincipalOwnerCandidateKey(row);
+    const candidates = ownerCandidatesByPrincipalId.get(principalId) ?? new Map<string, OwnerCandidate>();
+    const existing = candidates.get(candidateKey);
+    const evidence = toOwnerEvidence(row);
+    const relatedScope = toOwnerCandidateScope(row);
+
+    if (existing) {
+      existing.confidence = maxOwnerConfidence(existing.confidence, row.confidence);
+      existing.evidence = mergeOwnerEvidence(existing.evidence, [evidence]);
+      existing.relatedScopes = relatedScope
+        ? mergeOwnerCandidateScopes(existing.relatedScopes, [relatedScope])
+        : existing.relatedScopes;
+      continue;
+    }
+
+    candidates.set(candidateKey, {
+      key: candidateKey,
+      displayName: row.owner,
+      type: row.owner_type,
+      confidence: row.confidence,
+      source: row.source,
+      rank: 0,
+      evidence: [evidence],
+      relatedScopes: relatedScope ? [relatedScope] : []
+    });
+    ownerCandidatesByPrincipalId.set(principalId, candidates);
+  }
+
+  return new Map(
+    [...ownerCandidatesByPrincipalId.entries()].map(([principalId, candidates]) => [
+      principalId,
+      rankOwnerCandidates([...candidates.values()])
+    ])
+  );
+}
+
+function getPrincipalOwnerCandidateKey(row: PrincipalOwnerCandidateSqlRow): string {
+  if (row.source === "entraApplicationOwner" || row.source === "entraServicePrincipalOwner") {
+    return row.owner_candidate;
+  }
+
+  return getResourceGroupOwnerCandidateKey(row.owner_candidate, row.owner_type, row.owner);
+}
+
+function getResourceGroupOwnerCandidateKey(ownerCandidate: string, ownerType: OwnerType, owner: string): string {
+  if (ownerCandidate.trim()) {
+    return ownerCandidate;
+  }
+
+  return `${ownerType}:${owner.trim().toLowerCase()}`;
+}
+
+function toOwnerEvidence(row: PrincipalOwnerCandidateSqlRow): OwnerEvidence {
+  return {
+    user: row.evidence_value,
+    date: row.evidence_date,
+    key: row.evidence_key
+  };
+}
+
+function toOwnerCandidateScope(row: PrincipalOwnerCandidateSqlRow): OwnerCandidateScope | null {
+  if (row.path !== "indirect" || !row.subscription_id || !row.resource_group) {
+    return null;
+  }
+
+  return {
+    subscriptionId: row.subscription_id,
+    subscriptionName: row.subscription_name ?? undefined,
+    resourceGroup: row.resource_group,
+    principalId: row.principal_id,
+    scope: row.scope ?? undefined,
+    roleDefinitionName: row.role_definition_name
+  };
+}
+
+function mergeOwnerEvidence(left: OwnerEvidence[], right: OwnerEvidence[]): OwnerEvidence[] {
+  const merged = new Map<string, OwnerEvidence>();
+
+  for (const evidence of [...left, ...right]) {
+    merged.set(getOwnerEvidenceKey(evidence), evidence);
+  }
+
+  return [...merged.values()];
+}
+
+function getOwnerEvidenceKey(evidence: OwnerEvidence): string {
+  return `${evidence.key ?? ""}:${evidence.user}:${evidence.date ?? ""}`;
+}
+
+function mergeOwnerCandidateScopes(left: OwnerCandidateScope[], right: OwnerCandidateScope[]): OwnerCandidateScope[] {
+  const merged = new Map<string, OwnerCandidateScope>();
+
+  for (const scope of [...left, ...right]) {
+    merged.set(getOwnerCandidateScopeKey(scope), scope);
+  }
+
+  return [...merged.values()];
+}
+
+function getOwnerCandidateScopeKey(scope: OwnerCandidateScope): string {
+  return [
+    scope.subscriptionId ?? "",
+    scope.subscriptionName ?? "",
+    scope.resourceGroup ?? "",
+    scope.principalId ?? "",
+    scope.scope ?? "",
+    scope.roleDefinitionName ?? ""
+  ].join(":");
+}
+
 async function attachApplicationNotes<T extends { appId: string }>(
   connection: DuckDBConnection,
   servicePrincipals: T[]
@@ -307,3 +642,32 @@ const permissionRiskRank: Record<PermissionRiskLevel, number> = {
 function getPrincipalEnrichmentKeys(servicePrincipals: Pick<EntraServicePrincipal, "id" | "appId">[]): string[] {
   return servicePrincipals.flatMap((servicePrincipal) => [servicePrincipal.id, servicePrincipal.appId]);
 }
+
+async function readRows<Row extends Record<string, unknown>>(
+  connection: DuckDBConnection,
+  sql: string,
+  params?: Record<string, DuckDBValue>
+): Promise<Row[]> {
+  const reader = await connection.runAndReadAll(sql, params);
+  return reader.getRowObjectsJson() as Row[];
+}
+
+type PrincipalOwnerCandidateSqlRow = {
+  principal_id: string;
+  subscription_id: string | null;
+  subscription_name: string | null;
+  resource_group: string | null;
+  owner: string;
+  owner_type: OwnerType;
+  owner_candidate: string;
+  evidence_key: string;
+  confidence: Exclude<OwnerConfidence, "none">;
+  source: OwnerCandidateSource;
+  path: OwnershipEvidencePath;
+  discovery_source: OwnershipEvidenceDiscoverySource;
+  evidence_value: string;
+  evidence_date: string | null;
+  priority: number;
+  scope: string | null;
+  role_definition_name: string | null;
+};

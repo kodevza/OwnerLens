@@ -8,7 +8,14 @@ import type {
   AzureSubscription as CoreAzureSubscription,
   AzureUserAssignedManagedIdentity as CoreAzureUserAssignedManagedIdentity
 } from "../../../../core/azure/resources";
-import type { OwnerConfidence, OwnerEvidence, OwnerType } from "../../../../core/ownership/types";
+import type {
+  OwnerCandidateSource,
+  OwnerConfidence,
+  OwnerEvidence,
+  OwnerType,
+  OwnershipEvidenceDiscoverySource,
+  OwnershipEvidencePath
+} from "../../../../core/ownership/types";
 import type {
   AzureActivityLog as AzureActivityLogInput,
   AzureResource as AzureResourceInput,
@@ -45,6 +52,17 @@ export type AzureResourceGroupOwnerCandidateViewRow = {
   evidenceValue: string;
   evidenceDate: string | null;
   priority: number;
+};
+
+export type AzurePrincipalResourceGroupOwnerCandidateViewRow =
+  Omit<AzureResourceGroupOwnerCandidateViewRow, "subscriptionId" | "subscriptionName" | "resourceGroup" | "source"> & {
+  principalId: string;
+  subscriptionId: string | null;
+  subscriptionName: string | null;
+  resourceGroup: string | null;
+  source: OwnerCandidateSource;
+  path: OwnershipEvidencePath;
+  discoverySource: OwnershipEvidenceDiscoverySource;
 };
 
 export type AzureResourceGroupOwnershipSqlTarget =
@@ -307,6 +325,88 @@ export async function readAzureResourceGroupOwnerCandidateViewRows(
       limit: Math.max(1, Math.trunc(limit))
     }
   )).map(mapAzureResourceGroupOwnerCandidateRow);
+}
+
+export async function readAzurePrincipalResourceGroupOwnerCandidateViewRows(
+  connection: DuckDBConnection,
+  target: { principalId: string; subscriptionIds: string[]; resourceGroups: string[] },
+  limit: number
+): Promise<AzurePrincipalResourceGroupOwnerCandidateViewRow[]> {
+  return (await readRows<AzurePrincipalResourceGroupOwnerCandidateRow>(
+    connection,
+    `
+      select
+        coalesce(principal_id, lower(trim($principalId))) as principal_id,
+        subscription_id,
+        subscription_name,
+        resource_group,
+        owner,
+        owner_type,
+        owner_candidate,
+        case
+          when path = 'indirect' then concat(
+            'resourceGroup:',
+            lower(trim(subscription_id)),
+            ':',
+            lower(trim(resource_group)),
+            ':principal:',
+            lower(trim($principalId)),
+            ':',
+            owner_candidate
+          )
+          else evidence_key
+        end as evidence_key,
+        confidence,
+        source,
+        path,
+        discovery_source,
+        evidence_value,
+        evidence_date,
+        priority
+      from azure_principal_resource_group_owner_candidates
+      where (
+        path = 'direct'
+        and lower(trim(principal_id)) = lower(trim($principalId))
+      )
+      or (
+        path = 'indirect'
+        and (lower(trim(subscription_id)), lower(trim(resource_group))) in (
+          select
+            lower(trim(json_extract_string(subscription_entry.value, '$'))),
+            lower(trim(json_extract_string(resource_group_entry.value, '$')))
+          from json_each($subscriptionIds::json) subscription_entry
+          join json_each($resourceGroups::json) resource_group_entry
+            on subscription_entry.key = resource_group_entry.key
+        )
+      )
+      order by
+        case confidence
+          when 'high' then 3
+          when 'medium' then 2
+          when 'low' then 1
+          else 0
+        end desc,
+        case source
+          when 'tag' then 5
+          when 'resourceGroupOwner' then 5
+          when 'entraApplicationOwner' then 4
+          when 'entraServicePrincipalOwner' then 3
+          when 'activity' then 1
+          else 0
+        end desc,
+        priority,
+        lower(trim(coalesce(subscription_id, ''))),
+        lower(trim(coalesce(resource_group, ''))),
+        lower(trim(owner_candidate))
+      limit $limit
+    `,
+    {
+      principalId: target.principalId,
+      subscriptionIds: JSON.stringify(target.subscriptionIds),
+      resourceGroups: JSON.stringify(target.resourceGroups),
+      limit: Math.max(1, Math.trunc(limit))
+    }
+  )).map(mapAzurePrincipalResourceGroupOwnerCandidateRow);
 }
 
 async function readAzureResourceGroupOwnershipRows(
@@ -621,6 +721,17 @@ type AzureResourceGroupOwnerCandidateRow = {
   priority: number;
 };
 
+type AzurePrincipalResourceGroupOwnerCandidateRow =
+  Omit<AzureResourceGroupOwnerCandidateRow, "subscription_id" | "subscription_name" | "resource_group" | "source"> & {
+  principal_id: string;
+  subscription_id: string | null;
+  subscription_name: string | null;
+  resource_group: string | null;
+  source: OwnerCandidateSource;
+  path: OwnershipEvidencePath;
+  discovery_source: OwnershipEvidenceDiscoverySource;
+};
+
 type AzureResourceRow = {
   subscription_id: string;
   subscription_name: string;
@@ -755,6 +866,28 @@ function mapAzureResourceGroupOwnerCandidateRow(
     evidenceValue: row.evidence_value,
     evidenceDate: row.evidence_date,
     priority: readInteger(row.priority)
+  };
+}
+
+function mapAzurePrincipalResourceGroupOwnerCandidateRow(
+  row: AzurePrincipalResourceGroupOwnerCandidateRow
+): AzurePrincipalResourceGroupOwnerCandidateViewRow {
+  return {
+    subscriptionId: row.subscription_id,
+    subscriptionName: row.subscription_name,
+    resourceGroup: row.resource_group,
+    owner: row.owner,
+    ownerType: row.owner_type,
+    ownerCandidate: row.owner_candidate,
+    evidenceKey: row.evidence_key,
+    confidence: row.confidence,
+    evidenceValue: row.evidence_value,
+    evidenceDate: row.evidence_date,
+    priority: readInteger(row.priority),
+    principalId: row.principal_id,
+    source: row.source,
+    path: row.path,
+    discoverySource: row.discovery_source
   };
 }
 

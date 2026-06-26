@@ -9,7 +9,6 @@ import { AzureRbacComponent } from "./resource/AzureRbacComponent";
 import { EntraPermissionsComponent } from "./identity/EntraPermissionsComponent";
 import { ManagedIdentityComponent } from "./identity/ManagedIdentityComponent";
 import { OwnershipEvidenceComponent } from "./identity/OwnershipEvidenceComponent";
-import { OwnershipEvidenceToggle } from "./identity/OwnershipEvidenceToggle";
 import { RemediationPackageComponent } from "./RemediationPackageComponent";
 import { ResourceGroupComponent, type AzureRbacResourceGroupSelection } from "./resource/ResourceGroupComponent";
 import { ServicePrincipalComponent } from "./identity/ServicePrincipalComponent";
@@ -101,8 +100,6 @@ export function AzureComponent() {
     "servicePrincipals",
     enabledViewValues
   );
-  const [ownershipEvidenceToggleEnabled, setOwnershipEvidenceToggleEnabled] = useState(false);
-  const [ownershipEvidenceAutoFallbackEnabled, setOwnershipEvidenceAutoFallbackEnabled] = useState(true);
   const [ztaRelatedObjectFilter, setZtaRelatedObjectFilter] = useState<string | null>(null);
   const [tableControls, setTableControls] = useState<Record<PersistentTableView, PersistentTableControls>>({
     servicePrincipals: createPersistentTableControls(),
@@ -212,11 +209,6 @@ export function AzureComponent() {
         ...controls
       }
     }));
-  }
-
-  function handleOwnershipEvidenceToggleChange(checked: boolean) {
-    setOwnershipEvidenceToggleEnabled(checked);
-    setOwnershipEvidenceAutoFallbackEnabled(checked);
   }
 
   function getDetailTableControls(tabId: string): PersistentTableControls {
@@ -338,12 +330,6 @@ export function AzureComponent() {
             ))}
           </TabsList>
         </Tabs>
-        {ownershipEvidenceTab && isPrincipalOwnershipEvidenceTab(ownershipEvidenceTab) ? (
-          <OwnershipEvidenceToggle
-            checked={ownershipEvidenceToggleEnabled}
-            onCheckedChange={handleOwnershipEvidenceToggleChange}
-          />
-        ) : null}
       </div>
       <div className="relative z-0">
         {activeView === "resourceGroups" ? (
@@ -424,14 +410,11 @@ export function AzureComponent() {
         {ownershipEvidenceTab ? (
           <OwnershipEvidenceComponent
             key={ownershipEvidenceTab.tabId}
-            allowAzureRbacFallback={ownershipEvidenceAutoFallbackEnabled}
-            azureRbac={ownershipEvidenceToggleEnabled}
             displayName={getOwnershipEvidenceTabDisplayName(ownershipEvidenceTab)}
             filters={getDetailTableControls(ownershipEvidenceTab.tabId).filters}
             sortRules={getDetailTableControls(ownershipEvidenceTab.tabId).sortRules}
             target={ownershipEvidenceTab.target}
             onAzureRbacClick={(principal) => openAzureRbac(principal, ownershipEvidenceTab.tabId)}
-            onAzureRbacFallback={() => setOwnershipEvidenceToggleEnabled(true)}
             onFiltersChange={(filters) => setDetailTableControlState(ownershipEvidenceTab.tabId, { filters })}
             onOwnershipEvidenceClick={(selection) => openOwnershipEvidence(selection, ownershipEvidenceTab.returnView)}
             onSortRulesChange={(sortRules) => setDetailTableControlState(ownershipEvidenceTab.tabId, { sortRules })}
@@ -532,10 +515,6 @@ function getOwnershipEvidenceTabDisplayName(tab: OwnershipEvidenceTab): string {
   }
 
   return `${prefix}: ${tab.displayName}`;
-}
-
-function isPrincipalOwnershipEvidenceTab(tab: OwnershipEvidenceTab): boolean {
-  return tab.target.kind === "servicePrincipal" || tab.target.kind === "managedIdentity";
 }
 
 function getAzureRbacTabDisplayName(tab: AzureRbacTab): string {
