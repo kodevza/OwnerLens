@@ -4320,6 +4320,308 @@ test("seeds owner tag config from data config on runtime startup", async () => {
   }
 });
 
+test("queries service principal collection filters, sorts, page, and count in DuckDB", async () => {
+  const servicePrincipals = Array.from({ length: 25 }, (_, index) =>
+    servicePrincipal(`sp-${String(index + 1).padStart(2, "0")}`, `app-${index + 1}`, `Principal ${String(index + 1).padStart(2, "0")}`, {
+      servicePrincipalType: "Application",
+      tags: index === 4 ? ["ownerGroup=team-owner"] : []
+    })
+  );
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: servicePrincipals.length,
+      oauth2PermissionGrantCount: 1,
+      appRoleAssignmentCount: 1
+    },
+    servicePrincipals,
+    oauth2PermissionGrants: [
+      {
+        id: "grant-sp-07",
+        clientId: "sp-07",
+        consentType: "AllPrincipals",
+        principalId: null,
+        resourceId: "graph",
+        scope: "Directory.Read.All"
+      }
+    ],
+    appRoleAssignments: [
+      {
+        id: "assignment-sp-07",
+        principalId: "sp-07",
+        principalDisplayName: "Principal 07",
+        resourceId: "graph",
+        resourceDisplayName: "Microsoft Graph",
+        appRoleId: "role-1",
+        appRoleDisplayName: "Directory.Read.All",
+        appRoleValue: "Directory.Read.All"
+      }
+    ]
+  };
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      roleAssignmentCount: 3
+    },
+    roleAssignments: [
+      roleAssignment("sp-03", "Owner", "/subscriptions/sub-1/resourceGroups/rg-app", "ResourceGroup"),
+      roleAssignment("sp-03", "Reader", "/subscriptions/sub-1/resourceGroups/rg-app/providers/Microsoft.Web/sites/app-a", "Resource"),
+      roleAssignment("sp-11", "Reader", "/subscriptions/sub-1/resourceGroups/rg-app", "ResourceGroup")
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await runtime.initialize();
+
+    await expect(runtime.queryEntraServicePrincipals({
+      filters: [{ column: "displayName", values: ["Principal 24"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ id: "sp-24" })] });
+    await expect(runtime.queryEntraServicePrincipals({
+      filters: [{ column: "rbacRoleLevel", values: ["high"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ id: "sp-03" })] });
+    await expect(runtime.queryEntraServicePrincipals({
+      filters: [{ column: "entraPermissionRisk", values: ["high"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ id: "sp-07" })] });
+    await expect(runtime.queryEntraServicePrincipals({
+      filters: [{ column: "ownerConfidence", values: ["high"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ id: "sp-05" })] });
+    await expect(runtime.queryEntraServicePrincipals({
+      filters: [{ column: "potentialOwners", values: ["team-owner"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ id: "sp-05" })] });
+
+    expect((await runtime.queryEntraServicePrincipals({
+      sortRules: [{ columnId: "displayName", direction: "desc" }],
+      page: 1,
+      pageSize: 1
+    })).rows[0]).toMatchObject({ id: "sp-25" });
+    expect((await runtime.queryEntraServicePrincipals({
+      sortRules: [{ columnId: "rbacRoleAssignmentCount", direction: "desc" }],
+      page: 1,
+      pageSize: 1
+    })).rows[0]).toMatchObject({ id: "sp-03", rbacRoleAssignmentCount: 2 });
+    expect((await runtime.queryEntraServicePrincipals({
+      sortRules: [{ columnId: "entraPermissionCount", direction: "desc" }],
+      page: 1,
+      pageSize: 1
+    })).rows[0]).toMatchObject({ id: "sp-07", entraPermissionCount: 2 });
+
+    const pageTwo = await runtime.queryEntraServicePrincipals({ page: 2, pageSize: 20 });
+    expect(pageTwo.count).toBe(25);
+    expect(pageTwo.rows).toHaveLength(5);
+    expect(pageTwo.rows[0]).toMatchObject({ id: "sp-21" });
+  });
+});
+
+test("queries managed identity collection filters and sorts in DuckDB", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 3,
+      oauth2PermissionGrantCount: 1
+    },
+    servicePrincipals: [
+      servicePrincipal("mi-1", "client-1", "Identity One", "ManagedIdentity"),
+      servicePrincipal("mi-2", "client-2", "Identity Two", "ManagedIdentity"),
+      servicePrincipal("mi-3", "client-3", "Identity Three", "ManagedIdentity")
+    ],
+    oauth2PermissionGrants: [
+      {
+        id: "grant-mi-2",
+        clientId: "mi-2",
+        consentType: "AllPrincipals",
+        principalId: null,
+        resourceId: "graph",
+        scope: "Directory.Read.All"
+      }
+    ]
+  };
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      resourceGroupCount: 2,
+      userAssignedManagedIdentityCount: 2,
+      roleAssignmentCount: 2
+    },
+    resourceGroups: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-mi-owner",
+        location: "westeurope",
+        tags: { ownerGroup: "mi-team" }
+      },
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceGroup: "rg-mi-special",
+        location: "westeurope",
+        tags: null
+      }
+    ],
+    userAssignedManagedIdentities: [
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceId: "/subscriptions/sub-1/resourceGroups/rg-mi-owner/providers/Microsoft.ManagedIdentity/userAssignedIdentities/mi-one",
+        name: "mi-one",
+        resourceGroup: "rg-mi-owner",
+        location: "westeurope",
+        clientId: "client-1",
+        principalId: "mi-1",
+        tenantId: "tenant-1",
+        tags: null
+      },
+      {
+        subscriptionId: "sub-1",
+        subscriptionName: "Subscription One",
+        resourceId: "/subscriptions/sub-1/resourceGroups/rg-mi-special/providers/Microsoft.ManagedIdentity/userAssignedIdentities/mi-two",
+        name: "mi-two",
+        resourceGroup: "rg-mi-special",
+        location: "westeurope",
+        clientId: "client-2",
+        principalId: "mi-2",
+        tenantId: "tenant-1",
+        tags: null
+      }
+    ],
+    roleAssignments: [
+      roleAssignment("mi-1", "Owner", "/subscriptions/sub-1/resourceGroups/rg-mi-owner", "ResourceGroup"),
+      roleAssignment("mi-2", "Reader", "/subscriptions/sub-1/resourceGroups/rg-mi-special", "ResourceGroup")
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await runtime.initialize();
+
+    await expect(runtime.queryEntraManagedIdentities({
+      filters: [{ column: "managedIdentityHomeResourceGroup", values: ["rg-mi-owner"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ id: "mi-1" })] });
+    await expect(runtime.queryEntraManagedIdentities({
+      filters: [{ column: "assignedResourceGroups", values: ["rg-mi-special"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ id: "mi-2" })] });
+    await expect(runtime.queryEntraManagedIdentities({
+      filters: [{ column: "potentialOwners", values: ["mi-team"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ id: "mi-1" })] });
+
+    expect((await runtime.queryEntraManagedIdentities({
+      sortRules: [{ columnId: "rbacRoleLevel", direction: "desc" }],
+      page: 1,
+      pageSize: 1
+    })).rows[0]).toMatchObject({ id: "mi-1", rbacRoleLevel: "high" });
+    expect((await runtime.queryEntraManagedIdentities({
+      sortRules: [{ columnId: "entraPermissionRisk", direction: "desc" }],
+      page: 1,
+      pageSize: 1
+    })).rows[0]).toMatchObject({ id: "mi-2", entraPermissionRisk: "high" });
+  });
+});
+
+test("queries resource group ownership filters, sorts, page, and count in DuckDB", async () => {
+  const resourceGroups = Array.from({ length: 22 }, (_, index) => ({
+    subscriptionId: "sub-1",
+    subscriptionName: index === 0 ? "Critical Subscription" : "Subscription One",
+    resourceGroup: `rg-${String(index + 1).padStart(2, "0")}`,
+    location: "westeurope",
+    tags: index === 2 ? { ownerGroup: "rg-team" } : null
+  }));
+  const azureSnapshot: AzureSnapshot = {
+    ...minimalAzureSnapshot([]),
+    meta: {
+      ...minimalAzureSnapshot([]).meta,
+      resourceGroupCount: resourceGroups.length,
+      roleAssignmentCount: 2
+    },
+    resourceGroups,
+    roleAssignments: [
+      roleAssignmentForResourceGroup("sp-1", "Owner", "rg-03"),
+      roleAssignmentForResourceGroup("sp-2", "Reader", "rg-10")
+    ]
+  };
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 2
+    },
+    servicePrincipals: [
+      servicePrincipal("sp-1", "app-1", "Principal One", "Application"),
+      servicePrincipal("sp-2", "app-2", "Principal Two", "Application")
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
+    await runtime.initialize();
+
+    await expect(runtime.queryAzureResourceGroupOwnership({
+      filters: [{ column: "resourceGroup", values: ["rg-03"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ resourceGroup: "rg-03" })] });
+    await expect(runtime.queryAzureResourceGroupOwnership({
+      filters: [{ column: "subscriptionName", values: ["Critical"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ resourceGroup: "rg-01" })] });
+    await expect(runtime.queryAzureResourceGroupOwnership({
+      filters: [{ column: "ownerCandidates.displayName", values: ["rg-team"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ resourceGroup: "rg-03" })] });
+    await expect(runtime.queryAzureResourceGroupOwnership({
+      filters: [{ column: "confidence", values: ["high"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ resourceGroup: "rg-03" })] });
+    await expect(runtime.queryAzureResourceGroupOwnership({
+      filters: [{ column: "rbacRoleLevel", values: ["high"] }],
+      page: 1,
+      pageSize: 20
+    })).resolves.toMatchObject({ count: 1, rows: [expect.objectContaining({ resourceGroup: "rg-03" })] });
+
+    expect((await runtime.queryAzureResourceGroupOwnership({
+      sortRules: [{ columnId: "resourceGroup", direction: "desc" }],
+      page: 1,
+      pageSize: 1
+    })).rows[0]).toMatchObject({ resourceGroup: "rg-22" });
+    expect((await runtime.queryAzureResourceGroupOwnership({
+      sortRules: [{ columnId: "rbacRoleAssignmentCount", direction: "desc" }],
+      page: 1,
+      pageSize: 1
+    })).rows[0]).toMatchObject({ resourceGroup: "rg-03", rbacRoleAssignmentCount: 1 });
+
+    const pageTwo = await runtime.queryAzureResourceGroupOwnership({ page: 2, pageSize: 20 });
+    expect(pageTwo.count).toBe(22);
+    expect(pageTwo.rows).toHaveLength(2);
+    expect(pageTwo.rows[0]).toMatchObject({ resourceGroup: "rg-21" });
+  });
+});
+
 function servicePrincipal(
   id: string,
   appId: string,

@@ -1,16 +1,16 @@
 import { ExportService } from "../ExportService";
 import { AzureResourcesCollectionQueryService } from "./AzureResourcesCollectionQueryService";
-import type { AzureResourceGroupOwnershipSqlRow } from "./tables";
+import type { ResourceGroupOwnershipRow } from "../../../../core/azure/resources";
 
 test("exports resource group ownership CSV from a large paginated ownership query", async () => {
-  const readAzureResourceGroupOwnershipCollectionSqlRows = jest.fn().mockResolvedValue([
-    ownershipSqlRow("sub-1", "rg-a", "alice@example.test"),
-    ownershipSqlRow("sub-1", "rg-b", "bob@example.test")
+  const queryAzureResourceGroupOwnershipCollectionRows = jest.fn().mockResolvedValue([
+    ownershipRow("sub-1", "rg-a", "alice@example.test"),
+    ownershipRow("sub-1", "rg-b", "bob@example.test")
   ]);
   const service = new AzureResourcesCollectionQueryService({
     entra: {} as never,
     azureResources: {
-      readAzureResourceGroupOwnershipCollectionSqlRows
+      queryAzureResourceGroupOwnershipCollectionRows
     } as never,
     disabledEvidenceStore: {} as never,
     exportService: new ExportService()
@@ -19,20 +19,25 @@ test("exports resource group ownership CSV from a large paginated ownership quer
   const csv = await service.exportResourceGroupOwnershipCsv({
     page: 1,
     pageSize: 1,
-    sortRules: [{ columnId: "resourceGroup", direction: "asc" }]
+    sortRules: [{ columnId: "resourceGroup", direction: "asc" }],
+    selectedRowKeys: ["sub-1:rg-b"]
   });
 
-  expect(readAzureResourceGroupOwnershipCollectionSqlRows).toHaveBeenCalledWith(10000);
+  expect(queryAzureResourceGroupOwnershipCollectionRows).toHaveBeenCalledWith({
+    filters: undefined,
+    sortRules: [{ columnId: "resourceGroup", direction: "asc" }],
+    selectedRowKeys: ["sub-1:rg-b"]
+  });
   expect(csv.count).toBe(2);
   expect(csv.body).toContain("rg-a");
   expect(csv.body).toContain("rg-b");
 });
 
-function ownershipSqlRow(
+function ownershipRow(
   subscriptionId: string,
   resourceGroup: string,
   owner: string
-): AzureResourceGroupOwnershipSqlRow {
+): ResourceGroupOwnershipRow {
   return {
     subscriptionId,
     subscriptionName: "Subscription 1",
@@ -40,15 +45,24 @@ function ownershipSqlRow(
     location: "westeurope",
     tags: null,
     targetKey: `${subscriptionId}:${resourceGroup}`,
-    kind: "resourceGroup",
+    ownerCandidates: [
+      {
+        key: `resourceGroup:${subscriptionId}:${resourceGroup}:ownerUser:${owner}`,
+        displayName: owner,
+        type: "ownerUser",
+        confidence: "high",
+        source: "tag",
+        rank: 1,
+        evidence: [{ user: owner, date: null }],
+        relatedScopes: []
+      }
+    ],
     owner,
-    ownerCandidate: owner,
-    ownerType: "ownerUser",
-    ownerDisplayName: owner,
-    evidenceKey: `resourceGroup:${subscriptionId}:${resourceGroup}:ownerUser:${owner}`,
-    principalId: null,
     confidence: "high",
     source: "tag.owner",
-    evidence: [{ user: owner, date: null }]
+    evidence: [{ user: owner, date: null }],
+    roleAssignments: [],
+    rbacRoleAssignmentCount: 0,
+    rbacRoleLevel: "none"
   };
 }

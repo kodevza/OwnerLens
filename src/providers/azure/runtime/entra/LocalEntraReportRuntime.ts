@@ -21,15 +21,19 @@ import type { EntraSnapshot } from "../../inputTransferObject/generated/EntraSna
 import {
   countManagedIdentities,
   countServicePrincipals,
+  countPrincipalCollectionRows,
   readAppRoleAssignments,
   readManagedIdentities,
   readOAuth2PermissionGrants,
   readPrincipalPermissions,
   findServicePrincipalById,
+  queryPrincipalCollectionRows,
   readServicePrincipals,
   readUserGroupMembership,
   type EntraPermissionReadOptions,
   type EntraPrincipalReadOptions,
+  type EntraPrincipalCollectionRowsQueryOptions,
+  type EntraPrincipalCollectionRow,
   type EntraPrincipalPermissions,
   type EntraUserGroupMembershipResponse,
   type ManagedIdentity,
@@ -105,6 +109,20 @@ export class LocalEntraReportRuntime {
   async readServicePrincipals(options: EntraPrincipalReadOptions = {}): Promise<ServicePrincipal[]> {
     this.assertImported();
     return readServicePrincipals(this.getConnection(), options);
+  }
+
+  async queryPrincipalCollectionRows(
+    options: EntraPrincipalCollectionRowsQueryOptions
+  ): Promise<EntraPrincipalCollectionRow[]> {
+    this.assertImported();
+    return queryPrincipalCollectionRows(this.getConnection(), options);
+  }
+
+  async countPrincipalCollectionRows(
+    options: Omit<EntraPrincipalCollectionRowsQueryOptions, "page" | "pageSize" | "sortRules">
+  ): Promise<number> {
+    this.assertImported();
+    return countPrincipalCollectionRows(this.getConnection(), options);
   }
 
   async countServicePrincipals(options: EntraPrincipalReadOptions = {}): Promise<number> {

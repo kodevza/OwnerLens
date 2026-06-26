@@ -13,7 +13,6 @@ import type { RuntimeCollectionCsvExport } from "../../../../core/runtime/collec
 import type { DisabledOwnerEvidenceStore } from "../../../../core/runtime/DisabledOwnerEvidenceStore";
 import type { ExportService } from "../ExportService";
 import type { LocalEntraReportRuntime } from "./LocalEntraReportRuntime";
-import { getRuntimeServicePrincipalFilters } from "./domain/servicePrincipalsTable";
 import { maxOwnerConfidence } from "../../../../core/ownership/ownerCandidateRanking";
 import type { OwnerCandidate, OwnerConfidence } from "../../../../core/ownership/types";
 
@@ -37,44 +36,76 @@ export class EntraCollectionQueryService {
   async queryServicePrincipals(
     options: LocalReportCollectionQueryOptions
   ): Promise<LocalReportPaginatedCollection<"entra.servicePrincipals">> {
-    const rows = await this.readServicePrincipalRows(options);
-    const collection = buildPaginatedCollection(
-      "entra.servicePrincipals",
-      rows,
-      getRuntimePrincipalCollectionOptions(options, rows.length)
-    );
+    const [rows, count] = await Promise.all([
+      this.entra.queryPrincipalCollectionRows({
+        principalKind: "servicePrincipal",
+        page: options.page ?? 1,
+        pageSize: options.pageSize ?? 50,
+        filters: options.filters,
+        sortRules: options.sortRules
+      }),
+      this.entra.countPrincipalCollectionRows({
+        principalKind: "servicePrincipal",
+        filters: options.filters
+      })
+    ]);
 
-    return withDuckDbCount(collection, await this.countServicePrincipalRows(options), options);
+    return buildRuntimeCollectionResponse("entra.servicePrincipals", rows as unknown as Record<string, unknown>[], {
+      ...options,
+      page: options.page ?? 1,
+      pageSize: options.pageSize ?? 50
+    }, count);
   }
 
   async exportServicePrincipalsCsv(
     options: LocalReportCollectionQueryOptions
   ): Promise<RuntimeCollectionCsvExport<"entra.servicePrincipals">> {
     return this.exportService.exportEntraServicePrincipalsCsv(
-      await this.readServicePrincipalRows(options),
-      getRuntimePrincipalCollectionOptions(options)
+      await this.entra.queryPrincipalCollectionRows({
+        principalKind: "servicePrincipal",
+        filters: options.filters,
+        sortRules: options.sortRules,
+        selectedRowKeys: options.selectedRowKeys
+      }) as unknown as Record<string, unknown>[],
+      {}
     );
   }
 
   async queryManagedIdentities(
     options: LocalReportCollectionQueryOptions
   ): Promise<LocalReportPaginatedCollection<"entra.managedIdentities">> {
-    const rows = await this.readManagedIdentityRows(options);
-    const collection = buildPaginatedCollection(
-      "entra.managedIdentities",
-      rows,
-      getRuntimePrincipalCollectionOptions(options, rows.length)
-    );
+    const [rows, count] = await Promise.all([
+      this.entra.queryPrincipalCollectionRows({
+        principalKind: "managedIdentity",
+        page: options.page ?? 1,
+        pageSize: options.pageSize ?? 50,
+        filters: options.filters,
+        sortRules: options.sortRules
+      }),
+      this.entra.countPrincipalCollectionRows({
+        principalKind: "managedIdentity",
+        filters: options.filters
+      })
+    ]);
 
-    return withDuckDbCount(collection, await this.countManagedIdentityRows(options), options);
+    return buildRuntimeCollectionResponse("entra.managedIdentities", rows as unknown as Record<string, unknown>[], {
+      ...options,
+      page: options.page ?? 1,
+      pageSize: options.pageSize ?? 50
+    }, count);
   }
 
   async exportManagedIdentitiesCsv(
     options: LocalReportCollectionQueryOptions
   ): Promise<RuntimeCollectionCsvExport<"entra.managedIdentities">> {
     return this.exportService.exportEntraManagedIdentitiesCsv(
-      await this.readManagedIdentityRows(options),
-      getRuntimePrincipalCollectionOptions(options)
+      await this.entra.queryPrincipalCollectionRows({
+        principalKind: "managedIdentity",
+        filters: options.filters,
+        sortRules: options.sortRules,
+        selectedRowKeys: options.selectedRowKeys
+      }) as unknown as Record<string, unknown>[],
+      {}
     );
   }
 
@@ -181,63 +212,40 @@ export class EntraCollectionQueryService {
   }
 }
 
-function getRuntimePrincipalCollectionOptions(
-  options: LocalReportCollectionQueryOptions,
-  rowCount?: number
-): LocalReportCollectionQueryOptions {
-  if (rowCount !== undefined && canUseDuckDbLookupLimit(options)) {
-    return {
-      ...options,
-      page: 1,
-      pageSize: Math.max(1, rowCount),
-      filters: getRuntimeServicePrincipalFilters(options.filters ?? [])
-    };
+function buildRuntimeCollectionResponse<CollectionId extends string>(
+  collectionId: CollectionId,
+  rows: Record<string, unknown>[],
+  options: Required<Pick<LocalReportCollectionQueryOptions, "page" | "pageSize">> & LocalReportCollectionQueryOptions,
+  count: number
+): LocalReportPaginatedCollection<CollectionId> {
+  return {
+    collectionId,
+    columns: buildCollectionColumns(rows),
+    rows,
+    page: options.page,
+    pageSize: options.pageSize,
+    count
+  };
+}
+
+function buildCollectionColumns(rows: Record<string, unknown>[]): string[] {
+  const columns = new Set<string>();
+
+  for (const row of rows) {
+    for (const column of Object.keys(row)) {
+      columns.add(column);
+    }
   }
 
-  return {
-    ...options,
-    filters: getRuntimeServicePrincipalFilters(options.filters ?? [])
-  };
+  return [...columns];
 }
 
 function getPrincipalSourceReadOptions(
   options: LocalReportCollectionQueryOptions
 ): LocalReportCollectionQueryOptions {
-  if (!canUseDuckDbLookupLimit(options)) {
-    return {
-      filters: options.filters
-    };
-  }
-
   return {
-    page: options.page ?? 1,
-    pageSize: options.pageSize ?? 50000,
     filters: options.filters
   };
-}
-
-function withDuckDbCount<CollectionId extends string>(
-  collection: LocalReportPaginatedCollection<CollectionId>,
-  duckDbCount: number,
-  options: LocalReportCollectionQueryOptions
-): LocalReportPaginatedCollection<CollectionId> {
-  if (!canUseDuckDbLookupLimit(options)) {
-    return collection;
-  }
-
-  return {
-    ...collection,
-    page: options.page ?? collection.page,
-    pageSize: options.pageSize ?? collection.pageSize,
-    count: duckDbCount
-  };
-}
-
-function canUseDuckDbLookupLimit(options: LocalReportCollectionQueryOptions): boolean {
-  return (
-    getRuntimeServicePrincipalFilters(options.filters ?? []).length === 0 &&
-    (options.sortRules ?? []).filter((rule) => rule.columnId.trim()).length === 0
-  );
 }
 
 function applyActiveOwnerProjectionToPrincipalRows<Row extends ServicePrincipal | ManagedIdentity>(

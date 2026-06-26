@@ -38,14 +38,19 @@ import { readEntraUserGroupMembership } from "./domain/groupMembersTable";
 import { readEntraOAuth2PermissionGrantRows } from "./domain/oauth2PermissionGrantsTable";
 import { toManagedIdentities, toServicePrincipals } from "./principalProjection";
 import {
+  countEntraPrincipalCollectionRows,
   countEntraServicePrincipalRows,
+  queryEntraPrincipalCollectionRows,
   readEntraServicePrincipalRowById,
-  readEntraServicePrincipalRows
+  readEntraServicePrincipalRows,
+  type EntraPrincipalCollectionRow,
+  type EntraPrincipalCollectionRowsQueryOptions
 } from "./domain/servicePrincipalsTable";
 
 export type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
 export type { ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
 export type { EntraUserGroupMembershipResponse } from "../../../../core/azure/entra/types";
+export type { EntraPrincipalCollectionRow, EntraPrincipalCollectionRowsQueryOptions };
 
 export type EntraPrincipalPermissions = {
   principalId: string;
@@ -118,6 +123,20 @@ export async function countServicePrincipals(
     ...options,
     principalKind: "servicePrincipal"
   });
+}
+
+export async function queryPrincipalCollectionRows(
+  connection: DuckDBConnection,
+  options: EntraPrincipalCollectionRowsQueryOptions
+): Promise<EntraPrincipalCollectionRow[]> {
+  return queryEntraPrincipalCollectionRows(connection, options);
+}
+
+export async function countPrincipalCollectionRows(
+  connection: DuckDBConnection,
+  options: Omit<EntraPrincipalCollectionRowsQueryOptions, "page" | "pageSize" | "sortRules">
+): Promise<number> {
+  return countEntraPrincipalCollectionRows(connection, options);
 }
 
 export async function findServicePrincipalById(

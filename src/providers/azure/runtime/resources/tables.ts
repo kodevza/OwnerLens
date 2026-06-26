@@ -1,9 +1,11 @@
 import type { DuckDBConnection, DuckDBValue } from "@duckdb/node-api";
 
+import type { SortRule } from "../../../../core/collectionControls";
 import type {
   AzureActivityLog as CoreAzureActivityLog,
   AzureResource as CoreAzureResource,
   AzureResourceGroup as CoreAzureResourceGroup,
+  ResourceGroupOwnershipRow as CoreAzureResourceGroupOwnershipRow,
   AzureRoleAssignment as CoreAzureRoleAssignment,
   AzureSubscription as CoreAzureSubscription,
   AzureUserAssignedManagedIdentity as CoreAzureUserAssignedManagedIdentity
@@ -16,6 +18,8 @@ import type {
   OwnershipEvidenceDiscoverySource,
   OwnershipEvidencePath
 } from "../../../../core/ownership/types";
+import type { LocalReportCollectionFilter } from "../../../../core/runtime/collections";
+import type { PageOptions } from "../../../../core/runtime/pagination";
 import type {
   AzureActivityLog as AzureActivityLogInput,
   AzureResource as AzureResourceInput,
@@ -24,6 +28,15 @@ import type {
   AzureSubscription as AzureSubscriptionInput,
   AzureUserAssignedManagedIdentity as AzureUserAssignedManagedIdentityInput
 } from "../../inputTransferObject/generated/AzureSnapshot";
+import {
+  buildCountSql,
+  buildOrderBySql,
+  buildPageSql,
+  buildWhereSql,
+  combineWhereSql,
+  type RuntimeSqlFragment,
+  type RuntimeSqlColumnMap
+} from "../runtimeSqlCollectionQuery";
 
 export type AzureResourceGroupOwnershipSqlRow = CoreAzureResourceGroup & {
   targetKey: string;
@@ -37,6 +50,12 @@ export type AzureResourceGroupOwnershipSqlRow = CoreAzureResourceGroup & {
   confidence: OwnerConfidence;
   source: string;
   evidence: OwnerEvidence[];
+};
+
+export type AzureResourceGroupOwnershipCollectionQueryOptions = PageOptions & {
+  filters?: LocalReportCollectionFilter[];
+  sortRules?: SortRule[];
+  selectedRowKeys?: string[];
 };
 
 export type AzureResourceGroupOwnerCandidateViewRow = {
@@ -283,6 +302,44 @@ export async function readAzureResourceGroupOwnershipCollectionSqlRows(
   limit = 20
 ): Promise<AzureResourceGroupOwnershipSqlRow[]> {
   return readAzureResourceGroupOwnershipRows(connection, { limit });
+}
+
+export async function queryAzureResourceGroupOwnershipCollectionRows(
+  connection: DuckDBConnection,
+  options: AzureResourceGroupOwnershipCollectionQueryOptions = {}
+): Promise<CoreAzureResourceGroupOwnershipRow[]> {
+  const baseQuery = azureResourceGroupOwnershipCollectionRowsSql;
+  const where = buildResourceGroupOwnershipCollectionWhereSql(options);
+  const page = buildPageSql(options.page, options.pageSize);
+  const rows = await readRows<AzureResourceGroupOwnershipCollectionRow>(
+    connection,
+    `
+      select *
+      from (
+        ${baseQuery}
+      ) collection_rows
+      ${where.sql}
+      ${buildOrderBySql(options.sortRules, azureResourceGroupOwnershipColumnMap, "ordinal asc")}
+      ${page.sql}
+    `,
+    {
+      ...where.params,
+      ...page.params
+    }
+  );
+
+  return rows.map(mapAzureResourceGroupOwnershipCollectionRow);
+}
+
+export async function countAzureResourceGroupOwnershipCollectionRows(
+  connection: DuckDBConnection,
+  options: Pick<AzureResourceGroupOwnershipCollectionQueryOptions, "filters" | "selectedRowKeys"> = {}
+): Promise<number> {
+  const where = buildResourceGroupOwnershipCollectionWhereSql(options);
+  const countQuery = buildCountSql(azureResourceGroupOwnershipCollectionRowsSql, where);
+  const rows = await readRows<{ count: number | string }>(connection, countQuery.sql, countQuery.params);
+
+  return Number(rows[0]?.count ?? 0);
 }
 
 export async function readAzureResourceGroupOwnerCandidateViewRows(
@@ -610,6 +667,238 @@ function normalizeResourceGroupOwnershipSqlTarget(
   };
 }
 
+const azureResourceGroupOwnershipCollectionRowsSql = `
+  with base_rg as (
+    select
+      ordinal,
+      subscription_id,
+      subscription_name,
+      resource_group,
+      location,
+      tags,
+      'resourceGroup:' || lower(subscription_id) || ':' || lower(resource_group) as target_key
+    from azure_resource_groups
+  ),
+  service_principal_ids as (
+    select lower(trim(id)) as principal_id
+    from entra_service_principals
+  ),
+  role_assignment_rows as (
+    select
+      rg.target_key,
+      assignment.*,
+      case
+        when lower(coalesce(assignment.role_definition_name, '')) in (
+          'owner',
+          'user access administrator',
+          'role based access control administrator',
+          'privileged role administrator',
+          'key vault administrator'
+        ) then 'high'
+        when lower(coalesce(assignment.role_definition_name, '')) = 'reader' then 'low'
+        when assignment.role_definition_name is null then 'medium'
+        else 'medium'
+      end as role_risk
+    from base_rg rg
+    join azure_role_assignments assignment
+      on lower(trim(coalesce(assignment.scope_subscription_id, assignment.subscription_id, regexp_extract(assignment.scope, '/subscriptions/([^/]+)', 1)))) =
+        lower(trim(rg.subscription_id))
+      and lower(trim(coalesce(assignment.scope_resource_group, regexp_extract(assignment.scope, '/resourceGroups/([^/]+)', 1)))) =
+        lower(trim(rg.resource_group))
+    left join service_principal_ids principal_ids
+      on lower(trim(assignment.principal_id)) = principal_ids.principal_id
+    where lower(coalesce(assignment.principal_type, '')) = 'serviceprincipal'
+      or principal_ids.principal_id is not null
+  ),
+  rbac_summary as (
+    select
+      target_key,
+      count(*) as rbac_role_assignment_count,
+      case max(case role_risk when 'high' then 3 when 'medium' then 2 when 'low' then 1 else 0 end)
+        when 3 then 'high'
+        when 2 then 'medium'
+        when 1 then 'low'
+        else 'none'
+      end as rbac_role_level,
+      to_json(list(
+        struct_pack(
+          subscriptionId := subscription_id,
+          subscriptionName := subscription_name,
+          roleAssignmentId := role_assignment_id,
+          scope := scope,
+          scopeType := scope_type,
+          scopeSubscriptionId := scope_subscription_id,
+          scopeResourceGroup := scope_resource_group,
+          scopeResourceProvider := scope_resource_provider,
+          scopeResourceType := scope_resource_type,
+          scopeResourceName := scope_resource_name,
+          scopeManagementGroup := scope_management_group,
+          principalId := principal_id,
+          principalType := principal_type,
+          principalDisplayName := principal_display_name,
+          signInName := sign_in_name,
+          roleDefinitionId := role_definition_id,
+          roleDefinitionName := role_definition_name,
+          canDelegate := can_delegate,
+          condition := condition,
+          conditionVersion := condition_version
+        )
+        order by lower(coalesce(principal_display_name, principal_id)), lower(coalesce(role_definition_name, '')), lower(scope)
+      )) as role_assignments
+    from role_assignment_rows
+    group by target_key
+  ),
+  owner_candidates as (
+    select
+      rg.target_key,
+      candidate.owner,
+      candidate.owner_type,
+      candidate.owner_candidate,
+      candidate.evidence_key,
+      candidate.confidence,
+      candidate.source,
+      candidate.evidence_value,
+      candidate.evidence_date,
+      candidate.priority,
+      exists (
+        select 1
+        from disabled_owner_evidence_keys disabled
+        where disabled.provider = 'azure'
+          and lower(trim(disabled.owner_key)) = lower(trim(candidate.evidence_key))
+      ) as disabled
+    from base_rg rg
+    join azure_resource_group_owner_candidates candidate
+      on lower(trim(candidate.subscription_id)) = lower(trim(rg.subscription_id))
+      and lower(trim(candidate.resource_group)) = lower(trim(rg.resource_group))
+  ),
+  selected_owner as (
+    select *
+    from (
+      select
+        owner_candidates.*,
+        row_number() over (
+          partition by target_key
+          order by
+            case when disabled then 1 else 0 end asc,
+            case confidence when 'high' then 3 when 'medium' then 2 when 'low' then 1 else 0 end desc,
+            priority asc,
+            lower(trim(owner)) asc
+        ) as owner_rank
+      from owner_candidates
+    ) ranked_owner_candidates
+    where owner_rank = 1
+  ),
+  collection_rows as (
+    select
+      rg.ordinal,
+      rg.subscription_id,
+      rg.subscription_name,
+      rg.resource_group,
+      rg.location,
+      rg.tags,
+      rg.target_key,
+      case when owner.disabled then null else owner.owner end as owner,
+      case when owner.disabled then 'none' else coalesce(owner.confidence, 'none') end as confidence,
+      coalesce(owner.source, 'none') as source,
+      case
+        when owner.owner is null or owner.disabled then '[]'
+        else to_json([
+          struct_pack(
+            key := owner.owner_candidate,
+            displayName := owner.owner,
+            type := owner.owner_type,
+            confidence := owner.confidence,
+            source := case
+              when owner.source like 'tag.%' then 'tag'
+              when owner.source like 'activity.%' then 'activity'
+              else owner.source
+            end,
+            rank := 1,
+            evidence := [
+              struct_pack(user := owner.evidence_value, date := owner.evidence_date, key := owner.evidence_key)
+            ],
+            relatedScopes := [
+              struct_pack(
+                subscriptionId := rg.subscription_id,
+                subscriptionName := rg.subscription_name,
+                resourceGroup := rg.resource_group
+              )
+            ]
+          )
+        ])
+      end as owner_candidates,
+      case
+        when owner.owner is null then '[]'
+        when owner.disabled then to_json([
+          struct_pack(user := owner.evidence_value, date := owner.evidence_date, key := owner.evidence_key, disabled := true)
+        ])
+        else to_json([
+          struct_pack(user := owner.evidence_value, date := owner.evidence_date, key := owner.evidence_key)
+        ])
+      end as evidence,
+      coalesce(rbac.rbac_role_assignment_count, 0) as rbac_role_assignment_count,
+      coalesce(rbac.rbac_role_level, 'none') as rbac_role_level,
+      coalesce(rbac.role_assignments, '[]') as role_assignments
+    from base_rg rg
+    left join selected_owner owner on owner.target_key = rg.target_key
+    left join rbac_summary rbac on rbac.target_key = rg.target_key
+  )
+  select *
+  from collection_rows
+`;
+
+function buildResourceGroupOwnershipCollectionWhereSql(
+  options: Pick<AzureResourceGroupOwnershipCollectionQueryOptions, "filters" | "selectedRowKeys">
+) {
+  return combineWhereSql([
+    buildWhereSql(options.filters, azureResourceGroupOwnershipColumnMap),
+    buildResourceGroupSelectedRowsWhereSql(options.selectedRowKeys)
+  ]);
+}
+
+function buildResourceGroupSelectedRowsWhereSql(selectedRowKeys: string[] | undefined): RuntimeSqlFragment {
+  const keys = (selectedRowKeys ?? []).map((key) => key.trim()).filter(Boolean);
+
+  if (keys.length === 0) {
+    return {
+      sql: "",
+      params: {}
+    };
+  }
+
+  return {
+    sql: `(
+      target_key in (
+        select json_extract_string(value, '$')
+        from json_each($selectedRowKeys::json)
+      )
+      or subscription_id || ':' || resource_group in (
+        select json_extract_string(value, '$')
+        from json_each($selectedRowKeys::json)
+      )
+    )`,
+    params: {
+      selectedRowKeys: JSON.stringify(keys)
+    }
+  };
+}
+
+const azureResourceGroupOwnershipColumnMap: RuntimeSqlColumnMap = {
+  subscriptionId: { expr: "subscription_id", type: "text" },
+  subscriptionName: { expr: "subscription_name", type: "text" },
+  resourceGroup: { expr: "resource_group", type: "text" },
+  location: { expr: "location", type: "text" },
+  tags: { expr: "tags", type: "text" },
+  owner: { expr: "owner", type: "text" },
+  "ownerCandidates.displayName": { expr: "owner_candidates", type: "text" },
+  confidence: { expr: "confidence", type: "risk" },
+  source: { expr: "source", type: "text" },
+  rbacRoleAssignmentCount: { expr: "rbac_role_assignment_count", type: "number" },
+  rbacRoleLevel: { expr: "rbac_role_level", type: "risk" },
+  roleAssignments: { expr: "role_assignments", type: "text" },
+  targetKey: { expr: "target_key", type: "text" }
+};
+
 export async function readAzureResourceRows(connection: DuckDBConnection): Promise<CoreAzureResource[]> {
   return (await readRows<AzureResourceRow>(
     connection,
@@ -704,6 +993,19 @@ type AzureResourceGroupOwnershipRow = AzureResourceGroupRow & {
   confidence: OwnerConfidence;
   source: string;
   evidence: string;
+};
+
+type AzureResourceGroupOwnershipCollectionRow = AzureResourceGroupRow & {
+  ordinal: number | string;
+  target_key: string;
+  owner: string | null;
+  confidence: OwnerConfidence;
+  source: string;
+  owner_candidates: string;
+  evidence: string;
+  rbac_role_assignment_count: number | string | null;
+  rbac_role_level: CoreAzureResourceGroupOwnershipRow["rbacRoleLevel"];
+  role_assignments: string;
 };
 
 type AzureResourceGroupOwnerCandidateRow = {
@@ -847,6 +1149,23 @@ function mapAzureResourceGroupOwnershipRow(
     confidence: row.confidence,
     source: row.source,
     evidence: parseJsonArray<OwnerEvidence>(row.evidence)
+  };
+}
+
+function mapAzureResourceGroupOwnershipCollectionRow(
+  row: AzureResourceGroupOwnershipCollectionRow
+): CoreAzureResourceGroupOwnershipRow {
+  return {
+    ...mapAzureResourceGroupRow(row),
+    targetKey: row.target_key,
+    ownerCandidates: parseJsonArray(row.owner_candidates),
+    owner: row.owner,
+    confidence: row.confidence,
+    source: row.source,
+    evidence: parseJsonArray<OwnerEvidence>(row.evidence),
+    roleAssignments: parseJsonArray<CoreAzureRoleAssignment>(row.role_assignments),
+    rbacRoleAssignmentCount: readInteger(row.rbac_role_assignment_count),
+    rbacRoleLevel: row.rbac_role_level ?? "none"
   };
 }
 
