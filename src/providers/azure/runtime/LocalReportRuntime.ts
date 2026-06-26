@@ -1,5 +1,6 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 
+import { appConfig, setAppConfig, type AppConfig } from "../../../core/config";
 import {
   listLocalSnapshotFiles,
   pathExists,
@@ -46,11 +47,13 @@ import {
 
 export type LocalReportRuntimeOptions = {
   appRoot?: string;
+  config?: AppConfig;
   dataDir: string;
   databasePath?: string;
 };
 
 export class LocalReportRuntime {
+  private readonly config: AppConfig;
   private readonly dataDir: string;
   private readonly host: RuntimeHost;
   private readonly entra: LocalEntraReportRuntime;
@@ -67,6 +70,8 @@ export class LocalReportRuntime {
 
   constructor(options: LocalReportRuntimeOptions) {
     const appRoot = options.appRoot ?? process.cwd();
+    this.config = options.config ?? appConfig;
+    setAppConfig(this.config);
     this.dataDir = options.dataDir;
     this.host = new RuntimeHost({ databasePath: options.databasePath ?? ":memory:" });
     this.entra = new LocalEntraReportRuntime({
@@ -137,6 +142,10 @@ export class LocalReportRuntime {
   async readInventoryStats(): Promise<LocalReportRuntimeInventoryStats> {
     await this.initialize();
     return this.enrichmentService.readInventoryStats();
+  }
+
+  readAppConfig(): AppConfig {
+    return this.config;
   }
 
   async setOwnerCandidateDisabled(key: DisabledOwnerKey, disabled: boolean): Promise<number> {

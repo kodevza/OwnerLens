@@ -1,0 +1,26 @@
+{
+  "features": {
+    "zeroTrustAssessment": false
+  },
+  "azure": {
+    "ownership": {
+      "ownerTags": [
+        {
+          "name": "ownerGroup",
+          "confidence": "high",
+          "type": "ownerGroup"
+        },       
+        {
+          "name": "costCenter",
+          "confidence": "high",
+          "type": "ownerTag"
+        },
+        {
+          "name": "owner",
+          "confidence": "medium",
+          "type": "ownerUser"
+        }
+      ]
+    }
+  }
+}

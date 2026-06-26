@@ -287,7 +287,7 @@ async function readAzureResourceGroupOwnershipRows(
         select principal_id
         from target_principal_ids
       ),
-      owner_tags(name, confidence, priority) as (
+      owner_tags(name, confidence, owner_type, priority) as (
         values ${getOwnerTagSqlValues()}
       ),
       tag_candidates as (
@@ -295,11 +295,7 @@ async function readAzureResourceGroupOwnershipRows(
           rg.subscription_id,
           rg.resource_group,
           lower(trim(json_extract_string(tag_entry.value, '$'))) as owner,
-          case
-            when tag.name = 'ownerGroup' then 'ownerGroup'
-            when tag.name = 'ownerUser' then 'ownerUser'
-            else 'ownerTag'
-          end || ':' || lower(trim(json_extract_string(tag_entry.value, '$'))) as owner_candidate,
+          tag.owner_type || ':' || lower(trim(json_extract_string(tag_entry.value, '$'))) as owner_candidate,
           tag.confidence,
           'tag.' || tag.name as source,
           tag.name || '=' || json_extract_string(tag_entry.value, '$') as evidence_value,
@@ -839,7 +835,7 @@ function parseJsonValue(value: string | null | undefined): unknown {
 function getOwnerTagSqlValues(): string {
   return appConfig.azure.ownership.ownerTags
     .map((tag, index) =>
-      `('${escapeSqlString(tag.name)}', '${escapeSqlString(tag.confidence)}', ${index + 1})`
+      `('${escapeSqlString(tag.name)}', '${escapeSqlString(tag.confidence)}', '${escapeSqlString(tag.type)}', ${index + 1})`
     )
     .join(", ");
 }

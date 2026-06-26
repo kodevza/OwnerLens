@@ -6,6 +6,7 @@ import type {
   PowerShellScriptTemplateId
 } from "./scripts/PowershellScriptService";
 import {
+  appConfigResponseSchema,
   collectionResponseSchema,
   csvCollectionQuerySchema,
   deleteRemediationTasksBodySchema,
@@ -37,6 +38,15 @@ export function defineLocalReportRuntimeRestEndpoints(runtime: LocalReportRuntim
       querySchema: emptyQuerySchema,
       responseSchema: snapshotListResponseSchema,
       handle: () => runtime.listSnapshots()
+    },
+    {
+      operationId: "readRuntimeAppConfig",
+      tags: ["Runtime"],
+      summary: "Read OwnerLens runtime configuration.",
+      path: `${restBasePath}/runtime/config`,
+      querySchema: emptyQuerySchema,
+      responseSchema: appConfigResponseSchema,
+      handle: () => runtime.readAppConfig()
     },
     ...defineEntraLocalReportRuntimeRestEndpoints(runtime, restBasePath),
     ...defineAzureResourcesLocalReportRuntimeRestEndpoints(runtime, restBasePath),

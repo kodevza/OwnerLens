@@ -504,7 +504,7 @@ test("returns no active owner when both owner user and owner group tag candidate
     await disableResourceGroupOwnerCandidate(
       connection,
       "rg-disabled-user-and-group",
-      "ownerTag:fallback@example.test"
+      "ownerUser:fallback@example.test"
     );
 
     return readAzureResourceGroupOwnershipSqlRows(

@@ -40,6 +40,49 @@ export const jsonValueSchema: RuntimeRestJsonSchema = {
 
 export const emptyQuerySchema = querySchema({});
 
+export const appConfigResponseSchema: RuntimeRestJsonSchema = {
+  type: "object",
+  required: ["features", "azure"],
+  additionalProperties: false,
+  properties: {
+    features: {
+      type: "object",
+      required: ["zeroTrustAssessment"],
+      additionalProperties: false,
+      properties: {
+        zeroTrustAssessment: { type: "boolean" }
+      }
+    },
+    azure: {
+      type: "object",
+      required: ["ownership"],
+      additionalProperties: false,
+      properties: {
+        ownership: {
+          type: "object",
+          required: ["ownerTags"],
+          additionalProperties: false,
+          properties: {
+            ownerTags: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["name", "confidence", "type"],
+                additionalProperties: false,
+                properties: {
+                  name: { type: "string" },
+                  confidence: { enum: ["high", "medium", "low"] },
+                  type: { enum: ["ownerUser", "ownerGroup", "ownerTag", "application", "unknown"] }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+};
+
 export const collectionQuerySchema = querySchema(
   {
     page: queryStringSchema,

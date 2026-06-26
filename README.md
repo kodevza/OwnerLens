@@ -34,7 +34,7 @@ flowchart TD
 
 ➡️ Resolve owners from configurable Azure tags such as `ownerGroup`,
   `costCenter`, and `owner`. Configure tag names and confidence levels in
-  [src/core/config.ts](src/core/config.ts).
+  `data/config.json`.
 
 ➡️ Review ownership confidence and supporting evidence.
 

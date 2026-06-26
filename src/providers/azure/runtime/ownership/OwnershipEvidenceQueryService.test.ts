@@ -332,10 +332,10 @@ test("returns direct service principal, application, and tag owner evidence for 
         relatedScopes: []
       },
       {
-        key: "ownerTag:platform-team:owner=platform-team:",
-        ownerCandidateKey: "ownerTag:platform-team",
+        key: "ownerUser:platform-team:owner=platform-team:",
+        ownerCandidateKey: "ownerUser:platform-team",
         ownerDisplayName: "platform-team",
-        ownerType: "ownerTag",
+        ownerType: "ownerUser",
         confidence: "medium",
         source: "tag",
         path: "direct",
@@ -828,10 +828,10 @@ test("returns direct service principal owner and tag evidence for a managed iden
         relatedScopes: []
       },
       {
-        key: "ownerTag:identity-platform:owner=identity-platform:",
-        ownerCandidateKey: "ownerTag:identity-platform",
+        key: "ownerUser:identity-platform:owner=identity-platform:",
+        ownerCandidateKey: "ownerUser:identity-platform",
         ownerDisplayName: "identity-platform",
-        ownerType: "ownerTag",
+        ownerType: "ownerUser",
         confidence: "medium",
         source: "tag",
         path: "direct",
@@ -1023,7 +1023,7 @@ test("applies disabled evidence through the direct service principal owner wrapp
     },
     azureResources: {},
     disabledEvidenceStore: {
-      readKeys: jest.fn().mockResolvedValue(new Set(["ownerTag:platform-team:owner=platform-team:"]))
+      readKeys: jest.fn().mockResolvedValue(new Set(["ownerUser:platform-team:owner=platform-team:"]))
     }
   } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
 
@@ -1035,7 +1035,7 @@ test("applies disabled evidence through the direct service principal owner wrapp
   ).resolves.toMatchObject({
     evidence: [
       {
-        ownerCandidateKey: "ownerTag:platform-team",
+        ownerCandidateKey: "ownerUser:platform-team",
         ownerDisplayName: "platform-team",
         confidence: "medium",
         evidence: "owner=platform-team",

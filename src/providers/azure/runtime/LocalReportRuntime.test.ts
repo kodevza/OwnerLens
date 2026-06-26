@@ -8,6 +8,7 @@ import {
 import { testEndpoint } from "../../../../tests/support/runtimeRestEndpoint";
 import type { AzureSnapshot } from "../inputTransferObject/generated/AzureSnapshot";
 import type { EntraSnapshot } from "../inputTransferObject/generated/EntraSnapshot";
+import { defaultAppConfig } from "../../../core/config";
 
 function getEndpoint(
   endpoints: ReturnType<typeof defineLocalReportRuntimeRestEndpoints>,
@@ -435,6 +436,7 @@ test("defines local report runtime REST endpoints", async () => {
       resourceGroups: 42,
       rbacAssignments: 321
     }),
+    readAppConfig: jest.fn().mockReturnValue(defaultAppConfig),
     readDisabledOwnerEvidenceKeys: jest.fn(() => Promise.resolve(new Set(disabledOwnerKeys))),
     setOwnerCandidateDisabled: jest.fn((key: string, disabled: boolean) => {
       if (disabled) {
@@ -467,6 +469,7 @@ test("defines local report runtime REST endpoints", async () => {
     "/api/data/zeroTrustAssessment/remediationPackages"
   );
   const powershellScriptEndpoint = getEndpoint(endpoints, "/api/data/scripts/powershell");
+  const runtimeConfigEndpoint = getEndpoint(endpoints, "/api/data/runtime/config");
   const runtimeStatsEndpoint = getEndpoint(endpoints, "/api/data/runtime/stats");
   const remediationPackagesEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages");
   const remediationTaskExportEndpoint = getEndpoint(endpoints, "/api/data/remediationPackages/tasks", "GET");
@@ -474,6 +477,7 @@ test("defines local report runtime REST endpoints", async () => {
 
   expect(endpoints.map((endpoint) => endpoint.path)).toEqual([
     "/api/data",
+    "/api/data/runtime/config",
     "/api/data/entra/servicePrincipals",
     "/api/data/entra/managedIdentities",
     "/api/data/entra/permissions",
@@ -497,6 +501,9 @@ test("defines local report runtime REST endpoints", async () => {
   await expect(listEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data") })).resolves.toEqual({
     files: []
   });
+  expect(runtimeConfigEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data/runtime/config") })).toEqual(
+    defaultAppConfig
+  );
   await expect(
     runtimeStatsEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data/runtime/stats") })
   ).resolves.toEqual({
