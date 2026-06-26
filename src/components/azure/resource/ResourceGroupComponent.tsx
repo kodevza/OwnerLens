@@ -188,6 +188,7 @@ export function ResourceGroupComponent({
         loadPage={loadResourceGroups}
         loadingMessage="Loading resource groups..."
         minWidthClassName="min-w-[1040px]"
+        mode="remote"
         onFiltersChange={onFiltersChange}
         onPageChange={onPageChange}
         onSortRulesChange={onSortRulesChange}

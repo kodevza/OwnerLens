@@ -61,14 +61,18 @@ export class EntraCollectionQueryService {
     options: LocalReportCollectionQueryOptions
   ): Promise<RuntimeCollectionCsvExport<"entra.servicePrincipals">> {
     return this.exportService.exportEntraServicePrincipalsCsv(
-      await this.entra.queryPrincipalCollectionRows({
-        principalKind: "servicePrincipal",
-        filters: options.filters,
-        sortRules: options.sortRules,
-        selectedRowKeys: options.selectedRowKeys
-      }) as unknown as Record<string, unknown>[],
+      await this.queryServicePrincipalExportRows(options),
       {}
     );
+  }
+
+  async queryServicePrincipalExportRows(options: LocalReportCollectionQueryOptions): Promise<Record<string, unknown>[]> {
+    return await this.entra.queryPrincipalCollectionRows({
+      principalKind: "servicePrincipal",
+      filters: options.filters,
+      sortRules: options.sortRules,
+      selectedRowKeys: options.selectedRowKeys
+    }) as unknown as Record<string, unknown>[];
   }
 
   async queryManagedIdentities(
@@ -99,14 +103,18 @@ export class EntraCollectionQueryService {
     options: LocalReportCollectionQueryOptions
   ): Promise<RuntimeCollectionCsvExport<"entra.managedIdentities">> {
     return this.exportService.exportEntraManagedIdentitiesCsv(
-      await this.entra.queryPrincipalCollectionRows({
-        principalKind: "managedIdentity",
-        filters: options.filters,
-        sortRules: options.sortRules,
-        selectedRowKeys: options.selectedRowKeys
-      }) as unknown as Record<string, unknown>[],
+      await this.queryManagedIdentityExportRows(options),
       {}
     );
+  }
+
+  async queryManagedIdentityExportRows(options: LocalReportCollectionQueryOptions): Promise<Record<string, unknown>[]> {
+    return await this.entra.queryPrincipalCollectionRows({
+      principalKind: "managedIdentity",
+      filters: options.filters,
+      sortRules: options.sortRules,
+      selectedRowKeys: options.selectedRowKeys
+    }) as unknown as Record<string, unknown>[];
   }
 
   async readServicePrincipalRemediationSummaries(

@@ -14,6 +14,7 @@ export function GenericRemoteTable<TRow>({
   initialSortRules,
   loadPage,
   loadingMessage,
+  mode: _mode,
   onFiltersChange,
   onPageChange,
   onRuntimeControlsChange,
@@ -92,6 +93,7 @@ export function GenericRemoteTable<TRow>({
         fields={fields}
         filterOptions={filterOptions}
         filters={filters}
+        mode="remote"
         page={collection.page}
         pageSize={collection.pageSize}
         rows={collection.rows}
