@@ -1,6 +1,7 @@
 export type OwnerConfidence = "high" | "medium" | "low" | "none";
 
 export type OwnerEvidence = {
+  key?: string;
   user: string;
   date: string | null;
   disabled?: boolean;

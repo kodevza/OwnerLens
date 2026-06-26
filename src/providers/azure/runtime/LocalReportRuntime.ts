@@ -38,6 +38,7 @@ import {
   type OwnershipEvidenceRequest,
   type OwnershipEvidenceResponse
 } from "./ownership/OwnershipRuntime";
+import { OwnerTagConfigSeedService } from "./ownership/OwnerTagConfigSeedService";
 import { RemediationRuntime } from "./remediation/RemediationRuntime";
 import {
   PowershellScriptService,
@@ -60,6 +61,7 @@ export class LocalReportRuntime {
   private readonly azureResources: LocalAzureResourcesReportRuntime;
   private readonly remediationRuntime: RemediationRuntime;
   private readonly ownershipRuntime: OwnershipRuntime;
+  private readonly ownerTagConfigSeedService: OwnerTagConfigSeedService;
   private readonly azureResourcesQueries: AzureResourcesCollectionQueryService;
   private readonly entraQueries: EntraCollectionQueryService;
   private readonly snapshotImporter: SnapshotImporter;
@@ -98,6 +100,10 @@ export class LocalReportRuntime {
       getConnection: () => this.requireConnection(),
       getEntraQueries: () => this.entraQueries,
       azureResources: this.azureResources
+    });
+    this.ownerTagConfigSeedService = new OwnerTagConfigSeedService({
+      getConnection: () => this.requireConnection(),
+      getConfig: () => this.config
     });
     this.azureResourcesQueries = new AzureResourcesCollectionQueryService({
       entra: this.entra,
@@ -329,6 +335,7 @@ export class LocalReportRuntime {
   private async initializeInternal(): Promise<void> {
     await this.host.initialize();
     await prepareRuntimeSqlSchema(this.requireConnection());
+    await this.ownerTagConfigSeedService.seed();
     await this.snapshotImporter.importSnapshots();
     await this.enrichmentService.recalculate();
     await this.enrichmentService.readStatus();

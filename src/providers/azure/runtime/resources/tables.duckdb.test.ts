@@ -76,9 +76,18 @@ test("selects the strongest configured owner tag by priority", async () => {
   expect(rows).toEqual([
     expect.objectContaining({
       owner: "platform-team",
+      ownerCandidate: "ownerGroup:platform-team",
+      ownerType: "ownerGroup",
+      evidenceKey: "resourceGroup:sub-1:rg-tagged:ownerGroup:platform-team",
       confidence: "high",
       source: "tag.ownerGroup",
-      evidence: [{ user: "ownerGroup=Platform-Team", date: null }]
+      evidence: [
+        expect.objectContaining({
+          key: "resourceGroup:sub-1:rg-tagged:ownerGroup:platform-team",
+          user: "ownerGroup=Platform-Team",
+          date: null
+        })
+      ]
     })
   ]);
 });
@@ -106,21 +115,75 @@ test("returns requested owner candidates by priority", async () => {
   expect(rows).toEqual([
     expect.objectContaining({
       owner: "platform-team",
+      ownerCandidate: "ownerGroup:platform-team",
+      ownerType: "ownerGroup",
       confidence: "high",
       source: "tag.ownerGroup",
-      evidence: [{ user: "ownerGroup=Platform-Team", date: null }]
+      evidence: [expect.objectContaining({ user: "ownerGroup=Platform-Team", date: null })]
     }),
     expect.objectContaining({
       owner: "cc-1001",
+      ownerCandidate: "ownerTag:cc-1001",
+      ownerType: "ownerTag",
       confidence: "high",
       source: "tag.costCenter",
-      evidence: [{ user: "costCenter=cc-1001", date: null }]
+      evidence: [expect.objectContaining({ user: "costCenter=cc-1001", date: null })]
     }),
     expect.objectContaining({
       owner: "fallback@example.test",
+      ownerCandidate: "ownerUser:fallback@example.test",
+      ownerType: "ownerUser",
       confidence: "medium",
       source: "tag.owner",
-      evidence: [{ user: "owner=fallback@example.test", date: null }]
+      evidence: [expect.objectContaining({ user: "owner=fallback@example.test", date: null })]
+    })
+  ]);
+});
+
+test("resource group owner candidate view joins tag and activity evidence with evidence keys", async () => {
+  const rows = await withDuckDb(async ({ connection }) => {
+    await insertAzureResourceGroupRows(connection, [
+      resourceGroup("rg-view", {
+        ownerGroup: "Platform-Team"
+      })
+    ]);
+    await insertAzureActivityLogRows(connection, [
+      activityLog({
+        caller: "activity.owner@example.test",
+        eventTimestamp: "2026-06-05T10:00:00.000Z",
+        resourceGroupName: "rg-view",
+        resourceId: "/subscriptions/sub-1/resourceGroups/rg-view/providers/Microsoft.Web/sites/app-a"
+      })
+    ]);
+
+    const reader = await connection.runAndReadAll(`
+      select owner, owner_type, owner_candidate, evidence_key, source, evidence_value, evidence_date
+      from azure_resource_group_owner_candidates
+      where subscription_id = 'sub-1' and resource_group = 'rg-view'
+      order by priority
+    `);
+
+    return reader.getRowObjectsJson();
+  });
+
+  expect(rows).toEqual([
+    expect.objectContaining({
+      owner: "platform-team",
+      owner_type: "ownerGroup",
+      owner_candidate: "ownerGroup:platform-team",
+      evidence_key: "resourceGroup:sub-1:rg-view:ownerGroup:platform-team",
+      source: "tag.ownerGroup",
+      evidence_value: "ownerGroup=Platform-Team",
+      evidence_date: null
+    }),
+    expect.objectContaining({
+      owner: "activity.owner@example.test",
+      owner_type: "ownerUser",
+      owner_candidate: "ownerUser:activity.owner@example.test",
+      evidence_key: "resourceGroup:sub-1:rg-view:ownerUser:activity.owner@example.test",
+      source: "activity.lastModifier",
+      evidence_value: "/subscriptions/sub-1/resourceGroups/rg-view/providers/Microsoft.Web/sites/app-a",
+      evidence_date: "2026-06-05T10:00:00.000Z"
     })
   ]);
 });
@@ -215,13 +278,16 @@ test("uses the latest successful write or action activity when tags are absent",
   expect(rows).toEqual([
     expect.objectContaining({
       owner: "latest@example.test",
+      ownerCandidate: "ownerUser:latest@example.test",
+      ownerType: "ownerUser",
       confidence: "low",
       source: "activity.lastModifier",
       evidence: [
-        {
+        expect.objectContaining({
+          key: "resourceGroup:sub-1:rg-activity:ownerUser:latest@example.test",
           user: "/subscriptions/sub-1/resourceGroups/rg-activity/providers/Microsoft.KeyVault/vaults/latest-vault",
           date: "2026-06-05T10:00:00.000Z"
-        }
+        })
       ]
     })
   ]);
@@ -279,13 +345,14 @@ test("enriches activity owner display name for service principal callers", async
     expect.objectContaining({
       owner: "Deployment Bot (app-client-1)",
       ownerCandidate: "application:app-client-1",
+      ownerType: "application",
       confidence: "low",
       source: "activity.lastModifier",
       evidence: [
-        {
+        expect.objectContaining({
           user: "/subscriptions/sub-1/resourceGroups/rg-service-principal/providers/Microsoft.Web/sites/app-api",
           date: "2026-06-05T10:00:00.000Z"
-        }
+        })
       ]
     })
   ]);
@@ -312,7 +379,7 @@ test("falls back to the next owner candidate when the strongest tag candidate is
       owner: "fallback@example.test",
       confidence: "medium",
       source: "tag.owner",
-      evidence: [{ user: "owner=fallback@example.test", date: null }]
+      evidence: [expect.objectContaining({ user: "owner=fallback@example.test", date: null })]
     })
   ]);
 });
@@ -343,19 +410,19 @@ test("orders active owner candidates before disabled evidence rows", async () =>
       owner: "cc-1001",
       confidence: "high",
       source: "tag.costCenter",
-      evidence: [{ user: "costCenter=cc-1001", date: null }]
+      evidence: [expect.objectContaining({ user: "costCenter=cc-1001", date: null })]
     }),
     expect.objectContaining({
       owner: "fallback@example.test",
       confidence: "medium",
       source: "tag.owner",
-      evidence: [{ user: "owner=fallback@example.test", date: null }]
+      evidence: [expect.objectContaining({ user: "owner=fallback@example.test", date: null })]
     }),
     expect.objectContaining({
       owner: null,
       confidence: "none",
       source: "tag.ownerGroup",
-      evidence: [{ user: "ownerGroup=platform-team", date: null, disabled: true }]
+      evidence: [expect.objectContaining({ user: "ownerGroup=platform-team", date: null, disabled: true })]
     })
   ]);
 });
@@ -391,10 +458,10 @@ test("falls back to earlier activity when the latest activity candidate is disab
       confidence: "low",
       source: "activity.lastModifier",
       evidence: [
-        {
+        expect.objectContaining({
           user: "/subscriptions/sub-1/resourceGroups/rg-disabled-activity/providers/Microsoft.Storage/storageAccounts/olderstore",
           date: "2026-06-04T10:00:00.000Z"
-        }
+        })
       ]
     })
   ]);
@@ -423,7 +490,7 @@ test("applies disabled owner candidates only to the matching principal scope", a
     expect.objectContaining({
       owner: "platform-team",
       confidence: "high",
-      evidence: [{ user: "ownerGroup=platform-team", date: null }]
+      evidence: [expect.objectContaining({ user: "ownerGroup=platform-team", date: null })]
     })
   ]);
 
@@ -451,7 +518,12 @@ test("applies disabled owner candidates only to the matching principal scope", a
       owner: null,
       principalId: "sp-1",
       confidence: "none",
-      evidence: [{ user: "ownerGroup=platform-team", date: null, disabled: true }]
+      evidence: [expect.objectContaining({
+        key: "resourceGroup:sub-1:rg-principal-disabled:principal:sp-1:ownerGroup:platform-team",
+        user: "ownerGroup=platform-team",
+        date: null,
+        disabled: true
+      })]
     })
   ]);
 });
@@ -483,7 +555,11 @@ test("falls back to the next owner candidate when a principal-scoped ownerGroup 
       principalId: "mi-1",
       confidence: "medium",
       source: "tag.owner",
-      evidence: [{ user: "owner=fallback@example.test", date: null }]
+      evidence: [expect.objectContaining({
+        key: "resourceGroup:sub-1:rg-principal-disabled-fallback:principal:mi-1:ownerUser:fallback@example.test",
+        user: "owner=fallback@example.test",
+        date: null
+      })]
     })
   );
 });
@@ -522,13 +598,13 @@ test("returns no active owner when both owner user and owner group tag candidate
       owner: null,
       confidence: "none",
       source: "tag.ownerGroup",
-      evidence: [{ user: "ownerGroup=platform-team", date: null, disabled: true }]
+      evidence: [expect.objectContaining({ user: "ownerGroup=platform-team", date: null, disabled: true })]
     }),
     expect.objectContaining({
       owner: null,
       confidence: "none",
       source: "tag.owner",
-      evidence: [{ user: "owner=fallback@example.test", date: null, disabled: true }]
+      evidence: [expect.objectContaining({ user: "owner=fallback@example.test", date: null, disabled: true })]
     })
   ]);
 });
@@ -553,7 +629,7 @@ test("returns no active owner when every candidate is disabled", async () => {
       owner: null,
       confidence: "none",
       source: "tag.ownerGroup",
-      evidence: [{ user: "ownerGroup=platform-team", date: null, disabled: true }]
+      evidence: [expect.objectContaining({ user: "ownerGroup=platform-team", date: null, disabled: true })]
     })
   ]);
 });
