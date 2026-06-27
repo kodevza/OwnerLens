@@ -157,8 +157,6 @@ export class LocalAzureResourcesReportRuntime {
 
   async readAzurePrincipalResourceGroupOwnerCandidateViewRows(target: {
     principalId: string;
-    subscriptionIds: string[];
-    resourceGroups: string[];
   }, limit: number): Promise<AzurePrincipalResourceGroupOwnerCandidateViewRow[]> {
     this.assertImported();
     return readAzurePrincipalResourceGroupOwnerCandidateViewRows(this.getConnection(), target, limit);

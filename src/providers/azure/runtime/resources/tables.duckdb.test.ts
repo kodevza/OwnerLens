@@ -1,6 +1,7 @@
 import type {
   AzureActivityLog,
-  AzureResourceGroup
+  AzureResourceGroup,
+  AzureRoleAssignment
 } from "../../inputTransferObject/generated/AzureSnapshot";
 import type { EntraServicePrincipal } from "../../inputTransferObject/generated/EntraSnapshot";
 import { insertEntraServicePrincipalRows } from "../entra/domain/servicePrincipalsTable";
@@ -9,6 +10,7 @@ import { disableOwnerEvidenceKey } from "../../../../core/runtime/DisabledOwnerE
 import {
   insertAzureActivityLogRows,
   insertAzureResourceGroupRows,
+  insertAzureRoleAssignmentRows,
   readAzurePrincipalResourceGroupOwnerCandidateViewRows,
   readAzureResourceGroupOwnershipSqlRows
 } from "./tables";
@@ -189,8 +191,8 @@ test("resource group owner candidate view joins tag and activity evidence with e
   ]);
 });
 
-test("principal resource group owner candidate view scopes candidates to the requested principal and resource groups", async () => {
-  const rows = await withDuckDb(async ({ connection }) => {
+test("principal owner evidence query reuses the collection candidate ranking", async () => {
+  const result = await withDuckDb(async ({ connection }) => {
     await insertEntraServicePrincipalRows(connection, [
       servicePrincipal("sp-1", "app-1", "Owner Lens App", {
         tags: ["owner=Direct-Tag-Team"],
@@ -226,30 +228,36 @@ test("principal resource group owner candidate view scopes candidates to the req
         ownerGroup: "Unrelated-Team"
       })
     ]);
+    await insertAzureRoleAssignmentRows(connection, [
+      roleAssignment("sp-1", "rg-medium"),
+      roleAssignment("sp-1", "rg-high")
+    ]);
 
-    return readAzurePrincipalResourceGroupOwnerCandidateViewRows(
+    const rows = await readAzurePrincipalResourceGroupOwnerCandidateViewRows(
       connection,
       {
-        principalId: "sp-1",
-        subscriptionIds: ["sub-1", "sub-1"],
-        resourceGroups: ["rg-medium", "rg-high"]
+        principalId: "sp-1"
       },
       10
     );
+
+    const collectionCandidateReader = await connection.runAndReadAll(`
+      select json_extract_string(candidate.value, '$.key') as candidate_key
+      from runtime_entra_principal_collection_rows principal
+      join json_each(principal."ownerCandidates") candidate on true
+      where principal.id = 'sp-1'
+      order by cast(candidate.key as integer)
+    `);
+
+    return {
+      rows,
+      collectionCandidateKeys: collectionCandidateReader
+        .getRowObjectsJson()
+        .map((row) => row.candidate_key)
+    };
   });
 
-  expect(rows).toEqual([
-    expect.objectContaining({
-      principalId: "sp-1",
-      resourceGroup: "rg-high",
-      owner: "platform-team",
-      ownerCandidate: "ownerGroup:platform-team",
-      source: "resourceGroupOwner",
-      path: "indirect",
-      discoverySource: "tag",
-      confidence: "high",
-      evidenceKey: "resourceGroup:sub-1:rg-high:principal:sp-1:ownerGroup:platform-team"
-    }),
+  expect(result.rows).toEqual([
     expect.objectContaining({
       principalId: "sp-1",
       path: "direct",
@@ -285,6 +293,17 @@ test("principal resource group owner candidate view scopes candidates to the req
     }),
     expect.objectContaining({
       principalId: "sp-1",
+      resourceGroup: "rg-high",
+      owner: "platform-team",
+      ownerCandidate: "ownerGroup:platform-team",
+      source: "resourceGroupOwner",
+      path: "indirect",
+      discoverySource: "tag",
+      confidence: "high",
+      evidenceKey: "resourceGroup:sub-1:rg-high:principal:sp-1:ownerGroup:platform-team"
+    }),
+    expect.objectContaining({
+      principalId: "sp-1",
       path: "indirect",
       resourceGroup: "rg-high",
       owner: "fallback@example.test",
@@ -302,6 +321,9 @@ test("principal resource group owner candidate view scopes candidates to the req
       confidence: "medium"
     })
   ]);
+  expect(
+    result.rows.slice(0, result.collectionCandidateKeys.length).map((row) => row.ownerCandidate)
+  ).toEqual(result.collectionCandidateKeys);
 });
 
 test("filters resource group ownership rows by subscription and resource group lists", async () => {
@@ -836,5 +858,30 @@ function servicePrincipal(
     servicePrincipalOwners: options.servicePrincipalOwners ?? [],
     applicationOwners: options.applicationOwners ?? [],
     metadata: null
+  };
+}
+
+function roleAssignment(principalId: string, resourceGroupName: string): AzureRoleAssignment {
+  return {
+    subscriptionId: "sub-1",
+    subscriptionName: "Subscription One",
+    roleAssignmentId: `${principalId}-${resourceGroupName}`,
+    scope: `/subscriptions/sub-1/resourceGroups/${resourceGroupName}`,
+    scopeType: "ResourceGroup",
+    scopeSubscriptionId: "sub-1",
+    scopeResourceGroup: resourceGroupName,
+    scopeResourceProvider: null,
+    scopeResourceType: null,
+    scopeResourceName: null,
+    scopeManagementGroup: null,
+    principalId,
+    principalType: "ServicePrincipal",
+    principalDisplayName: principalId,
+    signInName: null,
+    roleDefinitionId: "reader-id",
+    roleDefinitionName: "Reader",
+    canDelegate: false,
+    condition: null,
+    conditionVersion: null
   };
 }

@@ -1,9 +1,4 @@
 import type { ManagedIdentity } from "../../../../core/azure/entra/managedIdentity";
-import type { ServicePrincipal } from "../../../../core/azure/entra/servicePrincipal";
-import type {
-  AzureRoleAssignment,
-  AzureUserAssignedManagedIdentity
-} from "../../../../core/azure/resources";
 import type {
   OwnerCandidate,
   OwnerCandidateSource,
@@ -86,8 +81,8 @@ export class OwnershipEvidenceQueryService {
         id: row.id,
         displayName: row.displayName
       },
-      evidence: withOwnershipEvidenceStatusKeys(flattenCandidateEvidence(rankOwnerCandidates(
-        await this.readPrincipalOwnerCandidates(row.id, getRoleAssignmentResourceGroupOwnershipTarget(row.roleAssignments ?? []))
+      evidence: withOwnershipEvidenceStatusKeys(flattenCandidateEvidence(rankPrincipalOwnerCandidates(
+        await this.readPrincipalOwnerCandidates(row.id)
       )))
     };
   }
@@ -98,15 +93,13 @@ export class OwnershipEvidenceQueryService {
   }
 
   private async readPrincipalOwnerCandidates(
-    principalId: string,
-    target: { subscriptionIds: string[]; resourceGroups: string[] }
+    principalId: string
   ): Promise<OwnerCandidate[]> {
     try {
       return this.applyStoredPrincipalOwnerDisabledEvidence(
         (await this.azureResources.readAzurePrincipalResourceGroupOwnerCandidateViewRows(
           {
-            principalId,
-            ...target
+            principalId
           },
           DEFAULT_RESOURCE_GROUP_OWNERSHIP_EVIDENCE_LIMIT
         )).flatMap(mapPrincipalResourceGroupOwnerCandidateViewRowToOwnerCandidate)
@@ -130,51 +123,16 @@ export class OwnershipEvidenceQueryService {
       throw new RuntimeHttpError("Ownership evidence target was not found.", 404);
     }
 
-    const identityResourceGroup = await this.readManagedIdentityResourceGroup(row);
-
     return {
       target: {
         kind: "managedIdentity",
         id: row.id,
         displayName: row.displayName
       },
-      evidence: withOwnershipEvidenceStatusKeys(flattenCandidateEvidence(rankOwnerCandidates(
-        await this.readPrincipalOwnerCandidates(
-          row.id,
-          identityResourceGroup
-            ? {
-                subscriptionIds: [identityResourceGroup.subscriptionId],
-                resourceGroups: [identityResourceGroup.resourceGroup]
-              }
-            : {
-                subscriptionIds: [],
-                resourceGroups: []
-              }
-        )
+      evidence: withOwnershipEvidenceStatusKeys(flattenCandidateEvidence(rankPrincipalOwnerCandidates(
+        await this.readPrincipalOwnerCandidates(row.id)
       )))
     };
-  }
-
-  private async readManagedIdentityResourceGroup(
-    row: ManagedIdentity
-  ): Promise<Pick<AzureUserAssignedManagedIdentity, "subscriptionId" | "resourceGroup"> | null> {
-    const resourceGroup = row.resourceGroup?.trim();
-    if (!resourceGroup) {
-      return null;
-    }
-
-    const normalizedPrincipalId = normalizeKey(row.id);
-    const normalizedClientId = normalizeKey(row.appId);
-    const normalizedResourceGroup = normalizeKey(resourceGroup);
-    const identities = await this.azureResources.readAzureUserAssignedManagedIdentities();
-
-    return identities.find((identity) => {
-      const identityKeyMatches =
-        normalizeKey(identity.principalId) === normalizedPrincipalId ||
-        normalizeKey(identity.clientId) === normalizedClientId;
-
-      return identityKeyMatches && normalizeKey(identity.resourceGroup) === normalizedResourceGroup;
-    }) ?? null;
   }
 
   private async readResourceGroupEvidence(
@@ -268,6 +226,23 @@ function withOwnershipEvidenceStatusKeys(
     ...item,
     statusKey: getOwnershipEvidenceStatusKey(item, principalId)
   }));
+}
+
+function rankPrincipalOwnerCandidates(candidates: OwnerCandidate[]): OwnerCandidate[] {
+  return candidates
+    .map((candidate, index) => ({ candidate, index }))
+    .sort((left, right) =>
+      Number(isOwnerCandidateInactive(left.candidate)) - Number(isOwnerCandidateInactive(right.candidate)) ||
+      left.index - right.index
+    )
+    .map(({ candidate }, index) => ({
+      ...candidate,
+      rank: index + 1
+    }));
+}
+
+function isOwnerCandidateInactive(candidate: OwnerCandidate): boolean {
+  return candidate.evidence.length > 0 && candidate.evidence.every((evidence) => evidence.disabled);
 }
 
 function getOwnershipEvidenceStatusKey(item: OwnershipEvidenceItem, principalId?: string): string | null {
@@ -478,60 +453,6 @@ function getResourceGroupOwnerCandidateKey(
   return `${ownerType}:${owner.trim().toLowerCase()}`;
 }
 
-function getRoleAssignmentResourceGroupOwnershipTarget(
-  roleAssignments: AzureRoleAssignment[]
-): { subscriptionIds: string[]; resourceGroups: string[] } {
-  const pairs = new Map<string, { subscriptionId: string; resourceGroup: string }>();
-
-  for (const assignment of roleAssignments) {
-    const subscriptionId = firstNonEmpty([
-      assignment.scopeSubscriptionId,
-      getScopeSubscriptionId(assignment.scope),
-      assignment.subscriptionId
-    ]);
-    const resourceGroup = firstNonEmpty([
-      assignment.scopeResourceGroup,
-      getScopeResourceGroup(assignment.scope)
-    ]);
-
-    if (!subscriptionId || !resourceGroup) {
-      continue;
-    }
-
-    const normalizedSubscriptionId = normalizeKey(subscriptionId);
-    const normalizedResourceGroup = normalizeKey(resourceGroup);
-    pairs.set(`${normalizedSubscriptionId}:${normalizedResourceGroup}`, {
-      subscriptionId: subscriptionId.trim(),
-      resourceGroup: resourceGroup.trim()
-    });
-  }
-
-  const targets = [...pairs.values()];
-
-  return {
-    subscriptionIds: targets.map((target) => target.subscriptionId),
-    resourceGroups: targets.map((target) => target.resourceGroup)
-  };
-}
-
-function getScopeSubscriptionId(scope: string): string | null {
-  return scope.match(/\/subscriptions\/([^/]+)/i)?.[1] ?? null;
-}
-
-function getScopeResourceGroup(scope: string): string | null {
-  return scope.match(/\/resourceGroups\/([^/]+)/i)?.[1] ?? null;
-}
-
-function firstNonEmpty(values: Array<string | null | undefined>): string | null {
-  for (const value of values) {
-    const trimmed = value?.trim();
-    if (trimmed) {
-      return trimmed;
-    }
-  }
-
-  return null;
-}
 
 function parseOwnerCandidateType(ownerCandidate: string | null | undefined): OwnerType | null {
   const separatorIndex = ownerCandidate?.indexOf(":") ?? -1;
