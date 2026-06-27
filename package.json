@@ -53,6 +53,7 @@
     "test:components": "jest --runInBand --config jest.components.config.cjs",
     "test:e2e": "playwright test",
     "test:e2e:validation": "playwright test tests/e2e/resource-groups.validation.spec.ts",
+    "perf:sp": "node tools/profile-service-principal-query.mjs",
     "test:coverage": "npm run test:node -- --coverage --coverageDirectory coverage/node && npm run test:duckdb -- --coverage --coverageDirectory coverage/duckdb && npm run test:components -- --coverage && npm run test:coverage:merge",
     "test:coverage:merge": "node tools/merge-coverage.cjs",
     "test:components:coverage": "npm run test:coverage",
