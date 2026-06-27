@@ -61,8 +61,8 @@ export async function insertEntraServicePrincipalRows(
     await connection.run(
       `insert into entra_service_principals values (
         $ordinal,
-        lower($id),
-        lower($appId),
+        lower(trim($id)),
+        lower(trim($appId)),
         $displayName,
         $appDisplayName,
         $servicePrincipalType,
@@ -314,7 +314,7 @@ function mapPrincipalCollectionRow(row: EntraPrincipalCollectionSqlRow): EntraPr
 const servicePrincipalRowsSql = `
   select
     *
-  from runtime_entra_principal_base
+  from runtime_entra_principal_base_source
 `;
 
 function buildPrincipalCollectionRowsSql(principalKind: "servicePrincipal" | "managedIdentity"): string {

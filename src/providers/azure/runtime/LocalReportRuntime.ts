@@ -39,6 +39,7 @@ import {
   type OwnershipEvidenceResponse
 } from "./ownership/OwnershipRuntime";
 import { OwnerTagConfigSeedService } from "./ownership/OwnerTagConfigSeedService";
+import { rebuildRuntimeOwnerEvidenceMaterialization } from "./ownership/runtimeOwnerEvidenceMaterialization";
 import { RemediationRuntime } from "./remediation/RemediationRuntime";
 import {
   PowershellScriptService,
@@ -335,6 +336,7 @@ export class LocalReportRuntime {
     await this.ownerTagConfigSeedService.seed();
     await this.snapshotImporter.importSnapshots();
     await this.enrichmentService.recalculate();
+    await rebuildRuntimeOwnerEvidenceMaterialization(this.requireConnection());
     await this.enrichmentService.readStatus();
   }
 

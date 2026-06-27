@@ -105,7 +105,11 @@ test("opens permission and RBAC tables from detail badges instead of rendering r
   await act(async () => {
     getButton("Open Entra API permissions 2").click();
   });
-  expect(onEntraPermissionsClick).toHaveBeenCalledWith({ displayName: "Details app", objectId: "sp-object-id" });
+  expect(onEntraPermissionsClick).toHaveBeenCalledWith({
+    appId: "client-id",
+    displayName: "Details app",
+    objectId: "sp-object-id"
+  });
 
   await act(async () => {
     getButton("Open Azure RBAC assignments 1").click();

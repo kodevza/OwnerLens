@@ -37,7 +37,9 @@ export type AzureRbacPrincipalSelection = {
   objectId: string;
 };
 
-export type EntraPermissionsPrincipalSelection = AzureRbacPrincipalSelection;
+export type EntraPermissionsPrincipalSelection = AzureRbacPrincipalSelection & {
+  appId?: string;
+};
 
 export type OwnershipEvidenceSelection = {
   displayName: string;
@@ -114,7 +116,9 @@ export function buildServicePrincipalFieldRenderers<TRow>({
           entraPermissionRisk={sp.entraPermissionRisk}
           oauthPermissionsCount={sp.oauthPermissionsCount}
           onClick={
-            onEntraPermissionsClick ? () => onEntraPermissionsClick({ displayName: sp.displayName, objectId: sp.id }) : undefined
+            onEntraPermissionsClick
+              ? () => onEntraPermissionsClick({ appId: sp.appId, displayName: sp.displayName, objectId: sp.id })
+              : undefined
           }
         />
       ) : (

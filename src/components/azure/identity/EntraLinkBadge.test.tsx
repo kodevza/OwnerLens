@@ -1,6 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { EntraLinkBadge, buildEntraEnterpriseApplicationPortalUrl } from "./EntraLinkBadge";
+import {
+  EntraLinkBadge,
+  buildEntraEnterpriseApplicationPermissionsPortalUrl,
+  buildEntraEnterpriseApplicationPortalUrl
+} from "./EntraLinkBadge";
 
 test("builds Entra portal URL for an enterprise application", () => {
   expect(
@@ -19,6 +23,25 @@ test("builds Entra portal URL with only an object ID", () => {
       objectId: "sp-object-1"
     })
   ).toBe("https://entra.microsoft.com/#view/Microsoft_AAD_IAM/ManagedAppMenuBlade/~/Overview/objectId/sp-object-1");
+});
+
+test("builds Entra permissions portal URL for an enterprise application", () => {
+  expect(
+    buildEntraEnterpriseApplicationPermissionsPortalUrl({
+      appId: "client 1",
+      objectId: "sp object 1"
+    })
+  ).toBe(
+    "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/ManagedAppMenuBlade/~/Permissions/objectId/sp%20object%201/appId/client%201"
+  );
+});
+
+test("builds Entra permissions portal URL with only an object ID", () => {
+  expect(
+    buildEntraEnterpriseApplicationPermissionsPortalUrl({
+      objectId: "sp-object-1"
+    })
+  ).toBe("https://entra.microsoft.com/#view/Microsoft_AAD_IAM/ManagedAppMenuBlade/~/Permissions/objectId/sp-object-1");
 });
 
 test("renders Entra link badge as an unstyled external portal link", () => {

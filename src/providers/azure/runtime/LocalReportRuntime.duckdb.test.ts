@@ -11,7 +11,10 @@ import {
   importZeroTrustAssessmentReportToDuckDb,
   readZeroTrustAssessmentReportFromDuckDb
 } from "./zta/snapshotStore";
-import { readAzureIdentityEnrichmentStatus } from "./enrichment/azureIdentityEnrichment";
+import {
+  readAzureIdentityEnrichmentStatus,
+  recalculateAzureIdentityEnrichment
+} from "./enrichment/azureIdentityEnrichment";
 import type { SnapshotImportStatus } from "../../../core/runtime/snapshotImportRegistry";
 import { RemediationPackageStore } from "../../../core/runtime/RemediationPackageStore";
 import { defaultAppConfig, setAppConfig } from "../../../core/config";
@@ -22,6 +25,7 @@ import {
 } from "./entra/domain/servicePrincipalsTable";
 import { insertEntraApplicationRows } from "./entra/domain/applicationsTable";
 import { prepareRuntimeSqlSchema } from "./SnapshotImporter";
+import { insertAzureRoleAssignmentRows } from "./resources/tables";
 import type { ZeroTrustAssessmentReport } from "./zta/types";
 import {
   installDuckDbHandleCleanup,
@@ -315,6 +319,25 @@ test("reads a single service principal row by id", async () => {
     displayName: "Two app"
   });
   expect(rows.missing).toBeNull();
+});
+
+test("calculates Azure identity enrichment from freshly imported rows before runtime materialization", async () => {
+  const status = await withDuckDb(async ({ connection }) => {
+    await prepareRuntimeSqlSchema(connection);
+    await insertEntraServicePrincipalRows(connection, [
+      servicePrincipal("sp-1", "app-1", "Example app", "Application")
+    ]);
+    await insertAzureRoleAssignmentRows(connection, [
+      roleAssignment("sp-1", "Owner", "/subscriptions/sub-1", "Subscription")
+    ]);
+
+    return recalculateAzureIdentityEnrichment(connection);
+  });
+
+  expect(status).toMatchObject({
+    identityRoleAssignmentCount: 1,
+    accessRiskIdentityCount: 1
+  });
 });
 
 test("filters Entra service principals in DuckDB before page lookup limits", async () => {
@@ -3295,6 +3318,81 @@ test("falls back from disabled direct service principal owner to resource group 
         })
       ]
     });
+  });
+});
+
+test("materializes ranked owner candidates before applying disabled evidence dynamically", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 1
+    },
+    servicePrincipals: [
+      servicePrincipal("sp-app", "app-app", "Application app", {
+        servicePrincipalType: "Application",
+        servicePrincipalOwners: [
+          {
+            id: "owner-direct-1",
+            displayName: "Direct Owner",
+            userPrincipalName: "direct-owner@example.test",
+            mail: null,
+            ownerType: "User"
+          }
+        ]
+      })
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await runtime.initialize();
+
+    await runtime.setOwnerCandidateDisabled(
+      "entraServicePrincipalOwner:ownerUser:owner-direct-1",
+      true
+    );
+
+    await expect(runtime.queryEntraServicePrincipals({ page: 1, pageSize: 10 })).resolves.toMatchObject({
+      rows: [
+        expect.objectContaining({
+          id: "sp-app",
+          potentialOwners: [],
+          ownerCandidates: []
+        })
+      ]
+    });
+
+    await runtime.close();
+    await withDuckDb(async ({ connection }) => {
+      const tableReader = await connection.runAndReadAll(`
+        select table_name, table_type
+        from information_schema.tables
+        where table_schema = 'main'
+          and table_name in (
+            'runtime_entra_principal_base_materialized',
+            'runtime_owner_evidence_materialized',
+            'runtime_principal_resource_group_targets_materialized',
+            'runtime_ranked_owner_candidates_materialized'
+          )
+        order by table_name
+      `);
+      expect(tableReader.getRowObjectsJson()).toEqual([
+        { table_name: "runtime_entra_principal_base_materialized", table_type: "BASE TABLE" },
+        { table_name: "runtime_owner_evidence_materialized", table_type: "BASE TABLE" },
+        { table_name: "runtime_principal_resource_group_targets_materialized", table_type: "BASE TABLE" },
+        { table_name: "runtime_ranked_owner_candidates_materialized", table_type: "BASE TABLE" }
+      ]);
+
+      const candidateReader = await connection.runAndReadAll(`
+        select "evidenceKey"
+        from runtime_ranked_owner_candidates_materialized
+        where "principalId" = 'sp-app'
+      `);
+      expect(candidateReader.getRowObjectsJson()).toEqual([
+        { evidenceKey: "entraServicePrincipalOwner:ownerUser:owner-direct-1:direct-owner@example.test:" }
+      ]);
+    }, { databasePath });
   });
 });
 

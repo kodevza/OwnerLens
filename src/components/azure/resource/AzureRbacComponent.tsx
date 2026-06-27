@@ -6,11 +6,16 @@ import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../../report/reportTypes";
 import type { PermissionRiskLevel } from "../../../core/risk/types";
 import { readAzureRbac, type AzureRbacTarget } from "../api";
+import { AzureLinkBadge } from "../AzureLinkBadge";
 
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
 const azureScopeTypeOptions = ["ManagementGroup", "Subscription", "ResourceGroup", "Resource", "Unknown"];
 const azurePrincipalTypeOptions = ["User", "Group", "ServicePrincipal", "ForeignGroup", "Device", "ManagedIdentity"];
 const assignmentSourceOptions = ["direct", "group"];
+
+function buildAzureScopeIamPortalUrl(scope: string): string {
+  return `https://portal.azure.com/#resource${scope}/users`;
+}
 
 const azureRbacFields: ReportFieldDescriptor<AzureRbac>[] = [
   {
@@ -136,6 +141,19 @@ export function AzureRbacComponent({
       columnWidthsStorageKey="azure-rbac-assignments"
       emptyMessage="No Azure RBAC assignments match the filter."
       fields={azureRbacFields}
+      fieldRenderers={{
+        roleAssignmentId: (assignment) =>
+          assignment.roleAssignmentId ? (
+            <AzureLinkBadge
+              href={buildAzureScopeIamPortalUrl(assignment.scope)}
+              title="Open Access control (IAM) for this scope in Azure portal"
+            >
+              {assignment.roleAssignmentId}
+            </AzureLinkBadge>
+          ) : (
+            ""
+          )
+      }}
       getRowKey={(row) => row.roleAssignmentId ?? `${row.servicePrincipalId}:${row.scope}:${row.roleDefinitionId ?? row.roleDefinitionName ?? ""}`}
       initialFilters={initialFilters}
       initialPage={initialPage}
