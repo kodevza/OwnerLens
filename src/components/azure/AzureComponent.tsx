@@ -391,6 +391,7 @@ export function AzureComponent() {
         {entraPermissionsTab ? (
           <EntraPermissionsComponent
             key={entraPermissionsTab.tabId}
+            appId={entraPermissionsTab.appId}
             filters={getDetailTableControls(entraPermissionsTab.tabId).filters}
             principalId={entraPermissionsTab.objectId}
             sortRules={getDetailTableControls(entraPermissionsTab.tabId).sortRules}

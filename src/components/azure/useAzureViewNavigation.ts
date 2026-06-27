@@ -97,6 +97,7 @@ function isDynamicTabView(view: string): boolean {
     "azureRbac:",
     "entraPermissions:",
     "ownershipEvidence:",
+    "principalDetails:",
     "remediationPackage:"
   ].some((prefix) => view.startsWith(prefix));
 }

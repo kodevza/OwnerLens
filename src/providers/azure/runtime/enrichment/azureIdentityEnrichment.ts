@@ -581,7 +581,7 @@ function uniqueSorted(values: string[]): string[] {
 }
 
 function normalizeKey(value: string): string {
-  return value.toLowerCase();
+  return value.trim().toLowerCase();
 }
 
 function normalizeKeys(values: string[]): string[] {

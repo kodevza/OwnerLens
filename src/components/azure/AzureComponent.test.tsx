@@ -44,6 +44,29 @@ test("hides the Zero Trust Assessment tab by default", () => {
   act(() => root.unmount());
 });
 
+test("opens and activates a service principal details tab from its display name", async () => {
+  globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
+    jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 1,
+      page: 1,
+      pageSize: 20,
+      rows: [servicePrincipalRow({ displayName: "Payroll API", id: "payroll-sp-id" })]
+    })
+  );
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await waitForText(container, "Payroll API");
+  await clickButton("Payroll API");
+
+  await waitForText(container, "Application data");
+  expect(getButton("INF: Payroll API").getAttribute("aria-selected")).toBe("true");
+
+  act(() => root.unmount());
+});
+
 test("keeps service principal filters and page separate from managed identities", async () => {
   const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
     const requestUrl = String(input);

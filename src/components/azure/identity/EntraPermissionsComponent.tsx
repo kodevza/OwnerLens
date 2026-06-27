@@ -4,9 +4,13 @@ import { GenericTable } from "../../../report/components/table/GenericTable";
 import type { ColumnFilters, SortRule } from "../../../core/collectionControls";
 import type { ReportFieldDescriptor } from "../../../report/reportTypes";
 import type { PermissionRiskLevel } from "../../../core/risk/types";
+import type { ReportColumnRenderers } from "../../../report/buildCollectionColumns";
 import { readEntraPermissions, type EntraPrincipalPermissionsResponse } from "../api";
+import { EntraLinkBadge, buildEntraEnterpriseApplicationPermissionsPortalUrl } from "./EntraLinkBadge";
 
 type EntraPermissionRow = {
+  clientAppId: string | null;
+  clientServicePrincipalId: string;
   id: string;
   permissionType: "OAuth2 permission grant" | "App role assignment";
   resourceDisplayName: string | null;
@@ -34,6 +38,20 @@ type LoadState =
 const permissionTypeOptions: EntraPermissionRow["permissionType"][] = ["OAuth2 permission grant", "App role assignment"];
 const consentTypeOptions = ["AllPrincipals", "Principal"];
 const permissionRiskLevelOptions: PermissionRiskLevel[] = ["high", "medium", "low", "none"];
+
+const entraPermissionFieldRenderers: ReportColumnRenderers<EntraPermissionRow> = {
+  id: (permission) => (
+    <EntraLinkBadge
+      href={buildEntraEnterpriseApplicationPermissionsPortalUrl({
+        appId: permission.clientAppId,
+        objectId: permission.clientServicePrincipalId
+      })}
+      title={`Open granted permissions in Microsoft Entra admin center: ${permission.id}`}
+    >
+      {permission.id}
+    </EntraLinkBadge>
+  )
+};
 
 const entraPermissionFields: ReportFieldDescriptor<EntraPermissionRow>[] = [
   {
@@ -102,6 +120,7 @@ const entraPermissionFields: ReportFieldDescriptor<EntraPermissionRow>[] = [
 ];
 
 type EntraPermissionsComponentProps = {
+  appId?: string | null;
   filters?: ColumnFilters;
   onFiltersChange?: (filters: ColumnFilters) => void;
   onSortRulesChange?: (sortRules: SortRule[]) => void;
@@ -110,6 +129,7 @@ type EntraPermissionsComponentProps = {
 };
 
 export function EntraPermissionsComponent({
+  appId,
   filters,
   onFiltersChange,
   onSortRulesChange,
@@ -146,7 +166,7 @@ export function EntraPermissionsComponent({
     return () => controller.abort();
   }, [principalId]);
 
-  const rows = useMemo(() => (permissions ? mapPermissionsToRows(permissions) : []), [permissions]);
+  const rows = useMemo(() => (permissions ? mapPermissionsToRows(permissions, appId) : []), [appId, permissions]);
 
   if (!permissions && loadState.status === "loading") {
     return <div className="rounded-md border bg-card p-4 text-sm text-muted-foreground">Loading Entra API permissions...</div>;
@@ -164,6 +184,7 @@ export function EntraPermissionsComponent({
       <GenericTable
         columnWidthsStorageKey="entra-api-permissions"
         emptyMessage="No Entra API permissions match the filter."
+        fieldRenderers={entraPermissionFieldRenderers}
         fields={entraPermissionFields}
         filters={filters}
         getRowKey={(row) => `${row.permissionType}:${row.id}`}
@@ -177,9 +198,14 @@ export function EntraPermissionsComponent({
   );
 }
 
-function mapPermissionsToRows(permissions: EntraPrincipalPermissionsResponse): EntraPermissionRow[] {
+function mapPermissionsToRows(
+  permissions: EntraPrincipalPermissionsResponse,
+  clientAppId?: string | null
+): EntraPermissionRow[] {
   return [
     ...permissions.oauth2PermissionGrants.map((grant) => ({
+      clientAppId: clientAppId ?? null,
+      clientServicePrincipalId: permissions.principalId,
       id: grant.id,
       permissionType: "OAuth2 permission grant" as const,
       resourceDisplayName: null,
@@ -192,6 +218,8 @@ function mapPermissionsToRows(permissions: EntraPrincipalPermissionsResponse): E
       principalId: grant.principalId
     })),
     ...permissions.appRoleAssignments.map((assignment) => ({
+      clientAppId: clientAppId ?? null,
+      clientServicePrincipalId: permissions.principalId,
       id: assignment.id,
       permissionType: "App role assignment" as const,
       resourceDisplayName: assignment.resourceDisplayName,

@@ -54,9 +54,16 @@ export function ServicePrincipalDetailsComponent({
     displayName: servicePrincipal.displayName,
     objectId: servicePrincipal.id
   };
+  const permissionsPrincipalSelection = {
+    appId: servicePrincipal.appId,
+    displayName: servicePrincipal.displayName,
+    objectId: servicePrincipal.id
+  };
   const { analysisRows, applicationRows } = buildServicePrincipalDetailRowGroups(servicePrincipal, {
     onAzureRbacClick: onAzureRbacClick ? () => onAzureRbacClick(principalSelection) : undefined,
-    onEntraPermissionsClick: onEntraPermissionsClick ? () => onEntraPermissionsClick(principalSelection) : undefined,
+    onEntraPermissionsClick: onEntraPermissionsClick
+      ? () => onEntraPermissionsClick(permissionsPrincipalSelection)
+      : undefined,
     onOwnershipEvidenceClick: onOwnershipEvidenceClick
       ? () =>
           onOwnershipEvidenceClick({

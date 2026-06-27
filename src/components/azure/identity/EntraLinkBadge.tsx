@@ -39,3 +39,16 @@ export function buildEntraEnterpriseApplicationPortalUrl({
 
   return `https://entra.microsoft.com/#view/Microsoft_AAD_IAM/ManagedAppMenuBlade/~/Overview/objectId/${encodedObjectId}${appIdPath}`;
 }
+
+export function buildEntraEnterpriseApplicationPermissionsPortalUrl({
+  appId,
+  objectId
+}: {
+  appId?: string | null;
+  objectId: string;
+}): string {
+  const encodedObjectId = encodeURIComponent(objectId);
+  const appIdPath = appId ? `/appId/${encodeURIComponent(appId)}` : "";
+
+  return `https://entra.microsoft.com/#view/Microsoft_AAD_IAM/ManagedAppMenuBlade/~/Permissions/objectId/${encodedObjectId}${appIdPath}`;
+}
