@@ -1,3 +1,20 @@
+create table if not exists entra_principal_permission_summary (
+  principal_id varchar primary key,
+  oauth_permissions_count integer not null,
+  app_roles_permission_count integer not null,
+  entra_permission_count integer not null,
+  entra_permission_risk varchar not null
+);
+
+create table if not exists azure_managed_identity_home_context (
+  principal_id varchar primary key,
+  client_id varchar not null,
+  subscription_id varchar not null,
+  resource_group varchar not null,
+  resource_id varchar not null,
+  identity_kind varchar not null
+);
+
 create or replace view runtime_latest_enrichment_run as
 select run_id
 from azure_runtime_enrichment_runs
@@ -804,3 +821,25 @@ select
 from base_rg rg
 left join selected_owner owner on owner."targetKey" = rg."targetKey"
 left join rbac_summary rbac on rbac."targetKey" = rg."targetKey";
+
+-- Backward-compatible projection for older code paths/tests that still reference
+-- azure_principal_resource_group_owner_candidates. Do not maintain separate logic here.
+create or replace view azure_principal_resource_group_owner_candidates as
+select
+  "principalId" as principal_id,
+  "subscriptionId" as subscription_id,
+  "subscriptionName" as subscription_name,
+  "resourceGroup" as resource_group,
+  owner,
+  "ownerType" as owner_type,
+  "ownerCandidate" as owner_candidate,
+  "evidenceKey" as evidence_key,
+  confidence,
+  source,
+  path,
+  "discoverySource" as discovery_source,
+  "evidenceValue" as evidence_value,
+  "evidenceDate" as evidence_date,
+  priority
+from runtime_owner_evidence
+where "targetKind" = 'principal';
