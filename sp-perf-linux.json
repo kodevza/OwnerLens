@@ -1,0 +1,1325 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-27T12:50:59.922Z",
+  "parameters": {
+    "iterations": 10,
+    "warmups": 3,
+    "pageSize": 20
+  },
+  "environment": {
+    "platform": "linux",
+    "architecture": "x64",
+    "osRelease": "6.16.0-061600-generic",
+    "nodeVersion": "v22.14.0",
+    "duckdbNodeApiVersion": "1.5.3-r.3",
+    "duckdbNodeBindingsVersion": "1.5.3-r.3",
+    "cpuModel": "AMD Ryzen 7 5825U with Radeon Graphics",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 32964145152,
+    "duckdbVersion": "v1.5.3",
+    "duckdbThreads": "16",
+    "duckdbMemoryLimit": "24.5 GiB"
+  },
+  "database": {
+    "fileName": "runtime.duckdb",
+    "sizeBytes": 19935232
+  },
+  "cardinalities": {
+    "principal_base": "513",
+    "rbac_enrichment": "66",
+    "managed_identity_enrichment": "62",
+    "resource_group_targets": "58",
+    "ranked_owner_candidates": "51",
+    "disabled_owner_evidence": "0"
+  },
+  "benchmarks": [
+    {
+      "name": "base_count",
+      "purpose": "Materialized principal base count without collection joins.",
+      "resultShape": {
+        "rowCount": 1,
+        "responseBytes": 17
+      },
+      "timingsMs": {
+        "query": {
+          "min": 0.639,
+          "median": 0.777,
+          "p95": 1.187,
+          "max": 1.187,
+          "mean": 0.855
+        },
+        "nativeToJs": {
+          "min": 0.028,
+          "median": 0.032,
+          "p95": 0.171,
+          "max": 0.171,
+          "mean": 0.057
+        },
+        "mapping": {
+          "min": 0,
+          "median": 0.001,
+          "p95": 0.001,
+          "max": 0.001,
+          "mean": 0.001
+        },
+        "stringify": {
+          "min": 0.002,
+          "median": 0.003,
+          "p95": 0.006,
+          "max": 0.006,
+          "mean": 0.003
+        },
+        "total": {
+          "min": 0.67,
+          "median": 0.943,
+          "p95": 1.221,
+          "max": 1.221,
+          "mean": 0.916
+        }
+      },
+      "samples": [
+        {
+          "query": 0.727,
+          "nativeToJs": 0.032,
+          "mapping": 0.001,
+          "stringify": 0.002,
+          "total": 0.762
+        },
+        {
+          "query": 0.751,
+          "nativeToJs": 0.032,
+          "mapping": 0.001,
+          "stringify": 0.002,
+          "total": 0.785
+        },
+        {
+          "query": 0.639,
+          "nativeToJs": 0.028,
+          "mapping": 0,
+          "stringify": 0.002,
+          "total": 0.67
+        },
+        {
+          "query": 0.856,
+          "nativeToJs": 0.098,
+          "mapping": 0.001,
+          "stringify": 0.002,
+          "total": 0.957
+        },
+        {
+          "query": 0.777,
+          "nativeToJs": 0.055,
+          "mapping": 0.001,
+          "stringify": 0.006,
+          "total": 0.839
+        },
+        {
+          "query": 0.932,
+          "nativeToJs": 0.045,
+          "mapping": 0.001,
+          "stringify": 0.004,
+          "total": 0.982
+        },
+        {
+          "query": 1.187,
+          "nativeToJs": 0.03,
+          "mapping": 0.001,
+          "stringify": 0.003,
+          "total": 1.221
+        },
+        {
+          "query": 0.917,
+          "nativeToJs": 0.028,
+          "mapping": 0.001,
+          "stringify": 0.003,
+          "total": 0.949
+        },
+        {
+          "query": 0.769,
+          "nativeToJs": 0.171,
+          "mapping": 0.001,
+          "stringify": 0.003,
+          "total": 0.943
+        },
+        {
+          "query": 0.996,
+          "nativeToJs": 0.048,
+          "mapping": 0,
+          "stringify": 0.004,
+          "total": 1.048
+        }
+      ]
+    },
+    {
+      "name": "base_page",
+      "purpose": "Materialized principal base page without collection joins.",
+      "resultShape": {
+        "rowCount": 20,
+        "responseBytes": 25798
+      },
+      "timingsMs": {
+        "query": {
+          "min": 3.199,
+          "median": 4.312,
+          "p95": 5.806,
+          "max": 5.806,
+          "mean": 4.614
+        },
+        "nativeToJs": {
+          "min": 0.45,
+          "median": 0.82,
+          "p95": 1.146,
+          "max": 1.146,
+          "mean": 0.798
+        },
+        "mapping": {
+          "min": 0,
+          "median": 0.001,
+          "p95": 0.003,
+          "max": 0.003,
+          "mean": 0.001
+        },
+        "stringify": {
+          "min": 0.067,
+          "median": 0.097,
+          "p95": 0.26,
+          "max": 0.26,
+          "mean": 0.119
+        },
+        "total": {
+          "min": 3.717,
+          "median": 5.391,
+          "p95": 6.732,
+          "max": 6.732,
+          "mean": 5.532
+        }
+      },
+      "samples": [
+        {
+          "query": 5.806,
+          "nativeToJs": 0.82,
+          "mapping": 0.001,
+          "stringify": 0.105,
+          "total": 6.732
+        },
+        {
+          "query": 4.438,
+          "nativeToJs": 0.853,
+          "mapping": 0.003,
+          "stringify": 0.097,
+          "total": 5.391
+        },
+        {
+          "query": 4.254,
+          "nativeToJs": 0.853,
+          "mapping": 0,
+          "stringify": 0.094,
+          "total": 5.202
+        },
+        {
+          "query": 5.364,
+          "nativeToJs": 0.856,
+          "mapping": 0.001,
+          "stringify": 0.26,
+          "total": 6.481
+        },
+        {
+          "query": 5.571,
+          "nativeToJs": 0.981,
+          "mapping": 0.001,
+          "stringify": 0.1,
+          "total": 6.653
+        },
+        {
+          "query": 3.199,
+          "nativeToJs": 0.45,
+          "mapping": 0,
+          "stringify": 0.067,
+          "total": 3.717
+        },
+        {
+          "query": 4.312,
+          "nativeToJs": 1.146,
+          "mapping": 0.001,
+          "stringify": 0.163,
+          "total": 5.621
+        },
+        {
+          "query": 5.591,
+          "nativeToJs": 0.787,
+          "mapping": 0,
+          "stringify": 0.092,
+          "total": 6.469
+        },
+        {
+          "query": 3.491,
+          "nativeToJs": 0.515,
+          "mapping": 0,
+          "stringify": 0.083,
+          "total": 4.089
+        },
+        {
+          "query": 4.114,
+          "nativeToJs": 0.718,
+          "mapping": 0.001,
+          "stringify": 0.128,
+          "total": 4.96
+        }
+      ]
+    },
+    {
+      "name": "rbac_join_normalized",
+      "purpose": "RBAC left join on already normalized principal IDs.",
+      "resultShape": {
+        "rowCount": 20,
+        "responseBytes": 2360
+      },
+      "timingsMs": {
+        "query": {
+          "min": 2.169,
+          "median": 3.004,
+          "p95": 4.756,
+          "max": 4.756,
+          "mean": 3.112
+        },
+        "nativeToJs": {
+          "min": 0.05,
+          "median": 0.086,
+          "p95": 0.216,
+          "max": 0.216,
+          "mean": 0.112
+        },
+        "mapping": {
+          "min": 0,
+          "median": 0,
+          "p95": 0.001,
+          "max": 0.001,
+          "mean": 0
+        },
+        "stringify": {
+          "min": 0.006,
+          "median": 0.013,
+          "p95": 0.089,
+          "max": 0.089,
+          "mean": 0.023
+        },
+        "total": {
+          "min": 2.226,
+          "median": 3.109,
+          "p95": 4.992,
+          "max": 4.992,
+          "mean": 3.247
+        }
+      },
+      "samples": [
+        {
+          "query": 3.527,
+          "nativeToJs": 0.216,
+          "mapping": 0.001,
+          "stringify": 0.021,
+          "total": 3.764
+        },
+        {
+          "query": 3.407,
+          "nativeToJs": 0.081,
+          "mapping": 0,
+          "stringify": 0.012,
+          "total": 3.5
+        },
+        {
+          "query": 3.113,
+          "nativeToJs": 0.086,
+          "mapping": 0.001,
+          "stringify": 0.021,
+          "total": 3.221
+        },
+        {
+          "query": 2.279,
+          "nativeToJs": 0.057,
+          "mapping": 0,
+          "stringify": 0.089,
+          "total": 2.425
+        },
+        {
+          "query": 2.169,
+          "nativeToJs": 0.05,
+          "mapping": 0,
+          "stringify": 0.006,
+          "total": 2.226
+        },
+        {
+          "query": 2.249,
+          "nativeToJs": 0.052,
+          "mapping": 0,
+          "stringify": 0.006,
+          "total": 2.308
+        },
+        {
+          "query": 2.833,
+          "nativeToJs": 0.178,
+          "mapping": 0.001,
+          "stringify": 0.021,
+          "total": 3.032
+        },
+        {
+          "query": 4.756,
+          "nativeToJs": 0.209,
+          "mapping": 0,
+          "stringify": 0.027,
+          "total": 4.992
+        },
+        {
+          "query": 3.781,
+          "nativeToJs": 0.1,
+          "mapping": 0,
+          "stringify": 0.013,
+          "total": 3.895
+        },
+        {
+          "query": 3.004,
+          "nativeToJs": 0.093,
+          "mapping": 0,
+          "stringify": 0.011,
+          "total": 3.109
+        }
+      ]
+    },
+    {
+      "name": "rbac_join_expression",
+      "purpose": "RBAC left join with lower(trim()) expressions used by the collection view.",
+      "resultShape": {
+        "rowCount": 20,
+        "responseBytes": 2360
+      },
+      "timingsMs": {
+        "query": {
+          "min": 2.542,
+          "median": 3.15,
+          "p95": 4.667,
+          "max": 4.667,
+          "mean": 3.383
+        },
+        "nativeToJs": {
+          "min": 0.056,
+          "median": 0.096,
+          "p95": 0.207,
+          "max": 0.207,
+          "mean": 0.11
+        },
+        "mapping": {
+          "min": 0,
+          "median": 0,
+          "p95": 0.001,
+          "max": 0.001,
+          "mean": 0
+        },
+        "stringify": {
+          "min": 0.007,
+          "median": 0.012,
+          "p95": 0.025,
+          "max": 0.025,
+          "mean": 0.013
+        },
+        "total": {
+          "min": 2.605,
+          "median": 3.305,
+          "p95": 4.899,
+          "max": 4.899,
+          "mean": 3.508
+        }
+      },
+      "samples": [
+        {
+          "query": 3.345,
+          "nativeToJs": 0.103,
+          "mapping": 0.001,
+          "stringify": 0.012,
+          "total": 3.461
+        },
+        {
+          "query": 3.196,
+          "nativeToJs": 0.096,
+          "mapping": 0,
+          "stringify": 0.012,
+          "total": 3.305
+        },
+        {
+          "query": 3.765,
+          "nativeToJs": 0.114,
+          "mapping": 0.001,
+          "stringify": 0.014,
+          "total": 3.894
+        },
+        {
+          "query": 3.076,
+          "nativeToJs": 0.086,
+          "mapping": 0,
+          "stringify": 0.01,
+          "total": 3.172
+        },
+        {
+          "query": 2.878,
+          "nativeToJs": 0.069,
+          "mapping": 0,
+          "stringify": 0.01,
+          "total": 2.957
+        },
+        {
+          "query": 2.915,
+          "nativeToJs": 0.061,
+          "mapping": 0,
+          "stringify": 0.008,
+          "total": 2.984
+        },
+        {
+          "query": 2.542,
+          "nativeToJs": 0.056,
+          "mapping": 0,
+          "stringify": 0.007,
+          "total": 2.605
+        },
+        {
+          "query": 3.15,
+          "nativeToJs": 0.183,
+          "mapping": 0.001,
+          "stringify": 0.022,
+          "total": 3.355
+        },
+        {
+          "query": 4.667,
+          "nativeToJs": 0.207,
+          "mapping": 0,
+          "stringify": 0.025,
+          "total": 4.899
+        },
+        {
+          "query": 4.302,
+          "nativeToJs": 0.129,
+          "mapping": 0,
+          "stringify": 0.015,
+          "total": 4.446
+        }
+      ]
+    },
+    {
+      "name": "rbac_correlated_json_each",
+      "purpose": "Correlated json_each and distinct subscription aggregation from the collection view.",
+      "resultShape": {
+        "rowCount": 20,
+        "responseBytes": 2979
+      },
+      "timingsMs": {
+        "query": {
+          "min": 7.957,
+          "median": 9.168,
+          "p95": 11.076,
+          "max": 11.076,
+          "mean": 9.542
+        },
+        "nativeToJs": {
+          "min": 0.117,
+          "median": 0.179,
+          "p95": 0.291,
+          "max": 0.291,
+          "mean": 0.192
+        },
+        "mapping": {
+          "min": 0,
+          "median": 0,
+          "p95": 0.001,
+          "max": 0.001,
+          "mean": 0.001
+        },
+        "stringify": {
+          "min": 0.013,
+          "median": 0.019,
+          "p95": 0.032,
+          "max": 0.032,
+          "mean": 0.021
+        },
+        "total": {
+          "min": 8.128,
+          "median": 9.491,
+          "p95": 11.32,
+          "max": 11.32,
+          "mean": 9.756
+        }
+      },
+      "samples": [
+        {
+          "query": 10.43,
+          "nativeToJs": 0.248,
+          "mapping": 0.001,
+          "stringify": 0.032,
+          "total": 10.712
+        },
+        {
+          "query": 10.781,
+          "nativeToJs": 0.15,
+          "mapping": 0,
+          "stringify": 0.019,
+          "total": 10.951
+        },
+        {
+          "query": 10.88,
+          "nativeToJs": 0.204,
+          "mapping": 0.001,
+          "stringify": 0.019,
+          "total": 11.104
+        },
+        {
+          "query": 8.027,
+          "nativeToJs": 0.117,
+          "mapping": 0,
+          "stringify": 0.013,
+          "total": 8.156
+        },
+        {
+          "query": 9.052,
+          "nativeToJs": 0.228,
+          "mapping": 0.001,
+          "stringify": 0.024,
+          "total": 9.305
+        },
+        {
+          "query": 9.168,
+          "nativeToJs": 0.291,
+          "mapping": 0.001,
+          "stringify": 0.031,
+          "total": 9.491
+        },
+        {
+          "query": 9.994,
+          "nativeToJs": 0.179,
+          "mapping": 0,
+          "stringify": 0.015,
+          "total": 10.189
+        },
+        {
+          "query": 11.076,
+          "nativeToJs": 0.221,
+          "mapping": 0,
+          "stringify": 0.023,
+          "total": 11.32
+        },
+        {
+          "query": 7.957,
+          "nativeToJs": 0.153,
+          "mapping": 0,
+          "stringify": 0.017,
+          "total": 8.128
+        },
+        {
+          "query": 8.058,
+          "nativeToJs": 0.133,
+          "mapping": 0,
+          "stringify": 0.017,
+          "total": 8.208
+        }
+      ]
+    },
+    {
+      "name": "owner_evidence_anti_join",
+      "purpose": "Correlated NOT EXISTS with OR over disabled owner evidence keys.",
+      "resultShape": {
+        "rowCount": 51,
+        "responseBytes": 46587
+      },
+      "timingsMs": {
+        "query": {
+          "min": 3.569,
+          "median": 4.208,
+          "p95": 5.142,
+          "max": 5.142,
+          "mean": 4.286
+        },
+        "nativeToJs": {
+          "min": 0.669,
+          "median": 0.958,
+          "p95": 2.394,
+          "max": 2.394,
+          "mean": 1.094
+        },
+        "mapping": {
+          "min": 0,
+          "median": 0,
+          "p95": 0.002,
+          "max": 0.002,
+          "mean": 0.001
+        },
+        "stringify": {
+          "min": 0.118,
+          "median": 0.225,
+          "p95": 0.474,
+          "max": 0.474,
+          "mean": 0.274
+        },
+        "total": {
+          "min": 4.762,
+          "median": 5.376,
+          "p95": 7.842,
+          "max": 7.842,
+          "mean": 5.655
+        }
+      },
+      "samples": [
+        {
+          "query": 5.142,
+          "nativeToJs": 2.394,
+          "mapping": 0.002,
+          "stringify": 0.304,
+          "total": 7.842
+        },
+        {
+          "query": 3.684,
+          "nativeToJs": 1.191,
+          "mapping": 0,
+          "stringify": 0.243,
+          "total": 5.118
+        },
+        {
+          "query": 4.48,
+          "nativeToJs": 1.131,
+          "mapping": 0.001,
+          "stringify": 0.22,
+          "total": 5.832
+        },
+        {
+          "query": 4.043,
+          "nativeToJs": 0.966,
+          "mapping": 0.001,
+          "stringify": 0.474,
+          "total": 5.484
+        },
+        {
+          "query": 4.208,
+          "nativeToJs": 0.953,
+          "mapping": 0.001,
+          "stringify": 0.214,
+          "total": 5.376
+        },
+        {
+          "query": 3.825,
+          "nativeToJs": 0.761,
+          "mapping": 0,
+          "stringify": 0.177,
+          "total": 4.762
+        },
+        {
+          "query": 4.393,
+          "nativeToJs": 0.669,
+          "mapping": 0,
+          "stringify": 0.118,
+          "total": 5.181
+        },
+        {
+          "query": 3.569,
+          "nativeToJs": 0.958,
+          "mapping": 0,
+          "stringify": 0.324,
+          "total": 4.851
+        },
+        {
+          "query": 4.969,
+          "nativeToJs": 1.068,
+          "mapping": 0.001,
+          "stringify": 0.444,
+          "total": 6.482
+        },
+        {
+          "query": 4.542,
+          "nativeToJs": 0.851,
+          "mapping": 0,
+          "stringify": 0.225,
+          "total": 5.619
+        }
+      ]
+    },
+    {
+      "name": "collection_id_page",
+      "purpose": "ID-only projection showing whether the collection CTE pipeline is pruned before LIMIT.",
+      "resultShape": {
+        "rowCount": 20,
+        "responseBytes": 921
+      },
+      "timingsMs": {
+        "query": {
+          "min": 22.286,
+          "median": 24.658,
+          "p95": 28.275,
+          "max": 28.275,
+          "mean": 24.917
+        },
+        "nativeToJs": {
+          "min": 0.089,
+          "median": 0.127,
+          "p95": 0.172,
+          "max": 0.172,
+          "mean": 0.133
+        },
+        "mapping": {
+          "min": 0,
+          "median": 0,
+          "p95": 0.001,
+          "max": 0.001,
+          "mean": 0
+        },
+        "stringify": {
+          "min": 0.01,
+          "median": 0.012,
+          "p95": 0.021,
+          "max": 0.021,
+          "mean": 0.013
+        },
+        "total": {
+          "min": 22.442,
+          "median": 24.758,
+          "p95": 28.469,
+          "max": 28.469,
+          "mean": 25.064
+        }
+      },
+      "samples": [
+        {
+          "query": 25.94,
+          "nativeToJs": 0.127,
+          "mapping": 0,
+          "stringify": 0.012,
+          "total": 26.079
+        },
+        {
+          "query": 23.546,
+          "nativeToJs": 0.121,
+          "mapping": 0,
+          "stringify": 0.011,
+          "total": 23.679
+        },
+        {
+          "query": 25.678,
+          "nativeToJs": 0.143,
+          "mapping": 0,
+          "stringify": 0.012,
+          "total": 25.834
+        },
+        {
+          "query": 22.286,
+          "nativeToJs": 0.143,
+          "mapping": 0.001,
+          "stringify": 0.013,
+          "total": 22.442
+        },
+        {
+          "query": 25.277,
+          "nativeToJs": 0.14,
+          "mapping": 0,
+          "stringify": 0.016,
+          "total": 25.433
+        },
+        {
+          "query": 24.658,
+          "nativeToJs": 0.089,
+          "mapping": 0,
+          "stringify": 0.01,
+          "total": 24.758
+        },
+        {
+          "query": 28.275,
+          "nativeToJs": 0.172,
+          "mapping": 0,
+          "stringify": 0.021,
+          "total": 28.469
+        },
+        {
+          "query": 24.417,
+          "nativeToJs": 0.117,
+          "mapping": 0.001,
+          "stringify": 0.014,
+          "total": 24.548
+        },
+        {
+          "query": 23.76,
+          "nativeToJs": 0.155,
+          "mapping": 0.001,
+          "stringify": 0.012,
+          "total": 23.928
+        },
+        {
+          "query": 25.332,
+          "nativeToJs": 0.126,
+          "mapping": 0,
+          "stringify": 0.01,
+          "total": 25.469
+        }
+      ]
+    },
+    {
+      "name": "collection_page_full",
+      "purpose": "Exact full collection page query used by the service principal endpoint.",
+      "resultShape": {
+        "rowCount": 20,
+        "responseBytes": 30350
+      },
+      "timingsMs": {
+        "query": {
+          "min": 23.787,
+          "median": 26.402,
+          "p95": 28.694,
+          "max": 28.694,
+          "mean": 26.244
+        },
+        "nativeToJs": {
+          "min": 0.552,
+          "median": 0.761,
+          "p95": 1.156,
+          "max": 1.156,
+          "mean": 0.782
+        },
+        "mapping": {
+          "min": 0.112,
+          "median": 0.185,
+          "p95": 0.263,
+          "max": 0.263,
+          "mean": 0.187
+        },
+        "stringify": {
+          "min": 0.076,
+          "median": 0.096,
+          "p95": 0.162,
+          "max": 0.162,
+          "mean": 0.1
+        },
+        "total": {
+          "min": 25.144,
+          "median": 27.539,
+          "p95": 29.742,
+          "max": 29.742,
+          "mean": 27.312
+        }
+      },
+      "samples": [
+        {
+          "query": 26.095,
+          "nativeToJs": 1.156,
+          "mapping": 0.245,
+          "stringify": 0.112,
+          "total": 27.608
+        },
+        {
+          "query": 24.599,
+          "nativeToJs": 0.552,
+          "mapping": 0.124,
+          "stringify": 0.076,
+          "total": 25.352
+        },
+        {
+          "query": 27.699,
+          "nativeToJs": 0.686,
+          "mapping": 0.112,
+          "stringify": 0.082,
+          "total": 28.579
+        },
+        {
+          "query": 24.546,
+          "nativeToJs": 0.767,
+          "mapping": 0.189,
+          "stringify": 0.093,
+          "total": 25.595
+        },
+        {
+          "query": 27.125,
+          "nativeToJs": 0.684,
+          "mapping": 0.185,
+          "stringify": 0.098,
+          "total": 28.092
+        },
+        {
+          "query": 23.787,
+          "nativeToJs": 0.932,
+          "mapping": 0.263,
+          "stringify": 0.162,
+          "total": 25.144
+        },
+        {
+          "query": 26.402,
+          "nativeToJs": 0.761,
+          "mapping": 0.198,
+          "stringify": 0.085,
+          "total": 27.446
+        },
+        {
+          "query": 26.462,
+          "nativeToJs": 0.78,
+          "mapping": 0.201,
+          "stringify": 0.096,
+          "total": 27.539
+        },
+        {
+          "query": 27.027,
+          "nativeToJs": 0.714,
+          "mapping": 0.184,
+          "stringify": 0.1,
+          "total": 28.025
+        },
+        {
+          "query": 28.694,
+          "nativeToJs": 0.784,
+          "mapping": 0.167,
+          "stringify": 0.097,
+          "total": 29.742
+        }
+      ]
+    },
+    {
+      "name": "collection_page_full_threads_1",
+      "purpose": "Full collection page forced to one DuckDB thread to detect platform-specific scheduling overhead.",
+      "duckdbThreads": 1,
+      "resultShape": {
+        "rowCount": 20,
+        "responseBytes": 30350
+      },
+      "timingsMs": {
+        "query": {
+          "min": 29.418,
+          "median": 31.888,
+          "p95": 36.849,
+          "max": 36.849,
+          "mean": 32.31
+        },
+        "nativeToJs": {
+          "min": 0.478,
+          "median": 0.542,
+          "p95": 0.953,
+          "max": 0.953,
+          "mean": 0.623
+        },
+        "mapping": {
+          "min": 0.091,
+          "median": 0.126,
+          "p95": 0.235,
+          "max": 0.235,
+          "mean": 0.137
+        },
+        "stringify": {
+          "min": 0.067,
+          "median": 0.073,
+          "p95": 0.113,
+          "max": 0.113,
+          "mean": 0.083
+        },
+        "total": {
+          "min": 30.078,
+          "median": 32.585,
+          "p95": 37.65,
+          "max": 37.65,
+          "mean": 33.153
+        }
+      },
+      "samples": [
+        {
+          "query": 36.849,
+          "nativeToJs": 0.59,
+          "mapping": 0.128,
+          "stringify": 0.083,
+          "total": 37.65
+        },
+        {
+          "query": 31.888,
+          "nativeToJs": 0.49,
+          "mapping": 0.126,
+          "stringify": 0.081,
+          "total": 32.585
+        },
+        {
+          "query": 34.494,
+          "nativeToJs": 0.478,
+          "mapping": 0.107,
+          "stringify": 0.067,
+          "total": 35.146
+        },
+        {
+          "query": 32.064,
+          "nativeToJs": 0.549,
+          "mapping": 0.113,
+          "stringify": 0.073,
+          "total": 32.798
+        },
+        {
+          "query": 34.716,
+          "nativeToJs": 0.489,
+          "mapping": 0.107,
+          "stringify": 0.069,
+          "total": 35.381
+        },
+        {
+          "query": 31.582,
+          "nativeToJs": 0.542,
+          "mapping": 0.14,
+          "stringify": 0.072,
+          "total": 32.335
+        },
+        {
+          "query": 29.803,
+          "nativeToJs": 0.785,
+          "mapping": 0.171,
+          "stringify": 0.113,
+          "total": 30.873
+        },
+        {
+          "query": 31.978,
+          "nativeToJs": 0.953,
+          "mapping": 0.154,
+          "stringify": 0.094,
+          "total": 33.18
+        },
+        {
+          "query": 30.306,
+          "nativeToJs": 0.855,
+          "mapping": 0.235,
+          "stringify": 0.111,
+          "total": 31.508
+        },
+        {
+          "query": 29.418,
+          "nativeToJs": 0.501,
+          "mapping": 0.091,
+          "stringify": 0.068,
+          "total": 30.078
+        }
+      ]
+    },
+    {
+      "name": "collection_count",
+      "purpose": "Exact collection count query used by the service principal endpoint.",
+      "resultShape": {
+        "rowCount": 1,
+        "responseBytes": 17
+      },
+      "timingsMs": {
+        "query": {
+          "min": 24.476,
+          "median": 27.549,
+          "p95": 33.58,
+          "max": 33.58,
+          "mean": 28.102
+        },
+        "nativeToJs": {
+          "min": 0.059,
+          "median": 0.08,
+          "p95": 0.133,
+          "max": 0.133,
+          "mean": 0.088
+        },
+        "mapping": {
+          "min": 0.001,
+          "median": 0.001,
+          "p95": 0.002,
+          "max": 0.002,
+          "mean": 0.001
+        },
+        "stringify": {
+          "min": 0.006,
+          "median": 0.008,
+          "p95": 0.016,
+          "max": 0.016,
+          "mean": 0.01
+        },
+        "total": {
+          "min": 24.554,
+          "median": 27.668,
+          "p95": 33.701,
+          "max": 33.701,
+          "mean": 28.201
+        }
+      },
+      "samples": [
+        {
+          "query": 30.413,
+          "nativeToJs": 0.067,
+          "mapping": 0.001,
+          "stringify": 0.008,
+          "total": 30.488
+        },
+        {
+          "query": 33.58,
+          "nativeToJs": 0.107,
+          "mapping": 0.001,
+          "stringify": 0.014,
+          "total": 33.701
+        },
+        {
+          "query": 30.946,
+          "nativeToJs": 0.133,
+          "mapping": 0.001,
+          "stringify": 0.016,
+          "total": 31.096
+        },
+        {
+          "query": 27.619,
+          "nativeToJs": 0.08,
+          "mapping": 0.001,
+          "stringify": 0.006,
+          "total": 27.707
+        },
+        {
+          "query": 24.476,
+          "nativeToJs": 0.069,
+          "mapping": 0.002,
+          "stringify": 0.008,
+          "total": 24.554
+        },
+        {
+          "query": 27.549,
+          "nativeToJs": 0.106,
+          "mapping": 0.001,
+          "stringify": 0.012,
+          "total": 27.668
+        },
+        {
+          "query": 26.099,
+          "nativeToJs": 0.111,
+          "mapping": 0.002,
+          "stringify": 0.013,
+          "total": 26.224
+        },
+        {
+          "query": 26.193,
+          "nativeToJs": 0.082,
+          "mapping": 0.002,
+          "stringify": 0.01,
+          "total": 26.286
+        },
+        {
+          "query": 25.218,
+          "nativeToJs": 0.059,
+          "mapping": 0.002,
+          "stringify": 0.008,
+          "total": 25.287
+        },
+        {
+          "query": 28.923,
+          "nativeToJs": 0.063,
+          "mapping": 0.001,
+          "stringify": 0.007,
+          "total": 28.995
+        }
+      ]
+    },
+    {
+      "name": "endpoint_pair_same_connection",
+      "purpose": "Concurrent page and count queries on the same DuckDB connection, matching endpoint behavior.",
+      "resultShape": {
+        "rowCount": 20,
+        "responseBytes": 30373
+      },
+      "timingsMs": {
+        "query": {
+          "min": 50.248,
+          "median": 52.809,
+          "p95": 58.38,
+          "max": 58.38,
+          "mean": 53.375
+        },
+        "nativeToJs": {
+          "min": 0.475,
+          "median": 0.664,
+          "p95": 1.008,
+          "max": 1.008,
+          "mean": 0.676
+        },
+        "mapping": {
+          "min": 0.094,
+          "median": 0.11,
+          "p95": 0.173,
+          "max": 0.173,
+          "mean": 0.12
+        },
+        "stringify": {
+          "min": 0.076,
+          "median": 0.1,
+          "p95": 0.142,
+          "max": 0.142,
+          "mean": 0.106
+        },
+        "total": {
+          "min": 50.923,
+          "median": 53.739,
+          "p95": 59.453,
+          "max": 59.453,
+          "mean": 54.277
+        }
+      },
+      "samples": [
+        {
+          "query": 52.809,
+          "nativeToJs": 0.585,
+          "mapping": 0.096,
+          "stringify": 0.118,
+          "total": 53.608
+        },
+        {
+          "query": 53.007,
+          "nativeToJs": 0.664,
+          "mapping": 0.121,
+          "stringify": 0.142,
+          "total": 53.933
+        },
+        {
+          "query": 55.306,
+          "nativeToJs": 0.475,
+          "mapping": 0.101,
+          "stringify": 0.116,
+          "total": 55.997
+        },
+        {
+          "query": 51.988,
+          "nativeToJs": 0.562,
+          "mapping": 0.11,
+          "stringify": 0.095,
+          "total": 52.754
+        },
+        {
+          "query": 58.38,
+          "nativeToJs": 0.782,
+          "mapping": 0.173,
+          "stringify": 0.117,
+          "total": 59.453
+        },
+        {
+          "query": 53.066,
+          "nativeToJs": 1.008,
+          "mapping": 0.115,
+          "stringify": 0.1,
+          "total": 54.289
+        },
+        {
+          "query": 52.14,
+          "nativeToJs": 0.702,
+          "mapping": 0.149,
+          "stringify": 0.092,
+          "total": 53.083
+        },
+        {
+          "query": 54.104,
+          "nativeToJs": 0.686,
+          "mapping": 0.105,
+          "stringify": 0.096,
+          "total": 54.991
+        },
+        {
+          "query": 50.248,
+          "nativeToJs": 0.504,
+          "mapping": 0.094,
+          "stringify": 0.076,
+          "total": 50.923
+        },
+        {
+          "query": 52.706,
+          "nativeToJs": 0.791,
+          "mapping": 0.138,
+          "stringify": 0.104,
+          "total": 53.739
+        }
+      ]
+    }
+  ]
+}

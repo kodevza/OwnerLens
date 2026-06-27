@@ -2,6 +2,24 @@
 
 OwnerLens snapshot collectors are exposed through the npm CLI and the PowerShell module in `powershell/OwnerLens`.
 
+## Service Principal Query Performance
+
+Run the same read-only DuckDB benchmark on Linux and Windows after OwnerLens has initialized `data/runtime.duckdb`. Stop the OwnerLens server first, then save the JSON result.
+
+Linux:
+
+```bash
+npm run --silent perf:sp > sp-perf-linux.json
+```
+
+Windows PowerShell:
+
+```powershell
+npm run --silent perf:sp | Out-File -Encoding utf8 sp-perf-windows.json
+```
+
+The benchmark reports environment details and non-sensitive table cardinalities, then separates SQL execution, native-to-JavaScript conversion, collection JSON mapping, and response serialization. It does not include row values. Set `OWNERLENS_DATA_DIR` when the runtime database is outside `./data`. Optional controls are `--iterations=20`, `--warmups=5`, and `--page-size=20`.
+
 The private snapshot preparation functions live under `powershell/OwnerLens/Private`:
 
 - `Invoke-OwnerLensPrepareResourceSnapshot.ps1` creates the Azure resource snapshot used by the app. It exports subscriptions, resource groups, resources, managed identities, role assignments, and optional Azure Monitor activity logs.
