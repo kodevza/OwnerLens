@@ -21,6 +21,16 @@ For a local development install from a bundled runtime:
 Install-OwnerLensRuntime -Force
 ```
 
+## Check prerequisites
+
+Check the local machine, module dependencies, runtime layout, authentication, and access before
+collecting tenant data:
+
+```powershell
+Check-OwnerLensPrerequisites
+```
+
+
 ## Start, Open, Stop
 
 ```powershell
