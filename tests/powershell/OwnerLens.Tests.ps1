@@ -5,7 +5,7 @@ BeforeAll {
   }
 
   function New-TestRuntime {
-    $root = Join-Path $TestDrive "runtime"
+    $root = Join-Path $TestDrive ("runtime-{0}" -f ([guid]::NewGuid().ToString("N")))
     $app = Join-Path $root "app"
     New-Item -ItemType Directory -Path (Join-Path $app "bin") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $app "dist") -Force | Out-Null
@@ -98,6 +98,43 @@ Describe "OwnerLens module" -Skip:(-not $IsWindows) {
   It "fails clearly for missing runtime path" {
     { Start-OwnerLens -RuntimePath (Join-Path $TestDrive "missing") -DataPath (Join-Path $TestDrive "data") } |
       Should -Throw "*OwnerLens runtime was not found*"
+  }
+}
+
+Describe "OwnerLens prerequisite runtime checks" {
+  BeforeEach {
+    . (Join-Path $PSScriptRoot "..\..\powershell\OwnerLens\Public\Check-OwnerLensPrerequisites.ps1")
+  }
+
+  It "detects the Windows <Architecture> native binding without a Join-Path argument conversion error" -ForEach @(
+    @{ Architecture = "x64" }
+    @{ Architecture = "arm64" }
+  ) {
+    $runtime = New-TestRuntime
+    $nativeBinding = Join-Path $runtime "app\node_modules\@duckdb\node-bindings-win32-$Architecture\duckdb.node"
+    New-Item -ItemType Directory -Path (Split-Path -Parent $nativeBinding) -Force | Out-Null
+    Set-Content -LiteralPath $nativeBinding -Value "test binding" -Encoding UTF8
+    $originalIsWindows = $IsWindows
+
+    try {
+      Set-Variable -Name IsWindows -Value $true -Force
+
+      $json = Check-OwnerLensPrerequisites `
+        -RuntimePath $runtime `
+        -DataPath (Join-Path $TestDrive "prerequisites-data") `
+        -SkipGraph `
+        -SkipAzure `
+        -SkipOnlineChecks `
+        -OutputJson
+
+      $report = $json | ConvertFrom-Json
+      $bindingCheck = @($report.checks | Where-Object { $_.Name -eq "DuckDB Windows native binding" })
+      $bindingCheck.Count | Should -Be 1
+      $bindingCheck[0].Status | Should -Be "Pass"
+      $bindingCheck[0].Details | Should -Be $nativeBinding
+    } finally {
+      Set-Variable -Name IsWindows -Value $originalIsWindows -Force
+    }
   }
 }
 
