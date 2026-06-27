@@ -61,8 +61,8 @@ export async function insertEntraServicePrincipalRows(
     await connection.run(
       `insert into entra_service_principals values (
         $ordinal,
-        lower($id),
-        lower($appId),
+        lower(trim($id)),
+        lower(trim($appId)),
         $displayName,
         $appDisplayName,
         $servicePrincipalType,

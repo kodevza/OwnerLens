@@ -12,6 +12,7 @@ import {
   insertAzureActivityLogRows,
   insertAzureResourceGroupRows,
   insertAzureRoleAssignmentRows,
+  insertAzureSubscriptionRows,
   readAzurePrincipalResourceGroupOwnerCandidateViewRows,
   readAzureResourceGroupOwnershipSqlRows
 } from "./tables";
@@ -326,6 +327,84 @@ test("principal owner evidence query reuses the collection candidate ranking", a
   expect(
     result.rows.slice(0, result.collectionCandidateKeys.length).map((row) => row.ownerCandidate)
   ).toEqual(result.collectionCandidateKeys);
+});
+
+test("stores normalized ownership join keys and uses them in materialization sources", async () => {
+  await withDuckDb(async ({ connection }) => {
+    await insertEntraServicePrincipalRows(connection, [
+      servicePrincipal(" SP-1 ", " APP-1 ", "Normalized principal")
+    ]);
+    await insertAzureSubscriptionRows(connection, [{
+      subscriptionId: " SUB-1 ",
+      subscriptionName: "Subscription One",
+      tenantId: "tenant-1",
+      state: "Enabled",
+      tags: null
+    }]);
+    await insertAzureResourceGroupRows(connection, [{
+      ...resourceGroup(" RG-ONE "),
+      subscriptionId: " SUB-1 "
+    }]);
+    await insertAzureRoleAssignmentRows(connection, [{
+      ...roleAssignment(" SP-1 ", " RG-ONE "),
+      subscriptionId: " SUB-1 ",
+      scopeSubscriptionId: " SUB-1 ",
+      scopeResourceGroup: " RG-ONE "
+    }]);
+    await insertAzureActivityLogRows(connection, [{
+      ...activityLog({
+        caller: " APP-1 ",
+        eventTimestamp: "2026-06-27T10:00:00.000Z",
+        resourceGroupName: " RG-ONE "
+      }),
+      subscriptionId: " SUB-1 "
+    }]);
+
+    const keys = await connection.runAndReadAll(`
+      select
+        (select id from entra_service_principals limit 1) as principal_id,
+        (select app_id from entra_service_principals limit 1) as app_id,
+        (select normalized_subscription_id from azure_subscriptions limit 1) as subscription_id,
+        (select normalized_subscription_id from azure_resource_groups limit 1) as resource_group_subscription_id,
+        (select normalized_resource_group from azure_resource_groups limit 1) as resource_group,
+        (select normalized_principal_id from azure_role_assignments limit 1) as assignment_principal_id,
+        (select normalized_subscription_id from azure_role_assignments limit 1) as assignment_subscription_id,
+        (select normalized_resource_group from azure_role_assignments limit 1) as assignment_resource_group,
+        (select normalized_subscription_id from azure_activity_logs limit 1) as activity_subscription_id,
+        (select normalized_resource_group from azure_activity_logs limit 1) as activity_resource_group,
+        (select normalized_caller from azure_activity_logs limit 1) as activity_caller
+    `);
+    expect(keys.getRowObjectsJson()).toEqual([{
+      principal_id: "sp-1",
+      app_id: "app-1",
+      subscription_id: "sub-1",
+      resource_group_subscription_id: "sub-1",
+      resource_group: "rg-one",
+      assignment_principal_id: "sp-1",
+      assignment_subscription_id: "sub-1",
+      assignment_resource_group: "rg-one",
+      activity_subscription_id: "sub-1",
+      activity_resource_group: "rg-one",
+      activity_caller: "app-1"
+    }]);
+
+    const sources = await connection.runAndReadAll(`
+      select view_name, sql
+      from duckdb_views()
+      where view_name in (
+        'runtime_entra_principal_base_source',
+        'runtime_owner_activity_logs',
+        'runtime_principal_resource_group_targets_source'
+      )
+      order by view_name
+    `);
+    expect(sources.getRowObjectsJson()).toHaveLength(3);
+    for (const source of sources.getRowObjectsJson()) {
+      expect(String(source.sql).toLowerCase()).not.toContain("lower(trim(");
+    }
+    expect(String(sources.getRowObjectsJson()[0]?.sql).toLowerCase()).not.toMatch(/\sor\s/);
+    expect(String(sources.getRowObjectsJson()[2]?.sql).toLowerCase()).not.toMatch(/\sor\s/);
+  });
 });
 
 test("filters resource group ownership rows by subscription and resource group lists", async () => {

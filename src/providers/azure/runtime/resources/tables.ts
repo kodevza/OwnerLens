@@ -101,14 +101,20 @@ export async function insertAzureSubscriptionRows(
   subscriptions: AzureSubscriptionInput[]
 ): Promise<void> {
   for (const [ordinal, row] of subscriptions.entries()) {
-    await connection.run("insert into azure_subscriptions values ($ordinal, $subscriptionId, $subscriptionName, $tenantId, $state, $tags::json)", {
-      ordinal,
-      subscriptionId: row.subscriptionId,
-      subscriptionName: row.subscriptionName,
-      tenantId: row.tenantId,
-      state: row.state,
-      tags: JSON.stringify(row.tags ?? null)
-    });
+    await connection.run(
+      `insert into azure_subscriptions values (
+        $ordinal, $subscriptionId, $subscriptionName, $tenantId, $state, $tags::json, $normalizedSubscriptionId
+      )`,
+      {
+        ordinal,
+        subscriptionId: row.subscriptionId,
+        subscriptionName: row.subscriptionName,
+        tenantId: row.tenantId,
+        state: row.state,
+        tags: JSON.stringify(row.tags ?? null),
+        normalizedSubscriptionId: normalizeJoinKey(row.subscriptionId)
+      }
+    );
   }
 }
 
@@ -118,14 +124,19 @@ export async function insertAzureResourceGroupRows(
 ): Promise<void> {
   for (const [ordinal, row] of resourceGroups.entries()) {
     await connection.run(
-      "insert into azure_resource_groups values ($ordinal, $subscriptionId, $subscriptionName, $resourceGroup, $location, $tags::json)",
+      `insert into azure_resource_groups values (
+        $ordinal, $subscriptionId, $subscriptionName, $resourceGroup, $location, $tags::json,
+        $normalizedSubscriptionId, $normalizedResourceGroup
+      )`,
       {
         ordinal,
         subscriptionId: row.subscriptionId,
         subscriptionName: row.subscriptionName,
         resourceGroup: row.resourceGroup,
         location: row.location,
-        tags: JSON.stringify(row.tags ?? null)
+        tags: JSON.stringify(row.tags ?? null),
+        normalizedSubscriptionId: normalizeJoinKey(row.subscriptionId),
+        normalizedResourceGroup: normalizeJoinKey(row.resourceGroup)
       }
     );
   }
@@ -197,7 +208,8 @@ export async function insertAzureRoleAssignmentRows(
         $ordinal, $subscriptionId, $subscriptionName, $roleAssignmentId, $scope, $scopeType, $scopeSubscriptionId,
         $scopeResourceGroup, $scopeResourceProvider, $scopeResourceType, $scopeResourceName, $scopeManagementGroup,
         $principalId, $principalType, $principalDisplayName, $signInName, $roleDefinitionId, $roleDefinitionName,
-        $canDelegate, $condition, $conditionVersion
+        $canDelegate, $condition, $conditionVersion, $normalizedPrincipalId, $normalizedSubscriptionId,
+        $normalizedResourceGroup
       )`,
       {
         ordinal,
@@ -220,7 +232,17 @@ export async function insertAzureRoleAssignmentRows(
         roleDefinitionName: row.roleDefinitionName,
         canDelegate: row.canDelegate,
         condition: row.condition,
-        conditionVersion: row.conditionVersion
+        conditionVersion: row.conditionVersion,
+        normalizedPrincipalId: normalizeJoinKey(row.principalId),
+        normalizedSubscriptionId: firstNormalizedJoinKey([
+          row.scopeSubscriptionId,
+          row.subscriptionId,
+          readAzureScopeSegment(row.scope, "subscriptions")
+        ]),
+        normalizedResourceGroup: firstNormalizedJoinKey([
+          row.scopeResourceGroup,
+          readAzureScopeSegment(row.scope, "resourceGroups")
+        ])
       }
     );
   }
@@ -233,7 +255,8 @@ export async function insertAzureActivityLogRows(connection: DuckDBConnection, l
         $ordinal, $subscriptionId, $subscriptionName, $eventTimestamp, $submissionTimestamp, $caller,
         $callerUserPrincipalName, $callerName, $callerEmail, $callerObjectId, $callerIdentityType, $callerAppId,
         $callerIpAddress, $callerTenantId, $operationName, $operationNameValue, $status, $subStatus, $category,
-        $resourceGroupName, $resourceId, $resourceProviderName, $resourceType, $authorizationAction, $authorizationScope
+        $resourceGroupName, $resourceId, $resourceProviderName, $resourceType, $authorizationAction, $authorizationScope,
+        $normalizedSubscriptionId, $normalizedResourceGroup, $normalizedCaller
       )`,
       {
         ordinal,
@@ -260,7 +283,13 @@ export async function insertAzureActivityLogRows(connection: DuckDBConnection, l
         resourceProviderName: row.resourceProviderName,
         resourceType: row.resourceType,
         authorizationAction: row.authorizationAction,
-        authorizationScope: row.authorizationScope
+        authorizationScope: row.authorizationScope,
+        normalizedSubscriptionId: normalizeJoinKey(row.subscriptionId),
+        normalizedResourceGroup: firstNormalizedJoinKey([
+          row.resourceGroupName,
+          readAzureScopeSegment(row.authorizationScope, "resourceGroups")
+        ]),
+        normalizedCaller: normalizeOptionalJoinKey(row.caller)
       }
     );
   }
@@ -890,6 +919,35 @@ async function readRows<Row extends Record<string, unknown>>(
 ): Promise<Row[]> {
   const reader = await connection.runAndReadAll(sql, params);
   return reader.getRowObjectsJson() as Row[];
+}
+
+function normalizeJoinKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function normalizeOptionalJoinKey(value: string | null | undefined): string | null {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  return normalized || null;
+}
+
+function firstNormalizedJoinKey(values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    const normalized = normalizeOptionalJoinKey(value);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
+function readAzureScopeSegment(scope: string | null | undefined, segment: string): string | null {
+  if (!scope) {
+    return null;
+  }
+
+  const match = scope.match(new RegExp(`/${segment}/([^/]+)`, "i"));
+  return match?.[1] ?? null;
 }
 
 function mapAzureResourceGroupRow(row: AzureResourceGroupRow): CoreAzureResourceGroup {

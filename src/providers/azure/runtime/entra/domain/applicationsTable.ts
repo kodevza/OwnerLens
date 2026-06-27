@@ -10,8 +10,8 @@ export async function insertEntraApplicationRows(
     await connection.run(
       `insert into entra_applications values (
         $ordinal,
-        lower($id),
-        lower($appId),
+        lower(trim($id)),
+        lower(trim($appId)),
         $displayName,
         $signInAudience,
         $publisherDomain,
