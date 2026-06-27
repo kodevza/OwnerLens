@@ -19,5 +19,6 @@ Export-ModuleMember -Function @(
   "Open-OwnerLens",
   "Invoke-OwnerLensCollectEntra",
   "Invoke-OwnerLensCollectAzure",
-  "Install-OwnerLensRuntime"
+  "Install-OwnerLensRuntime",
+  "Check-OwnerLensPrerequisites"
 )

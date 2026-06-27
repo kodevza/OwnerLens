@@ -15,7 +15,8 @@
     'Open-OwnerLens',
     'Invoke-OwnerLensCollectEntra',
     'Invoke-OwnerLensCollectAzure',
-    'Install-OwnerLensRuntime'
+    'Install-OwnerLensRuntime',
+    'Check-OwnerLensPrerequisites'
   )
   CmdletsToExport = @()
   VariablesToExport = @()

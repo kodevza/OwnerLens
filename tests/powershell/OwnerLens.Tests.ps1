@@ -56,6 +56,23 @@ Describe "OwnerLens module" -Skip:(-not $IsWindows) {
     $commands.Name | Should -Contain "Invoke-OwnerLensCollectEntra"
     $commands.Name | Should -Contain "Invoke-OwnerLensCollectAzure"
     $commands.Name | Should -Contain "Install-OwnerLensRuntime"
+    $commands.Name | Should -Contain "Check-OwnerLensPrerequisites"
+  }
+
+  It "returns a JSON prerequisite report without checking tenant connections" {
+    $json = Check-OwnerLensPrerequisites `
+      -DataPath (Join-Path $TestDrive "prerequisites-data") `
+      -SkipGraph `
+      -SkipAzure `
+      -SkipRuntime `
+      -SkipOnlineChecks `
+      -OutputJson
+
+    $report = $json | ConvertFrom-Json
+    $report.summary | Should -Not -BeNullOrEmpty
+    @($report.checks).Count | Should -BeGreaterThan 0
+    @($report.checks | Where-Object { $_.Name -eq "Graph checks" }).Count | Should -Be 1
+    @($report.checks | Where-Object { $_.Name -eq "Azure checks" }).Count | Should -Be 1
   }
 
   It "starts, reports status, and stops the tracked process" {
