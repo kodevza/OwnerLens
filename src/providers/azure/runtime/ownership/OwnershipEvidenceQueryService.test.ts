@@ -8,7 +8,6 @@ import type {
 } from "../../inputTransferObject/generated/AzureSnapshot";
 import type { EntraSnapshot } from "../../inputTransferObject/generated/EntraSnapshot";
 import { EntraCollectionQueryService } from "../entra/EntraCollectionQueryService";
-import { AzureResourcesCollectionQueryService } from "../resources/AzureResourcesCollectionQueryService";
 import { OwnershipEvidenceQueryService } from "./OwnershipEvidenceQueryService";
 
 test("returns indirect cost center tag evidence for a service principal with Azure RBAC on the resource group", async () => {
@@ -349,6 +348,66 @@ test("returns direct service principal, application, and tag owner evidence for 
   });
 });
 
+test("keeps the selected principal owner as the first candidate in the evidence list", async () => {
+  const service = new OwnershipEvidenceQueryService({
+    entraQueries: {
+      findServicePrincipalById: jest.fn().mockResolvedValue(servicePrincipal({
+        id: "sp-ranked",
+        displayName: "Ranked Owner App",
+        roleAssignments: []
+      }))
+    },
+    azureResources: {
+      readAzurePrincipalResourceGroupOwnerCandidateViewRows: jest.fn().mockResolvedValue([
+        {
+          principalId: "sp-ranked",
+          subscriptionId: null,
+          subscriptionName: null,
+          resourceGroup: null,
+          owner: "selected-direct-owner",
+          ownerCandidate: "ownerUser:selected-direct-owner",
+          ownerType: "ownerUser",
+          evidenceKey: "ownerUser:selected-direct-owner:owner=selected-direct-owner:",
+          confidence: "medium",
+          source: "tag",
+          path: "direct",
+          discoverySource: "tag",
+          evidenceValue: "owner=selected-direct-owner",
+          evidenceDate: null,
+          priority: 1
+        },
+        {
+          principalId: "sp-ranked",
+          subscriptionId: "sub-1",
+          subscriptionName: "Production",
+          resourceGroup: "rg-api",
+          owner: "indirect-high-owner",
+          ownerCandidate: "ownerGroup:indirect-high-owner",
+          ownerType: "ownerGroup",
+          evidenceKey: "resourceGroup:sub-1:rg-api:principal:sp-ranked:ownerGroup:indirect-high-owner",
+          confidence: "high",
+          source: "resourceGroupOwner",
+          path: "indirect",
+          discoverySource: "tag",
+          evidenceValue: "ownerGroup=indirect-high-owner",
+          evidenceDate: null,
+          priority: 1001
+        }
+      ])
+    }
+  } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
+
+  const response = await service.readOwnershipEvidence({
+    kind: "servicePrincipal",
+    principalId: "sp-ranked"
+  });
+
+  expect(response.evidence.map((item) => item.ownerDisplayName)).toEqual([
+    "selected-direct-owner",
+    "indirect-high-owner"
+  ]);
+});
+
 test("reads resource group owner evidence for distinct Azure RBAC resource groups of a service principal", async () => {
   const readAzurePrincipalResourceGroupOwnerCandidateViewRows = jest.fn().mockResolvedValue([
     {
@@ -455,8 +514,6 @@ test("reads resource group owner evidence for distinct Azure RBAC resource group
   expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledTimes(1);
   expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
     {
-      subscriptionIds: ["sub-1", "sub-2"],
-      resourceGroups: ["rg-api", "rg-worker"],
       principalId: "sp-rbac"
     },
     100
@@ -497,8 +554,6 @@ test("keeps Azure RBAC resource group lookup targets paired when subscription id
   ).resolves.toMatchObject({ evidence: [] });
   expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
     {
-      subscriptionIds: ["sub-1", "sub-1"],
-      resourceGroups: ["rg-api", "rg-worker"],
       principalId: "sp-rbac"
     },
     100
@@ -581,9 +636,7 @@ test("returns direct service principal owner evidence without an Azure RBAC togg
   });
   expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
     {
-      principalId: "sp-direct",
-      subscriptionIds: [],
-      resourceGroups: []
+      principalId: "sp-direct"
     },
     100
   );
@@ -726,9 +779,7 @@ test("returns direct managed identity owner evidence without an Azure RBAC toggl
   });
   expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
     {
-      principalId: "mi-principal-id",
-      subscriptionIds: [],
-      resourceGroups: []
+      principalId: "mi-principal-id"
     },
     100
   );
@@ -804,9 +855,7 @@ test("returns Azure RBAC evidence for a managed identity without using direct ow
   });
   expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
     {
-      principalId: "mi-principal-id",
-      subscriptionIds: ["sub-1"],
-      resourceGroups: ["rg-mi"]
+      principalId: "mi-principal-id"
     },
     100
   );
@@ -971,9 +1020,7 @@ test("reads managed identity ownership evidence with a principal-scoped resource
   });
   expect(readAzurePrincipalResourceGroupOwnerCandidateViewRows).toHaveBeenCalledWith(
     {
-      principalId: "mi-principal-id",
-      subscriptionIds: ["sub-1"],
-      resourceGroups: ["rg-mi"]
+      principalId: "mi-principal-id"
     },
     100
   );
@@ -1361,11 +1408,11 @@ function buildOwnershipEvidenceService({
     readAzureResourceGroupOwnerCandidateViewRows: jest.fn(({ subscriptionId, resourceGroup }, limit) =>
       Promise.resolve(readTestResourceGroupOwnerCandidateViewRows(azureSnapshot, { subscriptionId, resourceGroup }, limit))
     ),
-    readAzurePrincipalResourceGroupOwnerCandidateViewRows: jest.fn(({ principalId, subscriptionIds, resourceGroups }, limit) =>
+    readAzurePrincipalResourceGroupOwnerCandidateViewRows: jest.fn(({ principalId }, limit) =>
       Promise.resolve(readTestPrincipalResourceGroupOwnerCandidateViewRows(
         azureSnapshot,
         [...servicePrincipals, ...managedIdentities],
-        { principalId, subscriptionIds, resourceGroups },
+        { principalId },
         limit
       ))
     ),
@@ -1380,14 +1427,6 @@ function buildOwnershipEvidenceService({
     ),
     readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue(azureSnapshot.userAssignedManagedIdentities)
   };
-  const azureResourcesQueries = new AzureResourcesCollectionQueryService({
-    entra: entraRuntime,
-    azureResources: azureResourcesRuntime,
-    disabledEvidenceStore: {
-      readKeys: jest.fn().mockResolvedValue(new Set<string>())
-    },
-    exportService: {}
-  } as unknown as ConstructorParameters<typeof AzureResourcesCollectionQueryService>[0]);
   const entraQueries = new EntraCollectionQueryService({
     entra: entraRuntime,
     zeroTrustAssessmentQueries: {
@@ -1788,7 +1827,7 @@ function readTestResourceGroupOwnerCandidateViewRows(
 function readTestPrincipalResourceGroupOwnerCandidateViewRows(
   snapshot: AzureSnapshot,
   principals: Array<ServicePrincipal | ManagedIdentity>,
-  target: { principalId: string; subscriptionIds: string[]; resourceGroups: string[] },
+  target: { principalId: string },
   limit = 100
 ): Array<{
   principalId: string;
@@ -1809,12 +1848,13 @@ function readTestPrincipalResourceGroupOwnerCandidateViewRows(
 }> {
   const principal = principals.find((candidate) => candidate.id.toLowerCase() === target.principalId.toLowerCase());
   const directRows = principal ? readTestDirectPrincipalOwnerCandidateViewRows(principal) : [];
-  const indirectRows = target.subscriptionIds.flatMap((subscriptionId, index) =>
+  const resourceGroupTargets = principal ? getTestPrincipalResourceGroupTargets(snapshot, principal) : [];
+  const indirectRows = resourceGroupTargets.flatMap(({ subscriptionId, resourceGroup }) =>
     readTestResourceGroupOwnerCandidateViewRows(
       snapshot,
       {
         subscriptionId,
-        resourceGroup: target.resourceGroups[index] ?? ""
+        resourceGroup
       },
       limit
     ).map((row) => ({
@@ -1838,6 +1878,43 @@ function readTestPrincipalResourceGroupOwnerCandidateViewRows(
   return [...directRows, ...indirectRows]
     .sort(compareTestPrincipalCandidateRows)
     .slice(0, Math.max(1, Math.trunc(limit)));
+}
+
+function getTestPrincipalResourceGroupTargets(
+  snapshot: AzureSnapshot,
+  principal: ServicePrincipal | ManagedIdentity
+): Array<{ subscriptionId: string; resourceGroup: string }> {
+  const targets = new Map<string, { subscriptionId: string; resourceGroup: string }>();
+  const addTarget = (subscriptionId: string | null | undefined, resourceGroup: string | null | undefined): void => {
+    const trimmedSubscriptionId = subscriptionId?.trim();
+    const trimmedResourceGroup = resourceGroup?.trim();
+    if (!trimmedSubscriptionId || !trimmedResourceGroup) {
+      return;
+    }
+
+    targets.set(`${trimmedSubscriptionId.toLowerCase()}:${trimmedResourceGroup.toLowerCase()}`, {
+      subscriptionId: trimmedSubscriptionId,
+      resourceGroup: trimmedResourceGroup
+    });
+  };
+
+  for (const identity of snapshot.userAssignedManagedIdentities) {
+    if (
+      identity.principalId.toLowerCase() === principal.id.toLowerCase() ||
+      identity.clientId.toLowerCase() === principal.appId.toLowerCase()
+    ) {
+      addTarget(identity.subscriptionId, identity.resourceGroup);
+    }
+  }
+
+  for (const assignment of principal.roleAssignments ?? []) {
+    addTarget(
+      assignment.scopeSubscriptionId ?? assignment.scope.match(/\/subscriptions\/([^/]+)/i)?.[1] ?? assignment.subscriptionId,
+      assignment.scopeResourceGroup ?? assignment.scope.match(/\/resourceGroups\/([^/]+)/i)?.[1]
+    );
+  }
+
+  return [...targets.values()];
 }
 
 function readTestDirectPrincipalOwnerCandidateViewRows(

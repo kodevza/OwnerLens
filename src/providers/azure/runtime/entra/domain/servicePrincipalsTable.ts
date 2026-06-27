@@ -6,14 +6,14 @@ import type { PageOptions } from "../../../../../core/runtime/pagination";
 import type { SortRule } from "../../../../../core/collectionControls";
 import type { OwnerCandidate, OwnerConfidence } from "../../../../../core/ownership/types";
 import type { EntraServicePrincipal } from "../../../inputTransferObject/generated/EntraSnapshot";
+import { entraPrincipalSqlColumns } from "../../collectionSqlColumns";
 import {
   buildCountSql,
   buildOrderBySql,
   buildPageSql,
   buildSelectedRowsWhereSql,
   buildWhereSql,
-  combineWhereSql,
-  type RuntimeSqlColumnMap
+  combineWhereSql
 } from "../../runtimeSqlCollectionQuery";
 
 export type EntraServicePrincipalRowsQueryOptions = PageOptions & {
@@ -157,7 +157,7 @@ export async function queryEntraPrincipalCollectionRows(
         ${baseQuery}
       ) collection_rows
       ${where.sql}
-      ${buildOrderBySql(options.sortRules, entraPrincipalCollectionColumnMap, "ordinal asc")}
+      ${buildOrderBySql(options.sortRules, entraPrincipalSqlColumns, "ordinal asc")}
       ${page.sql}
     `,
     {
@@ -209,23 +209,25 @@ export async function readEntraServicePrincipalRowById(
 }
 
 type EntraServicePrincipalRow = {
+  ordinal: number | string;
   id: string;
-  app_id: string;
-  display_name: string;
-  app_display_name: string | null;
-  service_principal_type: EntraServicePrincipal["servicePrincipalType"];
-  publisher_name: string | null;
-  account_enabled: boolean;
-  app_owner_organization_id: string | null;
+  appId: string;
+  displayName: string;
+  appDisplayName: string | null;
+  servicePrincipalType: EntraServicePrincipal["servicePrincipalType"];
+  publisherName: string | null;
+  accountEnabled: boolean;
+  appOwnerOrganizationId: string | null;
   homepage: string | null;
-  login_url: string | null;
-  reply_urls: string;
-  service_principal_names: string;
+  loginUrl: string | null;
+  replyUrls: string;
+  servicePrincipalNames: string;
   tags: string;
-  app_roles: string;
-  service_principal_owners: string;
-  application_owners: string;
+  appRoles: string;
+  servicePrincipalOwners: string;
+  applicationOwners: string;
   metadata: string | null;
+  notes: string | null;
   permissionRisk: PermissionRiskLevel | null;
   rbacRoleAssignmentCount: number | string | null;
   rbacRoleLevel: PermissionRiskLevel | null;
@@ -239,11 +241,9 @@ type EntraServicePrincipalRow = {
 };
 
 type EntraPrincipalCollectionSqlRow = EntraServicePrincipalRow & {
-  ordinal: number | string;
   ownerCandidates: string;
   potentialOwners: string;
   ownerConfidence: OwnerConfidence | null;
-  notes: string | null;
   roleAssignments: string | null;
   rbacSubscriptionCount: number | string | null;
   resourceGroup: string | null;
@@ -254,21 +254,21 @@ type EntraPrincipalCollectionSqlRow = EntraServicePrincipalRow & {
 function mapServicePrincipalRow(row: EntraServicePrincipalRow): EntraServicePrincipalRuntimeRow {
   return {
     id: row.id,
-    appId: row.app_id,
-    displayName: row.display_name,
-    appDisplayName: row.app_display_name,
-    servicePrincipalType: row.service_principal_type,
-    publisherName: row.publisher_name,
-    accountEnabled: row.account_enabled,
-    appOwnerOrganizationId: row.app_owner_organization_id,
+    appId: row.appId,
+    displayName: row.displayName,
+    appDisplayName: row.appDisplayName,
+    servicePrincipalType: row.servicePrincipalType,
+    publisherName: row.publisherName,
+    accountEnabled: row.accountEnabled,
+    appOwnerOrganizationId: row.appOwnerOrganizationId,
     homepage: row.homepage,
-    loginUrl: row.login_url,
-    replyUrls: parseJsonArray<string>(row.reply_urls),
-    servicePrincipalNames: parseJsonArray<string>(row.service_principal_names),
+    loginUrl: row.loginUrl,
+    replyUrls: parseJsonArray<string>(row.replyUrls),
+    servicePrincipalNames: parseJsonArray<string>(row.servicePrincipalNames),
     tags: parseJsonArray<string>(row.tags),
-    appRoles: parseJsonArray(row.app_roles),
-    servicePrincipalOwners: parseJsonArray(row.service_principal_owners),
-    applicationOwners: parseJsonArray(row.application_owners),
+    appRoles: parseJsonArray(row.appRoles),
+    servicePrincipalOwners: parseJsonArray(row.servicePrincipalOwners),
+    applicationOwners: parseJsonArray(row.applicationOwners),
     metadata: row.metadata ? parseJsonObject(row.metadata) : null,
     permissionRisk: row.permissionRisk ?? "none",
     rbacRoleAssignmentCount: readNumber(row.rbacRoleAssignmentCount),
@@ -312,324 +312,20 @@ function mapPrincipalCollectionRow(row: EntraPrincipalCollectionSqlRow): EntraPr
 }
 
 const servicePrincipalRowsSql = `
-  with latest_run as (
-    select run_id
-    from azure_runtime_enrichment_runs
-    where status = 'completed'
-    order by completed_at desc
-    limit 1
-  )
   select
-    sp.ordinal,
-    sp.id,
-    sp.app_id,
-    sp.display_name,
-    sp.app_display_name,
-    sp.service_principal_type,
-    sp.publisher_name,
-    sp.account_enabled,
-    sp.app_owner_organization_id,
-    sp.homepage,
-    sp.login_url,
-    sp.reply_urls,
-    sp.service_principal_names,
-    sp.tags,
-    sp.app_roles,
-    sp.service_principal_owners,
-    sp.application_owners,
-    sp.metadata,
-    coalesce(access_risk.risk_level, 'none') as "permissionRisk",
-    coalesce(access_risk.assignment_count, 0) as "rbacRoleAssignmentCount",
-    coalesce(access_risk.risk_level, 'none') as "rbacRoleLevel",
-    coalesce(permission_summary.oauth_permissions_count, 0) as "oauthPermissionsCount",
-    coalesce(permission_summary.app_roles_permission_count, 0) as "appRolesPermissionCount",
-    coalesce(permission_summary.entra_permission_count, 0) as "entraPermissionCount",
-    coalesce(permission_summary.entra_permission_risk, 'none') as "entraPermissionRisk",
-    home_context.subscription_id as "managedIdentityHomeSubscriptionId",
-    home_context.resource_group as "managedIdentityHomeResourceGroup",
-    home_context.resource_id as "managedIdentityHomeResourceId"
-  from entra_service_principals sp
-  left join latest_run on true
-  left join azure_identity_access_risk_enrichment access_risk
-    on access_risk.run_id = latest_run.run_id
-    and lower(trim(access_risk.principal_id)) = lower(trim(sp.id))
-  left join entra_principal_permission_summary permission_summary
-    on permission_summary.principal_id = lower(trim(sp.id))
-  left join azure_managed_identity_home_context home_context
-    on home_context.principal_id = lower(trim(sp.id))
-    or home_context.client_id = lower(trim(sp.app_id))
+    *
+  from runtime_entra_principal_base
 `;
 
 function buildPrincipalCollectionRowsSql(principalKind: "servicePrincipal" | "managedIdentity"): string {
   const kindWhere = principalKind === "servicePrincipal"
-    ? "service_principal_type <> 'ManagedIdentity'"
-    : "service_principal_type = 'ManagedIdentity'";
+    ? "\"servicePrincipalType\" <> 'ManagedIdentity'"
+    : "\"servicePrincipalType\" = 'ManagedIdentity'";
 
   return `
-    with principal_rows as (
-      select *
-      from (
-        ${servicePrincipalRowsSql}
-      ) raw_principal_rows
-      where ${kindWhere}
-    ),
-    latest_run as (
-      select run_id
-      from azure_runtime_enrichment_runs
-      where status = 'completed'
-      order by completed_at desc
-      limit 1
-    ),
-    principal_rbac_enrichment as (
-      select
-        role_enrichment.principal_id,
-        role_enrichment.role_assignments,
-        (
-          select count(distinct coalesce(
-            nullif(json_extract_string(role_entry.value, '$.subscriptionId'), ''),
-            nullif(json_extract_string(role_entry.value, '$.scopeSubscriptionId'), '')
-          ))
-          from json_each(role_enrichment.role_assignments) role_entry
-          where coalesce(
-            nullif(json_extract_string(role_entry.value, '$.subscriptionId'), ''),
-            nullif(json_extract_string(role_entry.value, '$.scopeSubscriptionId'), '')
-          ) is not null
-        ) as rbac_subscription_count
-      from azure_identity_role_assignment_enrichment role_enrichment
-      join latest_run on latest_run.run_id = role_enrichment.run_id
-    ),
-    managed_identity_enrichment as (
-      select
-        assignment_enrichment.principal_id,
-        assigned_resource_groups,
-        managed_identity_assignments
-      from azure_managed_identity_assignment_enrichment assignment_enrichment
-      join latest_run on latest_run.run_id = assignment_enrichment.run_id
-    ),
-    rbac_resource_group_targets as (
-      select distinct
-        principal.id as principal_id,
-        coalesce(assignment.scope_subscription_id, assignment.subscription_id, regexp_extract(assignment.scope, '/subscriptions/([^/]+)', 1)) as subscription_id,
-        nullif(coalesce(assignment.scope_resource_group, regexp_extract(assignment.scope, '/resourceGroups/([^/]+)', 1)), '') as resource_group,
-        assignment.scope,
-        assignment.role_definition_name,
-        10 as target_priority
-      from principal_rows principal
-      join azure_role_assignments assignment
-        on lower(trim(assignment.principal_id)) = lower(trim(principal.id))
-      where nullif(coalesce(assignment.scope_resource_group, regexp_extract(assignment.scope, '/resourceGroups/([^/]+)', 1)), '') is not null
-    ),
-    home_resource_group_targets as (
-      select distinct
-        principal.id as principal_id,
-        principal."managedIdentityHomeSubscriptionId" as subscription_id,
-        principal."managedIdentityHomeResourceGroup" as resource_group,
-        principal."managedIdentityHomeResourceId" as scope,
-        null::varchar as role_definition_name,
-        0 as target_priority
-      from principal_rows principal
-      where principal."managedIdentityHomeSubscriptionId" is not null
-        and principal."managedIdentityHomeResourceGroup" is not null
-        and principal."managedIdentityHomeResourceId" is not null
-    ),
-    principal_resource_group_targets as (
-      select * from home_resource_group_targets
-      union all
-      select * from rbac_resource_group_targets
-    ),
-    assigned_resource_groups as (
-      select
-        principal_id,
-        to_json(list(distinct resource_group order by resource_group)) as assigned_resource_groups,
-        min(resource_group) as first_resource_group
-      from principal_resource_group_targets
-      where resource_group is not null
-      group by principal_id
-    ),
-    candidate_records as (
-      select
-        principal.id as principal_id,
-        candidate.subscription_id,
-        candidate.subscription_name,
-        candidate.resource_group,
-        candidate.owner,
-        candidate.owner_type,
-        candidate.owner_candidate,
-        candidate.evidence_key,
-        candidate.confidence,
-        candidate.source,
-        candidate.path,
-        candidate.discovery_source,
-        candidate.evidence_value,
-        candidate.evidence_date,
-        candidate.priority,
-        0 as target_priority,
-        null::varchar as scope,
-        null::varchar as role_definition_name
-      from principal_rows principal
-      join azure_principal_resource_group_owner_candidates candidate
-        on candidate.path = 'direct'
-        and lower(trim(candidate.principal_id)) = lower(trim(principal.id))
-      union all
-      select
-        target.principal_id,
-        candidate.subscription_id,
-        candidate.subscription_name,
-        candidate.resource_group,
-        candidate.owner,
-        candidate.owner_type,
-        candidate.owner_candidate,
-        concat(
-          'resourceGroup:',
-          lower(trim(candidate.subscription_id)),
-          ':',
-          lower(trim(candidate.resource_group)),
-          ':principal:',
-          lower(trim(target.principal_id)),
-          ':',
-          candidate.owner_candidate
-        ) as evidence_key,
-        candidate.confidence,
-        candidate.source,
-        candidate.path,
-        candidate.discovery_source,
-        candidate.evidence_value,
-        candidate.evidence_date,
-        candidate.priority,
-        target.target_priority,
-        target.scope,
-        target.role_definition_name
-      from principal_resource_group_targets target
-      join azure_principal_resource_group_owner_candidates candidate
-        on candidate.path = 'indirect'
-        and lower(trim(candidate.subscription_id)) = lower(trim(target.subscription_id))
-        and lower(trim(candidate.resource_group)) = lower(trim(target.resource_group))
-    ),
-    active_candidate_records as (
-      select candidate.*
-      from candidate_records candidate
-      where not exists (
-        select 1
-        from disabled_owner_evidence_keys disabled
-        where disabled.provider = 'azure'
-          and (
-            lower(trim(disabled.owner_key)) = lower(trim(candidate.evidence_key))
-            or lower(trim(disabled.owner_key)) = lower(trim(candidate.owner_candidate))
-          )
-      )
-    ),
-    candidate_scope as (
-      select
-        principal_id,
-        count(*) filter (where path = 'direct') as direct_count
-      from active_candidate_records
-      group by principal_id
-    ),
-    projected_candidate_records as (
-      select candidate.*
-      from active_candidate_records candidate
-      left join candidate_scope scope on scope.principal_id = candidate.principal_id
-      where coalesce(scope.direct_count, 0) = 0 or candidate.path = 'direct'
-    ),
-    deduped_owner_candidates as (
-      select *
-      from (
-        select
-          *,
-          row_number() over (
-            partition by principal_id, owner_candidate
-            order by
-              target_priority asc,
-              case confidence when 'high' then 3 when 'medium' then 2 when 'low' then 1 else 0 end desc,
-              priority asc,
-              lower(trim(owner)) asc
-          ) as duplicate_rank
-        from projected_candidate_records
-      ) duplicate_owner_candidates
-      where duplicate_rank = 1
-    ),
-    ranked_owner_candidates as (
-      select
-        *,
-        row_number() over (
-          partition by principal_id
-          order by
-            target_priority asc,
-            case confidence when 'high' then 3 when 'medium' then 2 when 'low' then 1 else 0 end desc,
-            case source
-              when 'tag' then 5
-              when 'resourceGroupOwner' then 5
-              when 'entraApplicationOwner' then 4
-              when 'entraServicePrincipalOwner' then 3
-              when 'activity' then 1
-              else 0
-            end desc,
-            priority asc,
-            lower(trim(owner)) asc
-        ) as candidate_rank
-      from deduped_owner_candidates
-    ),
-    owner_summary as (
-      select
-        principal_id,
-        to_json(list(
-          struct_pack(
-            key := owner_candidate,
-            displayName := owner,
-            type := owner_type,
-            confidence := confidence,
-            source := source,
-            rank := candidate_rank,
-            evidence := [
-              struct_pack(user := evidence_value, date := evidence_date, key := evidence_key)
-            ],
-            relatedScopes := case
-              when path = 'indirect' then [
-                struct_pack(
-                  subscriptionId := subscription_id,
-                  subscriptionName := subscription_name,
-                  resourceGroup := resource_group,
-                  principalId := principal_id,
-                  scope := scope,
-                  roleDefinitionName := role_definition_name
-                )
-              ]
-              else []
-            end
-          )
-          order by candidate_rank
-        )) as owner_candidates,
-        to_json(list(owner order by candidate_rank)) as potential_owners,
-        case max(case confidence when 'high' then 3 when 'medium' then 2 when 'low' then 1 else 0 end)
-          when 3 then 'high'
-          when 2 then 'medium'
-          when 1 then 'low'
-          else 'none'
-        end as owner_confidence
-      from ranked_owner_candidates
-      group by principal_id
-    )
-    select
-      principal.*,
-      app.notes as "notes",
-      coalesce(principal_rbac_enrichment.role_assignments, '[]') as "roleAssignments",
-      coalesce(principal_rbac_enrichment.rbac_subscription_count, 0) as "rbacSubscriptionCount",
-      coalesce(owner_summary.owner_candidates, '[]') as "ownerCandidates",
-      coalesce(owner_summary.potential_owners, '[]') as "potentialOwners",
-      coalesce(owner_summary.owner_confidence, 'none') as "ownerConfidence",
-      coalesce(principal."managedIdentityHomeResourceGroup", assigned_resource_groups.first_resource_group) as "resourceGroup",
-      coalesce(
-        nullif(cast(managed_identity_enrichment.assigned_resource_groups as varchar), '[]'),
-        assigned_resource_groups.assigned_resource_groups,
-        '[]'
-      ) as "assignedResourceGroups",
-      coalesce(managed_identity_enrichment.managed_identity_assignments, '[]') as "managedIdentityAssignments"
-    from principal_rows principal
-    left join entra_applications app on app.app_id = principal.app_id
-    left join principal_rbac_enrichment on lower(trim(principal_rbac_enrichment.principal_id)) = lower(trim(principal.id))
-    left join managed_identity_enrichment on lower(trim(managed_identity_enrichment.principal_id)) = lower(trim(principal.id))
-    left join owner_summary on owner_summary.principal_id = principal.id
-    left join assigned_resource_groups on assigned_resource_groups.principal_id = principal.id
+    select *
+    from runtime_entra_principal_collection_rows
+    where ${kindWhere}
   `;
 }
 
@@ -637,7 +333,7 @@ function buildPrincipalCollectionWhereSql(
   options: Pick<EntraPrincipalCollectionRowsQueryOptions, "filters" | "selectedRowKeys">
 ) {
   return combineWhereSql([
-    buildWhereSql(options.filters, entraPrincipalCollectionColumnMap),
+    buildWhereSql(options.filters, entraPrincipalSqlColumns),
     buildSelectedRowsWhereSql(options.selectedRowKeys, "id")
   ]);
 }
@@ -707,11 +403,11 @@ function buildServicePrincipalRowsQuery(options: EntraServicePrincipalRowsQueryO
   const params: Record<string, DuckDBValue> = {};
 
   if (options.principalKind === "servicePrincipal") {
-    clauses.push("service_principal_type <> 'ManagedIdentity'");
+    clauses.push("\"servicePrincipalType\" <> 'ManagedIdentity'");
   }
 
   if (options.principalKind === "managedIdentity") {
-    clauses.push("service_principal_type = 'ManagedIdentity'");
+    clauses.push("\"servicePrincipalType\" = 'ManagedIdentity'");
   }
 
   for (const [filterIndex, filter] of getDuckDbServicePrincipalFilters(options.filters).entries()) {
@@ -743,17 +439,17 @@ function isDuckDbServicePrincipalFilter(filter: LocalReportCollectionFilter): bo
 
 const duckDbServicePrincipalFilterColumns: Record<string, string> = {
   id: "coalesce(id, '')",
-  appId: "coalesce(app_id, '')",
-  displayName: "coalesce(display_name, '')",
-  appDisplayName: "coalesce(app_display_name, '')",
-  servicePrincipalType: "coalesce(service_principal_type, '')",
-  publisherName: "coalesce(publisher_name, '')",
-  accountEnabled: "cast(account_enabled as varchar)",
-  appOwnerOrganizationId: "coalesce(app_owner_organization_id, '')",
+  appId: "coalesce(\"appId\", '')",
+  displayName: "coalesce(\"displayName\", '')",
+  appDisplayName: "coalesce(\"appDisplayName\", '')",
+  servicePrincipalType: "coalesce(\"servicePrincipalType\", '')",
+  publisherName: "coalesce(\"publisherName\", '')",
+  accountEnabled: "cast(\"accountEnabled\" as varchar)",
+  appOwnerOrganizationId: "coalesce(\"appOwnerOrganizationId\", '')",
   homepage: "coalesce(homepage, '')",
-  loginUrl: "coalesce(login_url, '')",
-  replyUrls: "coalesce(cast(reply_urls as varchar), '')",
-  servicePrincipalNames: "coalesce(cast(service_principal_names as varchar), '')",
+  loginUrl: "coalesce(\"loginUrl\", '')",
+  replyUrls: "coalesce(cast(\"replyUrls\" as varchar), '')",
+  servicePrincipalNames: "coalesce(cast(\"servicePrincipalNames\" as varchar), '')",
   tags: "coalesce(cast(tags as varchar), '')",
   rbacRoleAssignmentCount: "cast(coalesce(\"rbacRoleAssignmentCount\", 0) as varchar)",
   rbacRoleLevel: "coalesce(\"rbacRoleLevel\", 'none')",
@@ -762,33 +458,4 @@ const duckDbServicePrincipalFilterColumns: Record<string, string> = {
   appRolesPermissionCount: "cast(coalesce(\"appRolesPermissionCount\", 0) as varchar)",
   entraPermissionCount: "cast(coalesce(\"entraPermissionCount\", 0) as varchar)",
   managedIdentityHomeResourceGroup: "coalesce(\"managedIdentityHomeResourceGroup\", '')"
-};
-
-const entraPrincipalCollectionColumnMap: RuntimeSqlColumnMap = {
-  id: { expr: "id", type: "text" },
-  appId: { expr: "app_id", type: "text" },
-  displayName: { expr: "display_name", type: "text" },
-  appDisplayName: { expr: "app_display_name", type: "text" },
-  servicePrincipalType: { expr: "service_principal_type", type: "text" },
-  publisherName: { expr: "publisher_name", type: "text" },
-  accountEnabled: { expr: "account_enabled", type: "text" },
-  appOwnerOrganizationId: { expr: "app_owner_organization_id", type: "text" },
-  homepage: { expr: "homepage", type: "text" },
-  loginUrl: { expr: "login_url", type: "text" },
-  replyUrls: { expr: "reply_urls", type: "text" },
-  servicePrincipalNames: { expr: "service_principal_names", type: "text" },
-  tags: { expr: "tags", type: "text" },
-  permissionRisk: { expr: "\"permissionRisk\"", type: "risk" },
-  rbacRoleAssignmentCount: { expr: "\"rbacRoleAssignmentCount\"", type: "number" },
-  rbacRoleLevel: { expr: "\"rbacRoleLevel\"", type: "risk" },
-  oauthPermissionsCount: { expr: "\"oauthPermissionsCount\"", type: "number" },
-  appRolesPermissionCount: { expr: "\"appRolesPermissionCount\"", type: "number" },
-  entraPermissionCount: { expr: "\"entraPermissionCount\"", type: "number" },
-  entraPermissionRisk: { expr: "\"entraPermissionRisk\"", type: "risk" },
-  managedIdentityHomeResourceGroup: { expr: "\"managedIdentityHomeResourceGroup\"", type: "text" },
-  assignedResourceGroups: { expr: "\"assignedResourceGroups\"", type: "text" },
-  resourceGroup: { expr: "\"resourceGroup\"", type: "text" },
-  potentialOwners: { expr: "\"potentialOwners\"", type: "text" },
-  ownerConfidence: { expr: "\"ownerConfidence\"", type: "risk" },
-  "ownerCandidates.displayName": { expr: "\"potentialOwners\"", type: "text" }
 };
