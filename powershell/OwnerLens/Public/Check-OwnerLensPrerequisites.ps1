@@ -436,8 +436,8 @@ function Test-OwnerLensRuntimeLayout {
 
   if ($IsWindows) {
     $winBindingCandidates = @(
-      Join-Path $Layout.AppRoot "node_modules\@duckdb\node-bindings-win32-x64\duckdb.node",
-      Join-Path $Layout.AppRoot "node_modules\@duckdb\node-bindings-win32-arm64\duckdb.node"
+      (Join-Path $Layout.AppRoot "node_modules\@duckdb\node-bindings-win32-x64\duckdb.node")
+      (Join-Path $Layout.AppRoot "node_modules\@duckdb\node-bindings-win32-arm64\duckdb.node")
     )
     $winBinding = $winBindingCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
     if ($winBinding) {
