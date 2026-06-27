@@ -7,6 +7,7 @@ import type { EntraServicePrincipal } from "../../inputTransferObject/generated/
 import { insertEntraServicePrincipalRows } from "../entra/domain/servicePrincipalsTable";
 import { prepareRuntimeSqlSchema } from "../SnapshotImporter";
 import { disableOwnerEvidenceKey } from "../../../../core/runtime/DisabledOwnerEvidenceStore";
+import { rebuildRuntimeOwnerEvidenceMaterialization } from "../ownership/runtimeOwnerEvidenceMaterialization";
 import {
   insertAzureActivityLogRows,
   insertAzureResourceGroupRows,
@@ -232,6 +233,7 @@ test("principal owner evidence query reuses the collection candidate ranking", a
       roleAssignment("sp-1", "rg-medium"),
       roleAssignment("sp-1", "rg-high")
     ]);
+    await rebuildRuntimeOwnerEvidenceMaterialization(connection);
 
     const rows = await readAzurePrincipalResourceGroupOwnerCandidateViewRows(
       connection,

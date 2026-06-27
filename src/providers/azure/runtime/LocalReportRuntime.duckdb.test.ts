@@ -3298,6 +3298,81 @@ test("falls back from disabled direct service principal owner to resource group 
   });
 });
 
+test("materializes ranked owner candidates before applying disabled evidence dynamically", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    meta: {
+      ...minimalEntraSnapshot().meta,
+      servicePrincipalCount: 1
+    },
+    servicePrincipals: [
+      servicePrincipal("sp-app", "app-app", "Application app", {
+        servicePrincipalType: "Application",
+        servicePrincipalOwners: [
+          {
+            id: "owner-direct-1",
+            displayName: "Direct Owner",
+            userPrincipalName: "direct-owner@example.test",
+            mail: null,
+            ownerType: "User"
+          }
+        ]
+      })
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await runtime.initialize();
+
+    await runtime.setOwnerCandidateDisabled(
+      "entraServicePrincipalOwner:ownerUser:owner-direct-1",
+      true
+    );
+
+    await expect(runtime.queryEntraServicePrincipals({ page: 1, pageSize: 10 })).resolves.toMatchObject({
+      rows: [
+        expect.objectContaining({
+          id: "sp-app",
+          potentialOwners: [],
+          ownerCandidates: []
+        })
+      ]
+    });
+
+    await runtime.close();
+    await withDuckDb(async ({ connection }) => {
+      const tableReader = await connection.runAndReadAll(`
+        select table_name, table_type
+        from information_schema.tables
+        where table_schema = 'main'
+          and table_name in (
+            'runtime_entra_principal_base_materialized',
+            'runtime_owner_evidence_materialized',
+            'runtime_principal_resource_group_targets_materialized',
+            'runtime_ranked_owner_candidates_materialized'
+          )
+        order by table_name
+      `);
+      expect(tableReader.getRowObjectsJson()).toEqual([
+        { table_name: "runtime_entra_principal_base_materialized", table_type: "BASE TABLE" },
+        { table_name: "runtime_owner_evidence_materialized", table_type: "BASE TABLE" },
+        { table_name: "runtime_principal_resource_group_targets_materialized", table_type: "BASE TABLE" },
+        { table_name: "runtime_ranked_owner_candidates_materialized", table_type: "BASE TABLE" }
+      ]);
+
+      const candidateReader = await connection.runAndReadAll(`
+        select "evidenceKey"
+        from runtime_ranked_owner_candidates_materialized
+        where "principalId" = 'sp-app'
+      `);
+      expect(candidateReader.getRowObjectsJson()).toEqual([
+        { evidenceKey: "entraServicePrincipalOwner:ownerUser:owner-direct-1:direct-owner@example.test:" }
+      ]);
+    }, { databasePath });
+  });
+});
+
 test("falls back from disabled principal-scoped resource group owner to direct owner in service principal collection", async () => {
   const azureSnapshot: AzureSnapshot = {
     ...minimalAzureSnapshot([]),
