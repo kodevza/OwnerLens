@@ -2023,15 +2023,21 @@ test("opens Entra API permissions tab for the selected service principal from it
   });
   globalThis.fetch = fetchMock;
 
-  const { container, root } = renderComponent(<AzureComponent />);
+  const activeViewTypeLabels: string[] = [];
+  const { container, root } = renderComponent(
+    <AzureComponent onActiveViewTypeChange={(label) => activeViewTypeLabels.push(label)} />
+  );
 
   await waitForText(container, "Service principal app");
+  expect(activeViewTypeLabels.at(-1)).toBe("Service Principal");
+
   await clickButton("Open Entra API permissions 2/1");
   await waitForText(container, "User.Read Directory.Read.All");
   await waitForText(container, "Directory.Read.All");
   await waitForText(container, "Microsoft Graph");
   await waitForText(container, "Risk");
   await waitForText(container, "high");
+  expect(activeViewTypeLabels.at(-1)).toBe("Entra API Permissions");
 
   expect(getButton("PER: Service principal app")).toBeDefined();
 
@@ -2048,6 +2054,7 @@ test("opens Entra API permissions tab for the selected service principal from it
     expect(queryButton("Close Service principal app Entra API permissions tab")).toBeNull();
     expect(container.textContent).not.toContain("User.Read Directory.Read.All");
   });
+  expect(activeViewTypeLabels.at(-1)).toBe("Service Principal");
 
   act(() => root.unmount());
 });

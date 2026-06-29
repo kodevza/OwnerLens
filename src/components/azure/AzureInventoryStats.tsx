@@ -19,11 +19,13 @@ type InventoryStatsState =
     };
 
 type InventoryStatItem = {
-  key: keyof AzureInventoryStatsData;
+  key: InventoryStatCountKey;
   label: string;
   shortLabel: string;
   Icon: LucideIcon;
 };
+
+type InventoryStatCountKey = Exclude<keyof AzureInventoryStatsData, "tenantName">;
 
 const inventoryStatItems: InventoryStatItem[] = [
   { key: "users", label: "Entra Users", shortLabel: "Users", Icon: UserRound },
@@ -34,7 +36,11 @@ const inventoryStatItems: InventoryStatItem[] = [
   { key: "rbacAssignments", label: "Azure RBAC assignments", shortLabel: "RBAC", Icon: KeyRound }
 ];
 
-export function AzureInventoryStats() {
+type AzureInventoryStatsProps = {
+  onStatsRead?: (stats: AzureInventoryStatsData) => void;
+};
+
+export function AzureInventoryStats({ onStatsRead }: AzureInventoryStatsProps) {
   const [state, setState] = useState<InventoryStatsState>({ status: "loading" });
 
   useEffect(() => {
@@ -43,6 +49,7 @@ export function AzureInventoryStats() {
     readAzureInventoryStats({ signal: controller.signal })
       .then((stats) => {
         setState({ status: "ready", stats });
+        onStatsRead?.(stats);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) {
@@ -58,7 +65,7 @@ export function AzureInventoryStats() {
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [onStatsRead]);
 
   if (state.status === "error") {
     return (

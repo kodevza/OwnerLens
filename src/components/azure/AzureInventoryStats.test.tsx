@@ -23,6 +23,7 @@ afterEach(() => {
 test("renders imported Azure and Entra inventory counters", async () => {
   globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
     jsonResponse({
+      tenantName: "Example Tenant",
       users: 12,
       groups: 4,
       servicePrincipals: 1234,

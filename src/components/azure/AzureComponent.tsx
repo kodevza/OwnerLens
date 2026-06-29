@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ZtaRelatedObject } from "../../core/azure/ztaReport";
 import type { RemediationPackage } from "../../core/runtime/remediation";
@@ -77,7 +77,11 @@ type PrincipalDetailsTab = {
   tabId: string;
 };
 
-export function AzureComponent() {
+type AzureComponentProps = {
+  onActiveViewTypeChange?: (label: string) => void;
+};
+
+export function AzureComponent({ onActiveViewTypeChange }: AzureComponentProps = {}) {
   const config = useAppConfig();
   const zeroTrustAssessmentEnabled = config.features.zeroTrustAssessment;
   const baseEnabledViewValues = zeroTrustAssessmentEnabled
@@ -112,6 +116,18 @@ export function AzureComponent() {
   const ownershipEvidenceTab = ownershipEvidenceTabs.find((tab) => tab.tabId === activeView) ?? null;
   const remediationPackageTab = remediationPackageTabs.find((tab) => tab.tabId === activeView) ?? null;
   const principalDetailsTab = principalDetailsTabs.find((tab) => tab.tabId === activeView) ?? null;
+  const activeViewTypeLabel = getAzureViewTypeLabel({
+    activeView,
+    azureRbacTab,
+    entraPermissionsTab,
+    ownershipEvidenceTab,
+    principalDetailsTab,
+    remediationPackageTab
+  });
+
+  useEffect(() => {
+    onActiveViewTypeChange?.(activeViewTypeLabel);
+  }, [activeViewTypeLabel, onActiveViewTypeChange]);
 
   function openRelatedPrincipal(relatedObject: ZtaRelatedObject) {
     const view = getRelatedPrincipalView(relatedObject);
@@ -559,6 +575,55 @@ function removeRecordKey<TValue>(record: Record<string, TValue>, key: string): R
   const { [key]: _removed, ...rest } = record;
 
   return rest;
+}
+
+function getAzureViewTypeLabel({
+  activeView,
+  azureRbacTab,
+  entraPermissionsTab,
+  ownershipEvidenceTab,
+  principalDetailsTab,
+  remediationPackageTab
+}: {
+  activeView: AzureView;
+  azureRbacTab: AzureRbacTab | null;
+  entraPermissionsTab: EntraPermissionsTab | null;
+  ownershipEvidenceTab: OwnershipEvidenceTab | null;
+  principalDetailsTab: PrincipalDetailsTab | null;
+  remediationPackageTab: RemediationPackageTab | null;
+}): string {
+  if (azureRbacTab) {
+    return "Azure RBAC";
+  }
+
+  if (entraPermissionsTab) {
+    return "Entra API Permissions";
+  }
+
+  if (ownershipEvidenceTab) {
+    return "Ownership Evidence";
+  }
+
+  if (principalDetailsTab) {
+    return "Service Principal";
+  }
+
+  if (remediationPackageTab) {
+    return "Remediation Package";
+  }
+
+  const labelByView: Record<BaseAzureView, string> = {
+    managedIdentities: "Managed Identity",
+    resourceGroups: "Resource Group",
+    servicePrincipals: "Service Principal",
+    zeroTrustAssessment: "Zero Trust Assessment"
+  };
+
+  return isBaseAzureView(activeView) ? labelByView[activeView] : "Azure";
+}
+
+function isBaseAzureView(view: AzureView): view is BaseAzureView {
+  return viewValues.includes(view as BaseAzureView);
 }
 
 function getAzureRbacTabTarget(tab: AzureRbacTab) {
