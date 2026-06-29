@@ -44,6 +44,137 @@ test("hides the Zero Trust Assessment tab by default", () => {
   act(() => root.unmount());
 });
 
+test("renders static and closable Azure tabs in navigation order", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/azureRbac")) {
+      return jsonResponse({
+        collectionId: "azureRbac",
+        columns: [],
+        count: 1,
+        page: 1,
+        pageSize: 20,
+        rows: [
+          {
+            accessDisplayName: "Owner on subscription Platform",
+            accessRisk: "high",
+            accessResourceGroup: null,
+            accessResourceId: null,
+            accessScope: "/subscriptions/sub-1",
+            accessScopeType: "Subscription",
+            accessSubscriptionId: "sub-1",
+            canDelegate: false,
+            condition: null,
+            conditionVersion: null,
+            principalDisplayName: "Payroll API",
+            principalId: "payroll-sp-id",
+            principalType: "ServicePrincipal",
+            roleAssignmentId: "assignment-1",
+            roleDefinitionId: "owner-role-id",
+            roleDefinitionName: "Owner",
+            scope: "/subscriptions/sub-1",
+            scopeSubscriptionId: "sub-1",
+            servicePrincipalId: "payroll-sp-id",
+            signInName: null,
+            subscriptionId: "sub-1",
+            subscriptionName: "Platform"
+          }
+        ]
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 1,
+      page: 1,
+      pageSize: 20,
+      rows: [servicePrincipalRow({ displayName: "Payroll API", id: "payroll-sp-id" })]
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  await waitForText(container, "Payroll API");
+  expect(getTabLabels()).toEqual(["Service principals", "Managed identities", "Resource groups"]);
+
+  await clickButton("Payroll API");
+  await waitForText(container, "Application data");
+  await clickButton("Service principals");
+  await clickButton("Open Azure RBAC assignments 1/1");
+  await waitForText(container, "Owner on subscription Platform");
+
+  expect(getTabLabels()).toEqual([
+    "Service principals",
+    "Managed identities",
+    "Resource groups",
+    "RBAC: Payroll API",
+    "INF: Payroll API"
+  ]);
+
+  act(() => root.unmount());
+});
+
+test("activates resource groups when its tab is selected", async () => {
+  const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async (input) => {
+    const requestUrl = String(input);
+
+    if (requestUrl.startsWith("/api/data/azureResources/resourceGroupOwnership")) {
+      return jsonResponse({
+        collectionId: "azureResources.resourceGroupOwnership",
+        columns: [],
+        count: 1,
+        page: 1,
+        pageSize: 20,
+        rows: [
+          {
+            subscriptionId: "sub-1",
+            subscriptionName: "Platform",
+            resourceGroup: "rg-app",
+            location: "westeurope",
+            tags: null,
+            targetKey: "resourceGroup:sub-1:rg-app",
+            ownerCandidates: [],
+            owner: null,
+            confidence: "none",
+            source: "none",
+            evidence: [],
+            roleAssignments: [],
+            rbacRoleAssignmentCount: 0,
+            rbacRoleLevel: "none"
+          }
+        ]
+      });
+    }
+
+    return jsonResponse({
+      collectionId: "entra.servicePrincipals",
+      columns: [],
+      count: 0,
+      page: 1,
+      pageSize: 20,
+      rows: []
+    });
+  });
+  globalThis.fetch = fetchMock;
+
+  const { container, root } = renderComponent(<AzureComponent />);
+
+  expect(getButton("Service principals").getAttribute("data-state")).toBe("active");
+
+  await clickButton("Resource groups");
+  await waitForText(container, "rg-app");
+
+  expect(getButton("Resource groups").getAttribute("data-state")).toBe("active");
+  expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain(
+    "/api/data/azureResources/resourceGroupOwnership?page=1&count=20"
+  );
+
+  act(() => root.unmount());
+});
+
 test("opens and activates a service principal details tab from its display name", async () => {
   globalThis.fetch = jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () =>
     jsonResponse({
@@ -2719,6 +2850,12 @@ function getButtons(label: string): HTMLButtonElement[] {
     (candidate): candidate is HTMLButtonElement =>
       candidate instanceof HTMLButtonElement &&
       (candidate.getAttribute("aria-label") === label || candidate.textContent?.trim() === label)
+  );
+}
+
+function getTabLabels(): string[] {
+  return [...document.querySelectorAll<HTMLElement>('[role="tab"]')].map((tab) =>
+    tab.getAttribute("aria-label") ?? tab.textContent?.trim() ?? ""
   );
 }
 

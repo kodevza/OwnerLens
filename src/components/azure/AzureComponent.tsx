@@ -30,12 +30,16 @@ type BaseAzureView =
 
 type AzureView = BaseAzureView | string;
 
-const viewValues: BaseAzureView[] = [
-  "servicePrincipals",
-  "managedIdentities",
-  "resourceGroups",
-  "zeroTrustAssessment"
+const baseViewTabs: { label: string; value: BaseAzureView }[] = [
+  { label: "Service principals", value: "servicePrincipals" },
+  { label: "Managed identities", value: "managedIdentities" },
+  { label: "Resource groups", value: "resourceGroups" },
+  { label: "Zero Trust Assessment", value: "zeroTrustAssessment" }
 ];
+
+const baseViewValues: BaseAzureView[] = baseViewTabs.map((tab) => tab.value);
+
+const initialView: BaseAzureView = baseViewTabs[0].value;
 
 type PersistentTableView = "servicePrincipals" | "managedIdentities" | "resourceGroups";
 
@@ -85,8 +89,8 @@ export function AzureComponent({ onActiveViewTypeChange }: AzureComponentProps =
   const config = useAppConfig();
   const zeroTrustAssessmentEnabled = config.features.zeroTrustAssessment;
   const baseEnabledViewValues = zeroTrustAssessmentEnabled
-    ? viewValues
-    : viewValues.filter((view) => view !== "zeroTrustAssessment");
+    ? baseViewValues
+    : baseViewValues.filter((view) => view !== "zeroTrustAssessment");
   const [azureRbacTabs, setAzureRbacTabs] = useState<AzureRbacTab[]>([]);
   const [entraPermissionsTabs, setEntraPermissionsTabs] = useState<EntraPermissionsTab[]>([]);
   const [ownershipEvidenceTabs, setOwnershipEvidenceTabs] = useState<OwnershipEvidenceTab[]>([]);
@@ -94,14 +98,14 @@ export function AzureComponent({ onActiveViewTypeChange }: AzureComponentProps =
   const [principalDetailsTabs, setPrincipalDetailsTabs] = useState<PrincipalDetailsTab[]>([]);
   const enabledViewValues = [
     ...baseEnabledViewValues,
-    ...principalDetailsTabs.map((tab) => tab.tabId),
     ...azureRbacTabs.map((tab) => tab.tabId),
+    ...principalDetailsTabs.map((tab) => tab.tabId),
     ...entraPermissionsTabs.map((tab) => tab.tabId),
     ...ownershipEvidenceTabs.map((tab) => tab.tabId),
     ...remediationPackageTabs.map((tab) => tab.tabId)
   ];
   const { activeView, activateView } = useAzureViewNavigation<AzureView>(
-    "servicePrincipals",
+    initialView,
     enabledViewValues
   );
   const [ztaRelatedObjectFilter, setZtaRelatedObjectFilter] = useState<string | null>(null);
@@ -280,20 +284,13 @@ export function AzureComponent({ onActiveViewTypeChange }: AzureComponentProps =
       <div className="flex flex-wrap items-end justify-between gap-3">
         <Tabs className="relative z-10 -mb-px gap-0" value={activeView} onValueChange={(value) => activateView(value as AzureView)}>
           <TabsList aria-label="Azure data" className="w-fit max-w-full items-end gap-1 rounded-none bg-transparent p-0 shadow-none">
-            <TabsTrigger className={azureTabTriggerClassName} value="resourceGroups">
-              Resource groups
-            </TabsTrigger>
-            <TabsTrigger className={azureTabTriggerClassName} value="servicePrincipals">
-              Service principals
-            </TabsTrigger>
-            <TabsTrigger className={azureTabTriggerClassName} value="managedIdentities">
-              Managed identities
-            </TabsTrigger>
-            {zeroTrustAssessmentEnabled ? (
-              <TabsTrigger className={azureTabTriggerClassName} value="zeroTrustAssessment">
-                Zero Trust Assessment
-              </TabsTrigger>
-            ) : null}
+            {baseViewTabs
+              .filter((tab) => zeroTrustAssessmentEnabled || tab.value !== "zeroTrustAssessment")
+              .map((tab) => (
+                <TabsTrigger key={tab.value} className={azureTabTriggerClassName} value={tab.value}>
+                  {tab.label}
+                </TabsTrigger>
+              ))}
             {azureRbacTabs.map((tab) => (
               <ClosableTab
                 key={tab.tabId}
@@ -623,7 +620,7 @@ function getAzureViewTypeLabel({
 }
 
 function isBaseAzureView(view: AzureView): view is BaseAzureView {
-  return viewValues.includes(view as BaseAzureView);
+  return baseViewValues.includes(view as BaseAzureView);
 }
 
 function getAzureRbacTabTarget(tab: AzureRbacTab) {
