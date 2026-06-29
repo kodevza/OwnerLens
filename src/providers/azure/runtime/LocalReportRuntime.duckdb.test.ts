@@ -3395,7 +3395,7 @@ test("materializes ranked owner candidates before applying disabled evidence dyn
       `);
       expect(resourceGroupSummaryViewReader.getRowObjectsJson()).toEqual([
         {
-          sql: expect.stringContaining("from runtime_owner_evidence_materialized candidate")
+          sql: expect.stringContaining("from runtime_owner_evidence_materialized as candidate")
         }
       ]);
 
