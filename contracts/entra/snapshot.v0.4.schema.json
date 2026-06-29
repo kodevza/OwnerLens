@@ -424,6 +424,12 @@
         },
         "tenantId": {
           "type": "string"
+        },
+        "tenantDisplayName": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [

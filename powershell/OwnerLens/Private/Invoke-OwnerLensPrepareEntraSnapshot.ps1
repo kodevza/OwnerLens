@@ -185,12 +185,36 @@ if (-not $context) {
   throw 'Not connected. Run: Connect-MgGraph -TenantId "<tenant-id>" -Scopes "Application.Read.All","Group.Read.All","Directory.Read.All"'
 }
 
+$tenantDisplayName = $null
+try {
+  Write-EntraSnapshotProgress "Loading tenant display name"
+  $organizationResponse = Invoke-OwnerLensRestRequestWithRetry `
+    -OperationName "Microsoft Graph organization request" `
+    -Request {
+      return Invoke-MgGraphRequest -Method GET -Uri "/v1.0/organization?`$select=id,displayName" -OutputType PSObject -ErrorAction Stop
+    }
+  $organization = @($organizationResponse.value) |
+    Where-Object { $_.id -eq $context.TenantId } |
+    Select-Object -First 1
+
+  if (-not $organization) {
+    $organization = @($organizationResponse.value) | Select-Object -First 1
+  }
+
+  if ($organization -and -not [string]::IsNullOrWhiteSpace([string]$organization.displayName)) {
+    $tenantDisplayName = [string]$organization.displayName
+  }
+} catch {
+  Write-EntraSnapshotProgress "Tenant display name lookup failed: $($_.Exception.Message)"
+}
+
 $snapshot = [ordered]@{
   meta = [ordered]@{
     provider = "entra"
     snapshotVersion = "0.4"
     createdAt = (Get-Date).ToUniversalTime().ToString("o")
     tenantId = $context.TenantId
+    tenantDisplayName = $tenantDisplayName
     account = $context.Account
     scopes = $context.Scopes
   }

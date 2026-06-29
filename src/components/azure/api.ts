@@ -38,6 +38,7 @@ type ResourceGroupRuntimeResponse = LocalReportPaginatedCollection<
 type AzureRbacRuntimeResponse = LocalReportPaginatedCollection<"azureRbac", AzureRbac>;
 
 export type AzureInventoryStats = {
+  tenantName: string | null;
   users: number;
   groups: number;
   servicePrincipals: number;

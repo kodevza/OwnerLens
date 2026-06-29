@@ -366,9 +366,10 @@ export const createRemediationPackageResponseSchema: RuntimeRestJsonSchema = {
 
 export const runtimeInventoryStatsResponseSchema: RuntimeRestJsonSchema = {
   type: "object",
-  required: ["users", "groups", "servicePrincipals", "managedIdentities", "resourceGroups", "rbacAssignments"],
+  required: ["tenantName", "users", "groups", "servicePrincipals", "managedIdentities", "resourceGroups", "rbacAssignments"],
   additionalProperties: false,
   properties: {
+    tenantName: { type: ["string", "null"] },
     users: { type: "integer" },
     groups: { type: "integer" },
     servicePrincipals: { type: "integer" },

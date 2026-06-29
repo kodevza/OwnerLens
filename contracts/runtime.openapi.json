@@ -4473,6 +4473,7 @@
                 "schema": {
                   "type": "object",
                   "required": [
+                    "tenantName",
                     "users",
                     "groups",
                     "servicePrincipals",
@@ -4482,6 +4483,12 @@
                   ],
                   "additionalProperties": false,
                   "properties": {
+                    "tenantName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "users": {
                       "type": "integer"
                     },

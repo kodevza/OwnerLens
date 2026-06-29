@@ -448,6 +448,7 @@ test("imports Zero Trust Assessment report into DuckDB and reads it back through
       snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
+      tenantDisplayName: "Example Tenant",
       account: "owner@example.test",
       scopes: [],
       servicePrincipalCount: 1,
@@ -2073,6 +2074,7 @@ test("reads imported Azure and Entra inventory stats", async () => {
     await writeFile(path.join(dataDir, "snapshot.json"), JSON.stringify(azureSnapshot), "utf8");
 
     await expect(runtime.readInventoryStats()).resolves.toEqual({
+      tenantName: "Example Tenant",
       users: 2,
       groups: 2,
       servicePrincipals: 2,
@@ -2384,6 +2386,7 @@ test("does not enrich Entra runtime collections with ZTA remediation summaries",
       snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
+      tenantDisplayName: "Example Tenant",
       account: "owner@example.test",
       scopes: [],
       servicePrincipalCount: 2
@@ -3382,6 +3385,18 @@ test("materializes ranked owner candidates before applying disabled evidence dyn
         { table_name: "runtime_owner_evidence_materialized", table_type: "BASE TABLE" },
         { table_name: "runtime_principal_resource_group_targets_materialized", table_type: "BASE TABLE" },
         { table_name: "runtime_ranked_owner_candidates_materialized", table_type: "BASE TABLE" }
+      ]);
+
+      const resourceGroupSummaryViewReader = await connection.runAndReadAll(`
+        select lower(sql) as sql
+        from duckdb_views()
+        where schema_name = 'main'
+          and view_name = 'runtime_resource_group_owner_summary'
+      `);
+      expect(resourceGroupSummaryViewReader.getRowObjectsJson()).toEqual([
+        {
+          sql: expect.stringContaining("from runtime_owner_evidence_materialized candidate")
+        }
       ]);
 
       const candidateReader = await connection.runAndReadAll(`
@@ -4759,6 +4774,7 @@ function minimalEntraSnapshot(): EntraSnapshot {
       snapshotVersion: "0.4",
       createdAt: "2026-06-05T00:00:00.000Z",
       tenantId: "tenant-1",
+      tenantDisplayName: "Example Tenant",
       account: "owner@example.test",
       scopes: [],
       servicePrincipalCount: 1,

@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { AzureComponent } from "./components/azure/AzureComponent";
 import { AzureInventoryStats } from "./components/azure/AzureInventoryStats";
 import { AppConfigProvider } from "./components/azure/AppConfigContext";
-import { readAppConfig } from "./components/azure/api";
+import { readAppConfig, type AzureInventoryStats as AzureInventoryStatsData } from "./components/azure/api";
 import { ownerLensVersion } from "./core/buildInfo";
 import { appConfig, type AppConfig } from "./core/config";
 import { RuntimeErrorToast } from "./components/azure/RuntimeErrorToast";
 
 export default function App() {
   const [runtimeConfig, setRuntimeConfig] = useState<AppConfig>(appConfig);
+  const [tenantName, setTenantName] = useState<string | null>(null);
+  const [activeViewTypeLabel, setActiveViewTypeLabel] = useState("Service Principal");
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -25,6 +27,10 @@ export default function App() {
       });
 
     return () => abortController.abort();
+  }, []);
+
+  const handleStatsRead = useCallback((stats: AzureInventoryStatsData) => {
+    setTenantName(stats.tenantName);
   }, []);
 
   return (
@@ -44,15 +50,18 @@ export default function App() {
                   {ownerLensVersion}
                 </span>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">Azure inventory</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Entra / Azure: (Tenant: {tenantName ?? "unknown"}) /{" "}
+                <strong className="font-semibold text-foreground">{activeViewTypeLabel}</strong>
+              </p>
             </div>
             <div className="ml-auto min-w-0 max-w-full">
-              <AzureInventoryStats />
+              <AzureInventoryStats onStatsRead={handleStatsRead} />
             </div>
           </header>
 
           <div className="p-[5px]">
-            <AzureComponent />
+            <AzureComponent onActiveViewTypeChange={setActiveViewTypeLabel} />
           </div>
         </div>
       </main>

@@ -429,6 +429,7 @@ test("defines local report runtime REST endpoints", async () => {
         })
     ),
     readInventoryStats: jest.fn().mockResolvedValue({
+      tenantName: "Example Tenant",
       users: 12,
       groups: 4,
       servicePrincipals: 1234,
@@ -507,6 +508,7 @@ test("defines local report runtime REST endpoints", async () => {
   await expect(
     runtimeStatsEndpoint.handle({ req: {}, url: new URL("http://localhost/api/data/runtime/stats") })
   ).resolves.toEqual({
+    tenantName: "Example Tenant",
     users: 12,
     groups: 4,
     servicePrincipals: 1234,
