@@ -80,6 +80,7 @@ Collect snapshots from `pwsh`:
 
 ```powershell
 Install-Module OwnerLens -Scope CurrentUser -AllowPrerelease
+Check-OwnerLensPrerequisites
 Invoke-OwnerLensCollectAzure -SubscriptionIds "sub-id-1,sub-id-2"
 Invoke-OwnerLensCollectEntra -TenantId "<tenant-id>"
 ```
