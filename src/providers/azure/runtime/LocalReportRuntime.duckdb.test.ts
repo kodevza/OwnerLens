@@ -37,7 +37,7 @@ installDuckDbHandleCleanup();
 type ZeroTrustAssessmentReportEndpointResponse = Awaited<
   ReturnType<LocalReportRuntime["queryZeroTrustAssessmentReport"]>
 >;
-type SnapshotImportSource = "entra" | "azureResources" | "zeroTrustAssessment";
+type SnapshotImportSource = "entra" | "azureResources" | "zeroTrustAssessment" | "externalOwnership";
 
 async function withRuntimeTestDir<T>(
   fn: (ctx: { dataDir: string; runtime: LocalReportRuntime; databasePath: string }) => Promise<T>,
@@ -3489,6 +3489,241 @@ test("falls back from disabled principal-scoped resource group owner to direct o
           ]
         })
       ]
+    });
+  });
+});
+
+test("imports external ownership evidence as principal owner candidates", async () => {
+  const entraSnapshot: EntraSnapshot = {
+    ...minimalEntraSnapshot(),
+    servicePrincipals: [
+      servicePrincipal(
+        "11111111-1111-1111-1111-111111111111",
+        "app-1",
+        "CRM automation",
+        "Application"
+      ),
+      servicePrincipal(
+        "22222222-2222-2222-2222-222222222222",
+        "app-2",
+        "Billing worker",
+        "ManagedIdentity"
+      )
+    ],
+    applications: []
+  };
+  const externalOwnershipEvidence = {
+    schemaVersion: "0.1",
+    sourceType: "cmdb",
+    sourceName: "serviceNow",
+    items: [
+      {
+        identityId: "11111111-1111-1111-1111-111111111111",
+        identityName: "Different display name",
+        ownerType: "ownerCustom",
+        ownerId: "APP-CRM-Owners",
+        confidence: "high",
+        observedAt: "2026-07-02T08:00:00Z",
+        sourceRef: "APP-123",
+        evidenceUrl: "https://servicenow.example.com/app/APP-123"
+      },
+      {
+        identityName: "Billing worker",
+        ownerId: "Platform Team"
+      }
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
+    await writeFile(path.join(dataDir, "entra-snapshot.json"), JSON.stringify(entraSnapshot), "utf8");
+    await writeFile(
+      path.join(dataDir, "external-ownership-evidence.json"),
+      JSON.stringify(externalOwnershipEvidence),
+      "utf8"
+    );
+
+    await runtime.initialize();
+
+    await runtime.close();
+    await withDuckDb(async ({ connection }) => {
+      const stagingReader = await connection.runAndReadAll(`
+        select
+          ordinal,
+          identity_id,
+          identity_name,
+          owner_type,
+          owner_id,
+          confidence,
+          observed_at,
+          source_type,
+          source_name,
+          source_ref,
+          evidence_url
+        from external_ownership_evidence_items
+        order by ordinal
+      `);
+      expect(stagingReader.getRowObjectsJson()).toEqual([
+        {
+          ordinal: 0,
+          identity_id: "11111111-1111-1111-1111-111111111111",
+          identity_name: "Different display name",
+          owner_type: "ownerCustom",
+          owner_id: "APP-CRM-Owners",
+          confidence: "high",
+          observed_at: "2026-07-02T08:00:00Z",
+          source_type: "cmdb",
+          source_name: "serviceNow",
+          source_ref: "APP-123",
+          evidence_url: "https://servicenow.example.com/app/APP-123"
+        },
+        {
+          ordinal: 1,
+          identity_id: null,
+          identity_name: "Billing worker",
+          owner_type: "ownerCustom",
+          owner_id: "Platform Team",
+          confidence: null,
+          observed_at: null,
+          source_type: "cmdb",
+          source_name: "serviceNow",
+          source_ref: null,
+          evidence_url: null
+        }
+      ]);
+
+      const evidenceReader = await connection.runAndReadAll(`
+        select
+          "targetKind",
+          "principalId",
+          "subscriptionId",
+          "subscriptionName",
+          "resourceGroup",
+          owner,
+          "ownerType",
+          "ownerCandidate",
+          "evidenceKey",
+          confidence,
+          source,
+          path,
+          "discoverySource",
+          "evidenceValue",
+          "evidenceDate",
+          priority,
+          "targetPriority",
+          scope,
+          "roleDefinitionName"
+        from runtime_owner_evidence_materialized
+        where source = 'ownerCustom'
+        order by "principalId"
+      `);
+      expect(evidenceReader.getRowObjectsJson()).toEqual([
+        {
+          targetKind: "principal",
+          principalId: "11111111-1111-1111-1111-111111111111",
+          subscriptionId: null,
+          subscriptionName: null,
+          resourceGroup: null,
+          owner: "APP-CRM-Owners",
+          ownerType: "ownerCustom",
+          ownerCandidate: "ownerCustom:app-crm-owners",
+          evidenceKey: "ownerCustom:11111111-1111-1111-1111-111111111111:serviceNow:app-crm-owners",
+          confidence: "high",
+          source: "ownerCustom",
+          path: "direct",
+          discoverySource: "ownerCustom",
+          evidenceValue: "APP-123",
+          evidenceDate: "2026-07-02T08:00:00Z",
+          priority: "50",
+          targetPriority: 0,
+          scope: null,
+          roleDefinitionName: null
+        },
+        {
+          targetKind: "principal",
+          principalId: "22222222-2222-2222-2222-222222222222",
+          subscriptionId: null,
+          subscriptionName: null,
+          resourceGroup: null,
+          owner: "Platform Team",
+          ownerType: "ownerCustom",
+          ownerCandidate: "ownerCustom:platform team",
+          evidenceKey: "ownerCustom:22222222-2222-2222-2222-222222222222:serviceNow:platform team",
+          confidence: "low",
+          source: "ownerCustom",
+          path: "direct",
+          discoverySource: "ownerCustom",
+          evidenceValue: "serviceNow",
+          evidenceDate: null,
+          priority: "500",
+          targetPriority: 0,
+          scope: null,
+          roleDefinitionName: null
+        }
+      ]);
+    }, { databasePath });
+
+    await expect(readLatestSnapshotImportStatus(databasePath, "externalOwnership")).resolves.toMatchObject({
+      imported: true,
+      fileName: "external-ownership-evidence.json",
+      skipped: false
+    });
+  });
+});
+
+test("rejects external ownership evidence that does not match the schema", async () => {
+  const invalidExternalOwnershipEvidence = {
+    schemaVersion: "0.1",
+    items: [
+      {
+        identityId: "11111111-1111-1111-1111-111111111111",
+        ownerType: "ownerGroup",
+        ownerId: "APP-CRM-Owners"
+      }
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
+    await writeFile(
+      path.join(dataDir, "external-ownership-evidence.json"),
+      JSON.stringify(invalidExternalOwnershipEvidence),
+      "utf8"
+    );
+
+    await expect(runtime.initialize()).rejects.toThrow(
+      "Invalid external-ownership-evidence.json: /items/0/ownerType"
+    );
+
+    await runtime.close();
+    await expect(readLatestSnapshotImportStatus(databasePath, "externalOwnership")).resolves.toMatchObject({
+      imported: false
+    });
+  });
+});
+
+test("rejects external ownership evidence without identity id or identity name", async () => {
+  const invalidExternalOwnershipEvidence = {
+    schemaVersion: "0.1",
+    items: [
+      {
+        ownerId: "APP-CRM-Owners"
+      }
+    ]
+  };
+
+  await withRuntimeTestDir(async ({ dataDir, runtime, databasePath }) => {
+    await writeFile(
+      path.join(dataDir, "external-ownership-evidence.json"),
+      JSON.stringify(invalidExternalOwnershipEvidence),
+      "utf8"
+    );
+
+    await expect(runtime.initialize()).rejects.toThrow(
+      "Invalid external-ownership-evidence.json: /items/0"
+    );
+
+    await runtime.close();
+    await expect(readLatestSnapshotImportStatus(databasePath, "externalOwnership")).resolves.toMatchObject({
+      imported: false
     });
   });
 });

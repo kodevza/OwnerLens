@@ -275,6 +275,8 @@ function inferOwnershipEvidenceDiscoverySource(
       return "activityLog";
     case "tag":
       return "tag";
+    case "ownerCustom":
+      return "ownerCustom";
     default:
       return assertNeverOwnerCandidateSource(candidate.source);
   }

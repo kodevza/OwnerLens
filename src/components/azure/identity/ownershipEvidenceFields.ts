@@ -20,7 +20,7 @@ export const ownershipEvidenceFields: ReportFieldDescriptor<OwnershipEvidenceIte
           id: "type",
           label: "Type",
           filterColumnId: "ownerType",
-          options: ["ownerUser", "ownerGroup", "ownerTag", "application", "unknown"]
+          options: ["ownerUser", "ownerGroup", "ownerTag", "application", "unknown", "ownerCustom", "ownerCustomLog"]
         }
       ]
     }
@@ -52,7 +52,8 @@ export const ownershipEvidenceFields: ReportFieldDescriptor<OwnershipEvidenceIte
         "entraServicePrincipalOwner",
         "entraApplicationOwner",
         "activity",
-        "tag"
+        "tag",
+        "ownerCustom"
       ]
     }
   },
@@ -70,7 +71,7 @@ export const ownershipEvidenceFields: ReportFieldDescriptor<OwnershipEvidenceIte
     getValue: (evidence) => evidence.discoverySource,
     filter: {
       kind: "multiSelect",
-      options: ["azureRbac", "activityLog", "tag", "applicationOwner", "servicePrincipalOwner"]
+      options: ["azureRbac", "activityLog", "tag", "applicationOwner", "servicePrincipalOwner", "ownerCustom"]
     }
   },
   {

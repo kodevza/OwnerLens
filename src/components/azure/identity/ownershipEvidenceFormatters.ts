@@ -36,6 +36,8 @@ export function formatOwnershipEvidenceSource(source: OwnershipEvidenceItem["sou
       return "Activity";
     case "tag":
       return "Tag";
+    case "ownerCustom":
+      return "Custom owner";
   }
 }
 
@@ -60,5 +62,7 @@ export function formatOwnershipEvidenceDiscoverySource(source: OwnershipEvidence
       return "Application owner";
     case "servicePrincipalOwner":
       return "Service principal owner";
+    case "ownerCustom":
+      return "Custom owner";
   }
 }

@@ -13,7 +13,8 @@ const SOURCE_WEIGHT: Record<OwnerCandidateSource, number> = {
   entraServicePrincipalOwner: 3,
   entraApplicationOwner: 4,
   resourceGroupOwner: 5,
-  tag: 5
+  tag: 5,
+  ownerCustom: 5
 };
 
 export function rankOwnerCandidates(candidates: OwnerCandidate[]): OwnerCandidate[] {

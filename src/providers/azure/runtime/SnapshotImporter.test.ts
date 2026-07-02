@@ -29,10 +29,12 @@ test("SnapshotImporter logs import progress for startup diagnostics", async () =
   const entra = createImportRuntime(false);
   const azureResources = createImportRuntime(true);
   const zeroTrustAssessment = createImportRuntime(false);
+  const externalOwnership = createImportRuntime(false);
   const importer = new SnapshotImporter({
     entra: entra as LocalEntraReportRuntime,
     azureResources: azureResources as LocalAzureResourcesReportRuntime,
     zeroTrustAssessment,
+    externalOwnership,
     logger
   });
 
@@ -44,6 +46,8 @@ test("SnapshotImporter logs import progress for startup diagnostics", async () =
     "Checking Azure resources snapshot...",
     "Azure resources snapshot is already current.",
     "Importing Zero Trust Assessment snapshot...",
-    "Imported Zero Trust Assessment snapshot."
+    "Imported Zero Trust Assessment snapshot.",
+    "Importing External ownership evidence snapshot...",
+    "Imported External ownership evidence snapshot."
   ]);
 });

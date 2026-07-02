@@ -38,6 +38,7 @@ import {
   type OwnershipEvidenceRequest,
   type OwnershipEvidenceResponse
 } from "./ownership/OwnershipRuntime";
+import { ExternalOwnershipEvidenceRuntime } from "./ownership/ExternalOwnershipEvidenceRuntime";
 import { OwnerTagConfigSeedService } from "./ownership/OwnerTagConfigSeedService";
 import { rebuildRuntimeOwnerEvidenceMaterialization } from "./ownership/runtimeOwnerEvidenceMaterialization";
 import { RemediationRuntime } from "./remediation/RemediationRuntime";
@@ -62,6 +63,7 @@ export class LocalReportRuntime {
   private readonly azureResources: LocalAzureResourcesReportRuntime;
   private readonly remediationRuntime: RemediationRuntime;
   private readonly ownershipRuntime: OwnershipRuntime;
+  private readonly externalOwnership: ExternalOwnershipEvidenceRuntime;
   private readonly ownerTagConfigSeedService: OwnerTagConfigSeedService;
   private readonly azureResourcesQueries: AzureResourcesCollectionQueryService;
   private readonly entraQueries: EntraCollectionQueryService;
@@ -90,10 +92,15 @@ export class LocalReportRuntime {
       getConnection: () => this.requireConnection(),
       getEntraQueries: () => this.entraQueries
     });
+    this.externalOwnership = new ExternalOwnershipEvidenceRuntime({
+      dataDir: this.dataDir,
+      getConnection: () => this.requireConnection()
+    });
     this.snapshotImporter = new SnapshotImporter({
       entra: this.entra,
       azureResources: this.azureResources,
-      zeroTrustAssessment: this.remediationRuntime
+      zeroTrustAssessment: this.remediationRuntime,
+      externalOwnership: this.externalOwnership
     });
     this.enrichmentService = new EnrichmentService(() => this.requireConnection());
     this.exportService = new ExportService();

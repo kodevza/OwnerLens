@@ -7,7 +7,14 @@ export type OwnerEvidence = {
   disabled?: boolean;
 };
 
-export type OwnerType = "ownerUser" | "ownerGroup" | "ownerTag" | "application" | "unknown";
+export type OwnerType =
+  | "ownerUser"
+  | "ownerGroup"
+  | "ownerTag"
+  | "application"
+  | "unknown"
+  | "ownerCustom"
+  | "ownerCustomLog";
 
 export type OwnerCandidateSource =
   | "resourceGroupOwner"
@@ -15,7 +22,8 @@ export type OwnerCandidateSource =
   | "entraServicePrincipalOwner"
   | "entraApplicationOwner"
   | "activity"
-  | "tag";
+  | "tag"
+  | "ownerCustom";
 
 export type OwnershipEvidencePath = "direct" | "indirect";
 
@@ -24,7 +32,8 @@ export type OwnershipEvidenceDiscoverySource =
   | "activityLog"
   | "tag"
   | "applicationOwner"
-  | "servicePrincipalOwner";
+  | "servicePrincipalOwner"
+  | "ownerCustom";
 
 export type OwnerCandidateScope = {
   subscriptionId?: string;

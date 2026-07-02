@@ -68,6 +68,12 @@ Collectors write these files by default:
   managed identities, role assignments, and optional activity logs.
 - `data/entra-snapshot.json` for Microsoft Entra service principals,
   application registrations, groups, and group membership facts.
+- `data/external-ownership-evidence.json` optionally adds external principal
+  ownership evidence from CMDB, ticketing, IGA, manual, scanner, or platform
+  sources. Each item requires `ownerId` and either `identityId` or
+  `identityName`; `identityId` is matched first, while `identityName` falls back
+  to the Entra principal display name. `ownerType` defaults to `ownerCustom`,
+  can also be `ownerCustomLog`, and `confidence` defaults to `low`.
 
 Sign in from `pwsh`:
 
@@ -88,8 +94,8 @@ Invoke-OwnerLensCollectEntra -TenantId "<tenant-id>"
 More collector options are documented in [tools/README.md](tools/README.md).
 
 Snapshot files can contain sensitive tenant, subscription, identity, group,
-credential, and activity-log metadata. Review them before sharing. Files matching
-`data/*snapshot.json` are ignored by git.
+credential, ownership, and activity-log metadata. Review them before sharing.
+The `data/` directory is ignored by git.
 
 
 ## Run

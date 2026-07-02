@@ -642,6 +642,65 @@ test("returns direct service principal owner evidence without an Azure RBAC togg
   );
 });
 
+test("returns custom principal owner evidence from runtime rows", async () => {
+  const readAzurePrincipalResourceGroupOwnerCandidateViewRows = jest.fn().mockResolvedValue([
+    {
+      principalId: "sp-custom",
+      subscriptionId: null,
+      subscriptionName: null,
+      resourceGroup: null,
+      owner: "platform-team",
+      ownerCandidate: "ownerCustom:platform-team",
+      ownerType: "ownerCustom",
+      evidenceKey: "ownerCustom:sp-custom:serviceNow:platform-team",
+      confidence: "high",
+      source: "ownerCustom",
+      path: "direct",
+      discoverySource: "ownerCustom",
+      evidenceValue: "CMDB assignment",
+      evidenceDate: "2026-06-30T12:00:00.000Z",
+      priority: 50
+    }
+  ]);
+  const service = new OwnershipEvidenceQueryService({
+    entraQueries: {
+      findServicePrincipalById: jest.fn().mockResolvedValue(
+        servicePrincipal({
+          id: "sp-custom",
+          displayName: "Custom Owner App",
+          roleAssignments: []
+        })
+      )
+    },
+    azureResources: {
+      readAzurePrincipalResourceGroupOwnerCandidateViewRows,
+      readAzureUserAssignedManagedIdentities: jest.fn().mockResolvedValue([])
+    }
+  } as unknown as ConstructorParameters<typeof OwnershipEvidenceQueryService>[0]);
+
+  await expect(
+    service.readOwnershipEvidence({ kind: "servicePrincipal", principalId: "SP-CUSTOM" })
+  ).resolves.toMatchObject({
+    target: {
+      kind: "servicePrincipal",
+      id: "sp-custom"
+    },
+    evidence: [
+      {
+        ownerCandidateKey: "ownerCustom:platform-team",
+        ownerDisplayName: "platform-team",
+        ownerType: "ownerCustom",
+        confidence: "high",
+        source: "ownerCustom",
+        path: "direct",
+        discoverySource: "ownerCustom",
+        evidence: "CMDB assignment",
+        date: "2026-06-30T12:00:00.000Z"
+      }
+    ]
+  });
+});
+
 test("returns resource group evidence for a managed identity with a resolved resource group", async () => {
   const service = buildOwnershipEvidenceService({
     azureSnapshot: azureSnapshot({

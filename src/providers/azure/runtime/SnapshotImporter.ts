@@ -15,6 +15,7 @@ export type SnapshotImporterOptions = {
   entra: LocalEntraReportRuntime;
   azureResources: LocalAzureResourcesReportRuntime;
   zeroTrustAssessment: SnapshotImportRuntime;
+  externalOwnership: SnapshotImportRuntime;
   logger?: Pick<Console, "log"> | null;
 };
 
@@ -22,6 +23,7 @@ export type SnapshotImporterStatus = {
   entra: SnapshotImportStatus;
   azureResources: SnapshotImportStatus;
   zeroTrustAssessment: SnapshotImportStatus;
+  externalOwnership: SnapshotImportStatus;
 };
 
 export async function prepareRuntimeSqlSchema(connection: DuckDBConnection): Promise<void> {
@@ -40,12 +42,14 @@ export class SnapshotImporter {
   private readonly entra: LocalEntraReportRuntime;
   private readonly azureResources: LocalAzureResourcesReportRuntime;
   private readonly zeroTrustAssessment: SnapshotImportRuntime;
+  private readonly externalOwnership: SnapshotImportRuntime;
   private readonly logger: Pick<Console, "log"> | null;
 
   constructor(options: SnapshotImporterOptions) {
     this.entra = options.entra;
     this.azureResources = options.azureResources;
     this.zeroTrustAssessment = options.zeroTrustAssessment;
+    this.externalOwnership = options.externalOwnership;
     this.logger = options.logger ?? (process.env.NODE_ENV === "test" ? null : console);
   }
 
@@ -53,7 +57,8 @@ export class SnapshotImporter {
     return {
       entra: this.entra.getStatus(),
       azureResources: this.azureResources.getStatus(),
-      zeroTrustAssessment: this.zeroTrustAssessment.getStatus()
+      zeroTrustAssessment: this.zeroTrustAssessment.getStatus(),
+      externalOwnership: this.externalOwnership.getStatus()
     };
   }
 
@@ -61,6 +66,7 @@ export class SnapshotImporter {
     await this.importSnapshotWithLogging("Entra", this.entra);
     await this.importSnapshotWithLogging("Azure resources", this.azureResources);
     await this.importSnapshotWithLogging("Zero Trust Assessment", this.zeroTrustAssessment);
+    await this.importSnapshotWithLogging("External ownership evidence", this.externalOwnership);
   }
 
   private async importSnapshotWithLogging(label: string, runtime: SnapshotImportRuntime): Promise<void> {

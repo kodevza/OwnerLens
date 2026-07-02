@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ownerlens.dev/contracts/ownership/external-ownership-evidence.v0.1.schema.json",
+  "title": "OwnerLens external ownership evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "0.1"
+    },
+    "sourceType": {
+      "type": ["string", "null"]
+    },
+    "sourceName": {
+      "type": ["string", "null"]
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ownerId"],
+        "anyOf": [
+          { "required": ["identityId"] },
+          { "required": ["identityName"] }
+        ],
+        "properties": {
+          "identityId": {
+            "type": "string",
+            "pattern": "\\S"
+          },
+          "identityName": {
+            "type": "string",
+            "pattern": "\\S"
+          },
+          "ownerType": {
+            "type": "string",
+            "enum": ["ownerCustom", "ownerCustomLog"],
+            "default": "ownerCustom"
+          },
+          "ownerId": {
+            "type": "string",
+            "pattern": "\\S"
+          },
+          "confidence": {
+            "type": ["string", "null"],
+            "enum": ["high", "medium", "low", null]
+          },
+          "observedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "sourceType": {
+            "type": ["string", "null"]
+          },
+          "sourceName": {
+            "type": ["string", "null"]
+          },
+          "sourceRef": {
+            "type": ["string", "null"]
+          },
+          "evidenceUrl": {
+            "type": ["string", "null"],
+            "format": "uri"
+          }
+        }
+      }
+    }
+  },
+  "required": ["schemaVersion", "items"]
+}
