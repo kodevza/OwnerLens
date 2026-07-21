@@ -467,9 +467,7 @@ function parseOwnerCandidateType(ownerCandidate: string | null | undefined): Own
     type === "ownerGroup" ||
     type === "ownerTag" ||
     type === "application" ||
-    type === "unknown" ||
-    type === "ownerCustom" ||
-    type === "ownerCustomLog"
+    type === "unknown"
   ) {
     return type;
   }

@@ -20,7 +20,7 @@ export const ownershipEvidenceFields: ReportFieldDescriptor<OwnershipEvidenceIte
           id: "type",
           label: "Type",
           filterColumnId: "ownerType",
-          options: ["ownerUser", "ownerGroup", "ownerTag", "application", "unknown", "ownerCustom", "ownerCustomLog"]
+          options: ["ownerUser", "ownerGroup", "ownerTag", "application", "unknown"]
         }
       ]
     }

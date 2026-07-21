@@ -53,6 +53,14 @@
     "test:components": "jest --runInBand --config jest.components.config.cjs",
     "test:e2e": "playwright test",
     "test:e2e:validation": "playwright test tests/e2e/resource-groups.validation.spec.ts",
+    "windows:package": "pwsh ./scripts/windows/Build-OwnerLensWindowsPackage.ps1",
+    "windows:sign": "pwsh ./scripts/windows/Sign-OwnerLensArtifacts.ps1",
+    "windows:signatures": "pwsh ./scripts/windows/Test-OwnerLensSignatures.ps1",
+    "windows:catalog": "pwsh ./scripts/windows/New-OwnerLensFileCatalog.ps1",
+    "windows:sbom": "pwsh ./scripts/windows/New-OwnerLensSbom.ps1",
+    "windows:hashes": "pwsh ./scripts/windows/New-OwnerLensHashManifest.ps1",
+    "windows:verify-hashes": "pwsh ./scripts/windows/Test-OwnerLensHashManifest.ps1",
+    "windows:verify": "pwsh ./scripts/windows/VERIFY.ps1",
     "perf:sp": "node tools/profile-service-principal-query.mjs",
     "test:coverage": "npm run test:node -- --coverage --coverageDirectory coverage/node && npm run test:duckdb -- --coverage --coverageDirectory coverage/duckdb && npm run test:components -- --coverage && npm run test:coverage:merge",
     "test:coverage:merge": "node tools/merge-coverage.cjs",
@@ -84,6 +92,7 @@
     "vite": "^7.0.0"
   },
   "devDependencies": {
+    "@cyclonedx/cyclonedx-npm": "^5.0.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.60.0",
     "@types/jest": "^29.5.14",

@@ -36,8 +36,8 @@
           },
           "ownerType": {
             "type": "string",
-            "enum": ["ownerCustom", "ownerCustomLog"],
-            "default": "ownerCustom"
+            "enum": ["ownerUser", "ownerGroup", "ownerTag", "application", "unknown"],
+            "default": "ownerGroup"
           },
           "ownerId": {
             "type": "string",

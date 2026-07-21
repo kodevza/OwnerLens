@@ -26,7 +26,7 @@ type ValidatedExternalOwnershipEvidenceDocument = {
 type ExternalOwnershipEvidenceItem = {
   identityId?: string | null;
   identityName?: string | null;
-  ownerType: ExternalOwnershipEvidenceOwnerType;
+  ownerType: OwnerType;
   ownerId: string;
   confidence?: string | null;
   observedAt?: string | null;
@@ -35,8 +35,6 @@ type ExternalOwnershipEvidenceItem = {
   sourceRef?: string | null;
   evidenceUrl?: string | null;
 };
-
-type ExternalOwnershipEvidenceOwnerType = Extract<OwnerType, "ownerCustom" | "ownerCustomLog">;
 
 export type ExternalOwnershipEvidenceRuntimeOptions = {
   dataDir: string;
@@ -198,15 +196,21 @@ function readExternalOwnershipEvidenceOwnerType(
   value: unknown,
   field: string,
   fileName: string
-): ExternalOwnershipEvidenceOwnerType {
+): OwnerType {
   if (value === undefined || value === null) {
-    return "ownerCustom";
+    return "ownerGroup";
   }
 
   const ownerType = readRequiredString(value, field, fileName);
 
-  if (ownerType !== "ownerCustom" && ownerType !== "ownerCustomLog") {
-    throw new Error(`Invalid ${fileName}: /${field} must be ownerCustom or ownerCustomLog.`);
+  if (
+    ownerType !== "ownerUser" &&
+    ownerType !== "ownerGroup" &&
+    ownerType !== "ownerTag" &&
+    ownerType !== "application" &&
+    ownerType !== "unknown"
+  ) {
+    throw new Error(`Invalid ${fileName}: /${field} must be a supported owner type.`);
   }
 
   return ownerType;

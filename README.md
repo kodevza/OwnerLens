@@ -72,8 +72,8 @@ Collectors write these files by default:
   ownership evidence from CMDB, ticketing, IGA, manual, scanner, or platform
   sources. Each item requires `ownerId` and either `identityId` or
   `identityName`; `identityId` is matched first, while `identityName` falls back
-  to the Entra principal display name. `ownerType` defaults to `ownerCustom`,
-  can also be `ownerCustomLog`, and `confidence` defaults to `low`.
+  to the Entra principal display name. `ownerType` defaults to `ownerGroup`,
+  and `confidence` defaults to `low`.
 
 Sign in from `pwsh`:
 
@@ -125,6 +125,10 @@ Start-OwnerLens -StartupTimeoutSeconds 240
 See [DEVELOPMENT.md](DEVELOPMENT.md) for local development, testing, dependency
 graph, and ownership rule configuration notes. See [CONTRIBUTING.md](CONTRIBUTING.md)
 for contribution expectations.
+
+For enterprise Windows packaging, PowerShell Gallery deployment, signing, SBOM,
+hash verification, and catalog verification, see
+[docs/enterprise-windows-packaging.md](docs/enterprise-windows-packaging.md).
 
 Common checks:
 

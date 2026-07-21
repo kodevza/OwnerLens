@@ -650,8 +650,8 @@ test("returns custom principal owner evidence from runtime rows", async () => {
       subscriptionName: null,
       resourceGroup: null,
       owner: "platform-team",
-      ownerCandidate: "ownerCustom:platform-team",
-      ownerType: "ownerCustom",
+      ownerCandidate: "ownerGroup:platform-team",
+      ownerType: "ownerGroup",
       evidenceKey: "ownerCustom:sp-custom:serviceNow:platform-team",
       confidence: "high",
       source: "ownerCustom",
@@ -687,9 +687,9 @@ test("returns custom principal owner evidence from runtime rows", async () => {
     },
     evidence: [
       {
-        ownerCandidateKey: "ownerCustom:platform-team",
+        ownerCandidateKey: "ownerGroup:platform-team",
         ownerDisplayName: "platform-team",
-        ownerType: "ownerCustom",
+        ownerType: "ownerGroup",
         confidence: "high",
         source: "ownerCustom",
         path: "direct",

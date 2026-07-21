@@ -1,16 +1,14 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const invocationRoot = process.cwd();
 const [, , command = "help", ...args] = process.argv;
-
-const dataDir = resolveDataDirectory(invocationRoot);
-printDataDirectorySummary(dataDir);
+let dataDir;
 
 const commands = new Map([
   ["collect:entra", { root: "powershell", script: join("OwnerLens", "Public", "Invoke-OwnerLensCollectEntra.ps1") }],
@@ -19,10 +17,18 @@ const commands = new Map([
   ["collect-entra", { root: "powershell", script: join("OwnerLens", "Public", "Invoke-OwnerLensCollectEntra.ps1") }]
 ]);
 
+if (command === "--version" || command === "-v" || command === "version") {
+  printVersion();
+  process.exit(0);
+}
+
 if (command === "help" || command === "--help" || command === "-h") {
   printHelp();
   process.exit(0);
 }
+
+dataDir = resolveDataDirectory(invocationRoot);
+printDataDirectorySummary(dataDir);
 
 if (commands.has(command)) {
   runPowerShellScript(commands.get(command), args);
@@ -224,6 +230,7 @@ function printHelp() {
   console.log(`OwnerLens
 
 Usage:
+  ownerlens --version
   ownerlens start [--host 127.0.0.1] [--port 4173]
   ownerlens collect:entra [PowerShell args]
   ownerlens collect:azure [PowerShell args]
@@ -235,4 +242,15 @@ Examples:
   ownerlens collect:azure -SubscriptionIds "sub-id-1,sub-id-2" -ActivityDays 30
   ownerlens collect:azure -SkipAuditLogsExport
 `);
+}
+
+function printVersion() {
+  const packageJsonPath = join(packageRoot, "package.json");
+  try {
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+    console.log(packageJson.version);
+  } catch (error) {
+    console.error(`Could not read OwnerLens package version: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
 }

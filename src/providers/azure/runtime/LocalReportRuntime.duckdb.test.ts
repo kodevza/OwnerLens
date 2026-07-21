@@ -3520,7 +3520,7 @@ test("imports external ownership evidence as principal owner candidates", async 
       {
         identityId: "11111111-1111-1111-1111-111111111111",
         identityName: "Different display name",
-        ownerType: "ownerCustom",
+        ownerType: "ownerGroup",
         ownerId: "APP-CRM-Owners",
         confidence: "high",
         observedAt: "2026-07-02T08:00:00Z",
@@ -3567,7 +3567,7 @@ test("imports external ownership evidence as principal owner candidates", async 
           ordinal: 0,
           identity_id: "11111111-1111-1111-1111-111111111111",
           identity_name: "Different display name",
-          owner_type: "ownerCustom",
+          owner_type: "ownerGroup",
           owner_id: "APP-CRM-Owners",
           confidence: "high",
           observed_at: "2026-07-02T08:00:00Z",
@@ -3580,7 +3580,7 @@ test("imports external ownership evidence as principal owner candidates", async 
           ordinal: 1,
           identity_id: null,
           identity_name: "Billing worker",
-          owner_type: "ownerCustom",
+          owner_type: "ownerGroup",
           owner_id: "Platform Team",
           confidence: null,
           observed_at: null,
@@ -3624,8 +3624,8 @@ test("imports external ownership evidence as principal owner candidates", async 
           subscriptionName: null,
           resourceGroup: null,
           owner: "APP-CRM-Owners",
-          ownerType: "ownerCustom",
-          ownerCandidate: "ownerCustom:app-crm-owners",
+          ownerType: "ownerGroup",
+          ownerCandidate: "ownerGroup:app-crm-owners",
           evidenceKey: "ownerCustom:11111111-1111-1111-1111-111111111111:serviceNow:app-crm-owners",
           confidence: "high",
           source: "ownerCustom",
@@ -3645,8 +3645,8 @@ test("imports external ownership evidence as principal owner candidates", async 
           subscriptionName: null,
           resourceGroup: null,
           owner: "Platform Team",
-          ownerType: "ownerCustom",
-          ownerCandidate: "ownerCustom:platform team",
+          ownerType: "ownerGroup",
+          ownerCandidate: "ownerGroup:platform team",
           evidenceKey: "ownerCustom:22222222-2222-2222-2222-222222222222:serviceNow:platform team",
           confidence: "low",
           source: "ownerCustom",
@@ -3676,7 +3676,7 @@ test("rejects external ownership evidence that does not match the schema", async
     items: [
       {
         identityId: "11111111-1111-1111-1111-111111111111",
-        ownerType: "ownerGroup",
+        ownerType: "notSupported",
         ownerId: "APP-CRM-Owners"
       }
     ]

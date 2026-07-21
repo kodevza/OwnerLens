@@ -12,9 +12,7 @@ export type OwnerType =
   | "ownerGroup"
   | "ownerTag"
   | "application"
-  | "unknown"
-  | "ownerCustom"
-  | "ownerCustomLog";
+  | "unknown";
 
 export type OwnerCandidateSource =
   | "resourceGroupOwner"

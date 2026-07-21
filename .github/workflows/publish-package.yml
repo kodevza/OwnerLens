@@ -10,10 +10,13 @@ permissions:
   id-token: write
 
 env:
-  MODULE_PATH: ./artifacts/powershell-package/OwnerLens
+  ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+  ARTIFACT_SIGNING_ACCOUNT_NAME: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT_NAME }}
+  ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}
+  OWNERLENS_ALLOW_UNSIGNED_RELEASE: ${{ vars.OWNERLENS_ALLOW_UNSIGNED_RELEASE }}
 
 jobs:
-  publish:
+  publish-npm:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.set_version.outputs.version }}
@@ -24,6 +27,7 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+          cache: npm
 
       - run: npm ci
       - run: npm run lint
@@ -43,7 +47,10 @@ jobs:
       - run: npm test --if-present
       - run: npm run test:components --if-present
       - run: npm run build --if-present
-      - name: Publish package
+
+      - name: Publish npm package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [[ "$VERSION" == *-* ]]; then
             npm publish --tag next
@@ -51,9 +58,9 @@ jobs:
             npm publish
           fi
 
-  package-powershell-module:
+  windows-release:
     runs-on: windows-latest
-    needs: publish
+    needs: publish-npm
     environment: package-signing
     steps:
       - uses: actions/checkout@v6
@@ -61,132 +68,184 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
+          cache: npm
 
-      - name: Package PowerShell module
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0.x"
+
+      - run: npm ci
+
+      - name: Set package version from tag
         shell: pwsh
         run: |
-          $version = "${{ needs.publish.outputs.version }}"
-          ./scripts/package-powershell-module.ps1 -Version $version
+          $ErrorActionPreference = "Stop"
+          npm version "${{ needs.publish-npm.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          npm run test:node --if-present
+
+      - name: Build app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          npm run build --if-present
+
+      - name: Package OwnerLens for Windows
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          ./scripts/windows/Build-OwnerLensWindowsPackage.ps1 -Version "${{ needs.publish-npm.outputs.version }}"
+
+      - name: Validate release signing policy
+        id: signing_policy
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $allowUnsigned = $env:OWNERLENS_ALLOW_UNSIGNED_RELEASE -eq "true"
+          $hasArtifactSigning = -not [string]::IsNullOrWhiteSpace($env:ARTIFACT_SIGNING_ENDPOINT) -and
+            -not [string]::IsNullOrWhiteSpace($env:ARTIFACT_SIGNING_ACCOUNT_NAME) -and
+            -not [string]::IsNullOrWhiteSpace($env:ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME)
+
+          if (-not $hasArtifactSigning -and -not $allowUnsigned) {
+            throw "Tagged OwnerLens releases require Azure Artifact Signing. Configure ARTIFACT_SIGNING_ENDPOINT, ARTIFACT_SIGNING_ACCOUNT_NAME, and ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME, or set repository variable OWNERLENS_ALLOW_UNSIGNED_RELEASE=true for an emergency unsigned release."
+          }
+
+          "has_artifact_signing=$($hasArtifactSigning.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "allow_unsigned=$($allowUnsigned.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
       - name: Azure login via OIDC
+        if: steps.signing_policy.outputs.has_artifact_signing == 'true'
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Install publishing tools
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          Install-Module PowerShellGet -Force -Scope CurrentUser
-          Install-Module PackageManagement -Force -Scope CurrentUser
-
-      - name: Validate PowerShell files to sign
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $files = Get-ChildItem $env:MODULE_PATH -Recurse -File |
-            Where-Object { $_.Extension -in ".ps1", ".psm1", ".psd1" }
-
-          if (-not $files) {
-            throw "No PowerShell files found to sign."
-          }
-
-          $files | ForEach-Object { Write-Host "Will sign $($_.FullName)" }
-
-      - name: Validate Artifact Signing configuration
-        shell: pwsh
-        env:
-          ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
-          ARTIFACT_SIGNING_ACCOUNT_NAME: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT_NAME }}
-          ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $missing = @(
-            "ARTIFACT_SIGNING_ENDPOINT",
-            "ARTIFACT_SIGNING_ACCOUNT_NAME",
-            "ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME"
-          ) | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
-
-          if ($missing) {
-            throw "Missing required package-signing environment secret(s): $($missing -join ', '). Configure them in GitHub before running the publish workflow."
-          }
-
-      - name: Sign PowerShell files with Artifact Signing
+      - name: Sign OwnerLens package files with Azure Artifact Signing
+        if: steps.signing_policy.outputs.has_artifact_signing == 'true'
         uses: azure/artifact-signing-action@v2
         with:
           endpoint: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
           signing-account-name: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT_NAME }}
           certificate-profile-name: ${{ secrets.ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}
-          files-folder: ${{ github.workspace }}\artifacts\powershell-package\OwnerLens
-          files-folder-filter: ps1,psm1,psd1
+          files-folder: ${{ github.workspace }}\artifacts\windows\package
+          files-folder-filter: exe,dll,node,cat,ps1,psm1,psd1
           files-folder-recurse: true
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
 
-      - name: Verify PowerShell signatures
+      - name: Sign loose OwnerLens release executable with Azure Artifact Signing
+        if: steps.signing_policy.outputs.has_artifact_signing == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ secrets.ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}
+          files-folder: ${{ github.workspace }}\artifacts\release
+          files-folder-filter: exe
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify Authenticode signatures
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-
-          $files = Get-ChildItem $env:MODULE_PATH -Recurse -File |
-            Where-Object { $_.Extension -in ".ps1", ".psm1", ".psd1" }
-
-          foreach ($file in $files) {
-            $sig = Get-AuthenticodeSignature -FilePath $file.FullName
-
-            if ($sig.Status -ne "Valid") {
-              throw "Authenticode signature is not valid for $($file.FullName): $($sig.Status) - $($sig.StatusMessage)"
-            }
-
-            if (-not $sig.TimeStamperCertificate) {
-              throw "Missing timestamp: $($file.FullName)"
-            }
-
-            Write-Host "Signed: $($file.Name) / Status: $($sig.Status)"
+          if ("${{ steps.signing_policy.outputs.has_artifact_signing }}" -eq "true") {
+            ./scripts/windows/Test-OwnerLensSignatures.ps1 -Path .\artifacts\windows\package, .\artifacts\release -RequireValid -RequireTimestamp -OutputJson .\artifacts\release\OwnerLens-signatures.json
+          } else {
+            ./scripts/windows/Test-OwnerLensSignatures.ps1 -Path .\artifacts\windows\package, .\artifacts\release -OutputJson .\artifacts\release\OwnerLens-signatures.json
           }
 
-      - name: Refresh signed PowerShell module release assets
+      - name: Refresh ZIP artifacts from signed package tree
+        if: steps.signing_policy.outputs.has_artifact_signing == 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          $version = "${{ needs.publish-npm.outputs.version }}"
+          $runtimeZip = ".\artifacts\release\OwnerLens-$version-win-x64-runtime.zip"
+          $moduleZip = ".\artifacts\release\OwnerLens-$version-powershell.zip"
+          Remove-Item -LiteralPath $runtimeZip, $moduleZip -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path .\artifacts\windows\package\* -DestinationPath $runtimeZip -CompressionLevel Optimal
+          Compress-Archive -Path .\artifacts\windows\package\PowerShell\OwnerLens\* -DestinationPath $moduleZip -CompressionLevel Optimal
 
-          $version = "${{ needs.publish.outputs.version }}"
-          $zipPath = "artifacts/release/OwnerLens-$version-win-x64.zip"
-          $checksumPath = "$zipPath.sha256"
+      - name: Generate SBOM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          ./scripts/windows/New-OwnerLensSbom.ps1
 
-          Remove-Item -LiteralPath $zipPath, $checksumPath -Force -ErrorAction SilentlyContinue
-          Compress-Archive -Path $env:MODULE_PATH -DestinationPath $zipPath -CompressionLevel Optimal
+      - name: Generate SHA256 hashes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          ./scripts/windows/New-OwnerLensHashManifest.ps1
 
-          $hash = Get-FileHash -Path $zipPath -Algorithm SHA256
-          Set-Content -Path $checksumPath -Value "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $zipPath)" -Encoding ascii
+      - name: Verify Windows release artifacts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ("${{ steps.signing_policy.outputs.has_artifact_signing }}" -eq "true") {
+            ./scripts/windows/VERIFY.ps1 -RequireValidSignatures -RequireTimestamp
+          } else {
+            ./scripts/windows/VERIFY.ps1
+          }
 
-      - name: Upload PowerShell module release assets
+      - name: Upload Windows release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ownerlens-windows-release-${{ needs.publish-npm.outputs.version }}
+          path: artifacts/release/*
+          if-no-files-found: error
+
+      - name: Publish GitHub Release artifacts
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $version = "${{ needs.publish.outputs.version }}"
+          $ErrorActionPreference = "Stop"
           $tag = $env:GITHUB_REF_NAME
-          $zipPath = "artifacts/release/OwnerLens-$version-win-x64.zip"
-          $checksumPath = "$zipPath.sha256"
+          $signedText = if ("${{ steps.signing_policy.outputs.has_artifact_signing }}" -eq "true") {
+            "Signed with Azure Artifact Signing. Authenticode verification report is attached as OwnerLens-signatures.json."
+          } else {
+            "UNSIGNED EMERGENCY RELEASE. OWNERLENS_ALLOW_UNSIGNED_RELEASE was true and Authenticode signing was not performed."
+          }
+
+          $notes = @"
+          OwnerLens Windows release artifacts.
+
+          $signedText
+
+          Included artifacts:
+          - Windows runtime ZIP
+          - PowerShell module ZIP
+          - CycloneDX SBOM
+          - SHA256 JSON and text manifests
+          - Authenticode signature report
+          "@
 
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --verify-tag --title $tag --notes ""
+            gh release create $tag --verify-tag --title $tag --notes $notes
             if ($LASTEXITCODE -ne 0) {
               throw "Failed to create GitHub Release for $tag."
             }
+          } else {
+            $notes | gh release edit $tag --notes-file -
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to update GitHub Release notes for $tag."
+            }
           }
 
-          gh release upload $tag $zipPath $checksumPath --clobber
+          gh release upload $tag (Get-ChildItem .\artifacts\release -File).FullName --clobber
           if ($LASTEXITCODE -ne 0) {
-            throw "Failed to upload PowerShell module release assets for $tag."
+            throw "Failed to upload Windows release artifacts for $tag."
           }
 
       - name: Publish module to PowerShell Gallery
@@ -195,8 +254,5 @@ jobs:
           PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
         run: |
           $ErrorActionPreference = "Stop"
-
-          Publish-Module `
-            -Path $env:MODULE_PATH `
-            -NuGetApiKey $env:PSGALLERY_API_KEY `
-            -Verbose
+          $modulePath = Join-Path $PWD "artifacts\windows\package\PowerShell\OwnerLens"
+          Publish-Module -Path $modulePath -NuGetApiKey $env:PSGALLERY_API_KEY -Verbose
